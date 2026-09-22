@@ -50,7 +50,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ project: Project; sources: SourceAsset[]; exports: ExportRec[]; conflicts: Conflict[]; hasSpec: boolean } | null>(null);
-  const [brief, setBrief] = useState({ audience: '商品经营负责人', purpose: '上半年经营复盘与方案讨论', page_budget: 8 });
+  const [brief, setBrief] = useState({ audience: '商品经营负责人', purpose: '上半年经营复盘与方案讨论', page_budget: 8, deliverable_type: 'meeting_deck' as 'meeting_deck' | 'research_report' });
   const [outline, setOutline] = useState<OutlineDraft | null>(null);
   const [checks, setChecks] = useState<CheckReport | null>(null);
   const [exportScope, setExportScope] = useState<'internal' | 'external'>('internal');
@@ -178,15 +178,18 @@ export default function App() {
     setDiffResult(res);
   };
 
-  const doExport = async (mode: 'formal' | 'draft') => {
+  const doExport = async (mode: 'formal' | 'draft', deliverable?: 'executive_summary') => {
     if (!currentId) return;
     setBusy(true);
     try {
+      const isResearch = (detail as { deliverable_type?: string } | null)?.deliverable_type === 'research_report';
+      const formats = deliverable === 'executive_summary' ? ['pptx'] : isResearch ? ['docx', 'html', 'pdf'] : ['pptx', 'pdf'];
       const res = await api.post<{ allowed: boolean; reason: string; exports: ExportRec[]; privacy?: { checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } }>(`/api/projects/${currentId}/export`, {
-        mode, formats: ['pptx', 'pdf'], exportScope,
+        mode, formats, exportScope,
         chart_data_mode: exportScope === 'external' ? chartDataMode : undefined,
         ack_editable_data: ackEditable,
         ack_external_share: ackExternalShare,
+        ...(deliverable ? { deliverable } : {}),
       });
       const privacyNote = res.privacy ? `（隐私检查：${res.privacy.checked_count} 项已检查 / ${res.privacy.not_checked_count} 项未覆盖）` : '';
       if (res.privacy) setLastPrivacy(res.privacy);
@@ -314,6 +317,12 @@ export default function App() {
           <label className="field">受众<input value={brief.audience} onChange={(e) => setBrief({ ...brief, audience: e.target.value })} /></label>
           <label className="field">目的<input value={brief.purpose} onChange={(e) => setBrief({ ...brief, purpose: e.target.value })} /></label>
           <label className="field">页数预算<input type="number" min={1} value={brief.page_budget} onChange={(e) => setBrief({ ...brief, page_budget: Number(e.target.value) })} style={{ width: 80 }} /></label>
+          <label className="field">交付物
+            <select value={brief.deliverable_type} onChange={(e) => setBrief({ ...brief, deliverable_type: e.target.value as 'meeting_deck' | 'research_report' })}>
+              <option value="meeting_deck">会议汇报（PPT）</option>
+              <option value="research_report">研究报告（文档）</option>
+            </select>
+          </label>
         </div>
         <button className="primary" disabled={busy || sources.length === 0} onClick={genOutline}>{busy ? '生成中…' : '生成大纲（确定性模式）'}</button>
         {outline && (
@@ -393,8 +402,9 @@ export default function App() {
               )}
             </div>
             <div className="row">
-              <button className="primary" disabled={busy} onClick={() => doExport('formal')}>正式导出（PPTX + PDF）</button>
+              <button className="primary" disabled={busy} onClick={() => doExport('formal')}>正式导出</button>
               <button disabled={busy} onClick={() => doExport('draft')}>草稿导出（带未解决标识）</button>
+              <button disabled={busy} onClick={() => doExport('formal', 'executive_summary')}>导出一页摘要</button>
             </div>
             {lastPrivacy && (
               <div style={{ marginTop: 10 }}>

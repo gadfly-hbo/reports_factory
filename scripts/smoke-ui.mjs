@@ -10,10 +10,20 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const PORT = 8791;
 const dataDir = mkdtempSync(join(tmpdir(), 'rs-smoke-'));
 const server = spawn('node', ['dist/server/start.js'], {
-  env: { ...process.env, REPORT_STUDIO_HOME: dataDir, PORT: String(PORT) },
+  env: { ...process.env, REPORT_STUDIO_HOME: dataDir, REPORT_STUDIO_NO_SYNC: '1', PORT: String(PORT) },
   stdio: 'ignore',
 });
-await sleep(1200);
+// 服务就绪轮询（启动含 data-sync git 操作，就绪时间可能 > 1s）
+let ready = false;
+for (let i = 0; i < 40 && !ready; i++) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/projects`);
+    ready = r.ok;
+  } catch {
+    await sleep(500);
+  }
+}
+if (!ready) { console.error('服务未就绪'); server.kill(); rmSync(dataDir, { recursive: true, force: true }); process.exit(1); }
 
 let failed = 0;
 const ok = (name) => console.log(`  ✓ ${name}`);
@@ -111,6 +121,29 @@ try {
   await page.click('div.card:has(h2:text("版本比较")) button:has-text("比较")');
   await page.waitForSelector('text=版本比较演示标题');
   ok('版本比较：差异清单可见（改后标题命中）');
+
+  // 研究报告路径（M3 document 管线）：新建研究项目 → 文档主线大纲 → 文档流预览 → 导出 docx/html/pdf
+  await page.click('button:has-text("← 项目列表")');
+  page.once('dialog', (d) => d.accept('研究报告冒烟'));
+  await page.click('button:has-text("新建汇报")');
+  await page.waitForSelector('h1:has-text("研究报告冒烟")');
+  await page.setInputFiles('input[type=file]', [
+    'tests/fixtures/materials/conclusion.md',
+    'tests/fixtures/materials/sales.csv',
+  ]);
+  await page.waitForSelector('tr:has-text("sales.csv")');
+  await page.selectOption('select:has(option:text("研究报告"))', 'research_report');
+  await page.click('button:has-text("生成大纲")');
+  await page.waitForSelector('input[value*="限制与不确定性"]');
+  ok('研究报告大纲含文档主线（限制与不确定性）');
+  await page.click('button:has-text("确认大纲")');
+  await page.waitForSelector('h2:has-text("④ 预览")');
+  const rframe = page.frameLocator('iframe.preview-frame');
+  await rframe.locator('p.kicker:has-text("研究报告")').first().waitFor();
+  ok('研究报告预览为文档流（document 管线）');
+  await page.click('button:has-text("正式导出")');
+  await page.waitForSelector('.notice:has-text("已导出")');
+  ok('研究报告导出（docx/html/pdf）成功');
 
   await browser.close();
   console.log(failed === 0 ? '\nUI 冒烟走查：全部通过 ✅' : `\nUI 冒烟走查：${failed} 项失败 ❌`);

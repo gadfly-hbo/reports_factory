@@ -12,6 +12,7 @@ const git = (root: string, args: string[]): string =>
   execFileSync('git', ['-C', root, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 30_000, // 网络远端操作可能卡住——30s 兜底，超时走 conflict 保本机
   }).trim();
 
 /** 项目数据目录（寄居仓库内，随 git 双机同步） */
@@ -23,6 +24,10 @@ const DATA_DIR = 'data';
  * 冲突时中止 rebase、保留本机数据并返回 conflict，由上层提示人工处理。
  */
 export function dataSync(repoRoot = process.cwd()): DataSyncResult {
+  // 测试/临时服务器环境可禁用（不触发远端往返）
+  if (process.env['REPORT_STUDIO_NO_SYNC'] === '1') {
+    return { ok: true, action: 'up-to-date', detail: 'REPORT_STUDIO_NO_SYNC=1，同步已禁用' };
+  }
   if (!existsSync(join(repoRoot, '.git'))) {
     return { ok: false, action: 'not-a-repo', detail: '当前目录不是 git 仓库，项目数据仅本机保存' };
   }

@@ -4,7 +4,7 @@ import type { ReportSpec } from '../schema/report-spec.js';
 import { renderReportHtml } from '../render/html.js';
 import { renderReportPptx } from '../render/pptx.js';
 import { renderReportPdf, closePdfBrowser } from '../render/pdf.js';
-import { extractHtmlText, extractPptxText, extractPdfText } from '../render/consistency.js';
+import { extractHtmlText, extractPptxText, extractPdfText, normalizeText } from '../render/consistency.js';
 
 /**
  * 回归 golden 机制（红队约束①）：比对归一化文本与对象形状，禁止字节哈希
@@ -34,7 +34,7 @@ export async function generateNormalizedTexts(spec: ReportSpec): Promise<Normali
 }
 
 export interface Mismatch {
-  format: 'html' | 'pptx' | 'pdf';
+  format: 'html' | 'pptx' | 'pdf' | 'docx';
   detail: string;
 }
 
@@ -80,6 +80,63 @@ export async function updateGolden(spec: ReportSpec, goldenDir = GOLDEN_DIR): Pr
   const actual = await generateNormalizedTexts(spec);
   await mkdir(goldenDir, { recursive: true });
   for (const fmt of ['html', 'pptx', 'pdf'] as const) {
+    await writeFile(join(goldenDir, `${fmt}.txt`), actual[fmt].text, 'utf-8');
+  }
+}
+
+/** DOCX 文本抽取（word/document.xml 的 w:t run 之和） */
+export async function extractDocxText(buf: Buffer): Promise<{ text: string; parts: number }> {
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(buf);
+  const xml = await zip.file('word/document.xml')!.async('string');
+  const runs = [...xml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]!);
+  return { text: normalizeText(runs.join(' ')), parts: 1 };
+}
+
+/** document 管线（研究报告）的归一化产物：独立 HTML / DOCX / A4 PDF */
+export async function generateDocumentNormalizedTexts(spec: ReportSpec): Promise<{
+  html: { text: string; pages: number };
+  docx: { text: string; parts: number };
+  pdf: { text: string; pages: number };
+  pages_expected: number;
+}> {
+  const { renderDocumentHtml } = await import('../render/document-html.js');
+  const { renderDocumentPdf, closeDocumentPdfBrowser } = await import('../render/document-pdf.js');
+  const { renderReportDocx } = await import('../render/docx.js');
+  const htmlStr = renderDocumentHtml(spec);
+  const docxBuf = await renderReportDocx(spec);
+  const pdfBuf = await renderDocumentPdf(spec);
+  await closeDocumentPdfBrowser();
+  return {
+    html: await extractHtmlText(htmlStr),
+    docx: await extractDocxText(docxBuf),
+    pdf: await extractPdfText(pdfBuf),
+    pages_expected: spec.pages.length,
+  };
+}
+
+export async function compareDocumentGolden(spec: ReportSpec, goldenDir: string): Promise<GoldenResult> {
+  const actual = await generateDocumentNormalizedTexts(spec);
+  const mismatches: Mismatch[] = [];
+  for (const fmt of ['html', 'docx', 'pdf'] as const) {
+    let golden: string;
+    try {
+      golden = await readFile(join(goldenDir, `${fmt}.txt`), 'utf-8');
+    } catch {
+      mismatches.push({ format: fmt, detail: 'golden 基线缺失（先跑 --update）' });
+      continue;
+    }
+    if (golden !== actual[fmt].text) {
+      mismatches.push({ format: fmt, detail: lineDiff(golden, actual[fmt].text) });
+    }
+  }
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+export async function updateDocumentGolden(spec: ReportSpec, goldenDir: string): Promise<void> {
+  const actual = await generateDocumentNormalizedTexts(spec);
+  await mkdir(goldenDir, { recursive: true });
+  for (const fmt of ['html', 'docx', 'pdf'] as const) {
     await writeFile(join(goldenDir, `${fmt}.txt`), actual[fmt].text, 'utf-8');
   }
 }
