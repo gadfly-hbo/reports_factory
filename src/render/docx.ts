@@ -15,7 +15,6 @@ import type { ChartSpec, Page, ReportSpec, TableSpec } from '../schema/report-sp
 import { pageFooterParts } from './footer.js';
 import { palette, pptxFont as defaultPptxFont, resolveFonts, statusSuffix, withBrand } from './theme.js';
 
-const pptxFont = defaultPptxFont; // 默认字体；品牌 font_name 时经 f 参数覆盖
 import { ImageRun } from 'docx';
 
 /**
@@ -81,13 +80,13 @@ function specTableToDocx(t: TableSpec, p = palette, f = defaultPptxFont): Table 
 function chartToDocxTable(chart: ChartSpec, p = palette, f = defaultPptxFont): Table {
   const header = new TableRow({
     tableHeader: true,
-    children: [cell('项目', { header: true }), ...chart.series.map((ser) => cell(ser.name, { header: true }))],
+    children: [cell('项目', { header: true }, p, f), ...chart.series.map((ser) => cell(ser.name, { header: true }, p, f))],
   });
   const labels = chart.series[0]?.data.map((d) => d.label) ?? [];
   const rows = labels.map(
     (label, i) =>
       new TableRow({
-        children: [cell(label), ...chart.series.map((ser) => cell(String(ser.data[i]?.value ?? ''), { align: AlignmentType.RIGHT }))],
+        children: [cell(label, {}, p, f), ...chart.series.map((ser) => cell(String(ser.data[i]?.value ?? ''), { align: AlignmentType.RIGHT }, p, f))],
       }),
   );
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [header, ...rows] });

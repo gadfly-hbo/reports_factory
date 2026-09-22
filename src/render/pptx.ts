@@ -14,7 +14,6 @@ import {
   withBrand,
 } from './theme.js';
 
-const pptxFont = defaultPptxFont; // 默认字体；品牌 font_name 时经 f 参数覆盖
 
 /**
  * ReportSpec → 基础可编辑 PPTX。

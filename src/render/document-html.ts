@@ -1,7 +1,7 @@
 import type { ChartSpec, Page, ReportSpec } from '../schema/report-spec.js';
 import { escapeHtml } from './html.js';
 import { pageFooterParts } from './footer.js';
-import { fontStack as baseFontStack, pageTypeLabels, resolveFonts, statusSuffix, withBrand } from './theme.js';
+import { pageTypeLabels, resolveFonts, statusSuffix, withBrand } from './theme.js';
 
 /**
  * document 管线：A4 文档流 HTML（研究报告——可独立分发的自包含单文件）。
@@ -63,7 +63,6 @@ export function renderDocumentHtml(spec: ReportSpec): string {
   // 品牌覆盖（无品牌时与默认 palette 完全一致）
   const palette = withBrand(spec.theme?.brand);
   const fontStack = resolveFonts(spec.theme?.brand).stack;
-  void baseFontStack;
   const logo = spec.theme?.brand?.logo_data_url
     ? `<img src="${spec.theme.brand.logo_data_url}" alt="logo" style="height:36px;margin-bottom:8px" />`
     : '';
