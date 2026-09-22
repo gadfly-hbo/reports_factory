@@ -6,12 +6,15 @@ import { pageFooterParts } from './footer.js';
 import {
   pageTypeLabels,
   palette,
-  pptxFont,
+  pptxFont as defaultPptxFont,
   pptxFontSize,
+  resolveFonts,
   slide,
   statusVisual,
   withBrand,
 } from './theme.js';
+
+const pptxFont = defaultPptxFont; // 默认字体；品牌 font_name 时经 f 参数覆盖
 
 /**
  * ReportSpec → 基础可编辑 PPTX。
@@ -24,7 +27,7 @@ type Slide = ReturnType<PptxGenJS['addSlide']>;
 /** 内容区宽度（pt），标题测量基准：12.1in × 72 */
 const CONTENT_WIDTH_PT = 12.1 * 72 - 20;
 
-function addChart(pptx: PptxGenJS, s: Slide, chart: ChartSpec, area: PptxGenJS.PositionProps) {
+function addChart(pptx: PptxGenJS, s: Slide, chart: ChartSpec, area: PptxGenJS.PositionProps, f = defaultPptxFont) {
   const data = chart.series.map((ser) => ({
     name: ser.name,
     labels: ser.data.map((d) => d.label),
@@ -34,10 +37,10 @@ function addChart(pptx: PptxGenJS, s: Slide, chart: ChartSpec, area: PptxGenJS.P
     ...area,
     showLegend: true,
     legendPos: 't',
-    legendFontFace: pptxFont,
+    legendFontFace: f,
     showTitle: false,
-    catAxisLabelFontFace: pptxFont,
-    valAxisLabelFontFace: pptxFont,
+    catAxisLabelFontFace: f,
+    valAxisLabelFontFace: f,
   };
   const t = pptx.ChartType;
   switch (chart.type) {
@@ -56,7 +59,7 @@ function addChart(pptx: PptxGenJS, s: Slide, chart: ChartSpec, area: PptxGenJS.P
   }
 }
 
-function addTable(s: Slide, table: TableSpec, area: PptxGenJS.PositionProps) {
+function addTable(s: Slide, table: TableSpec, area: PptxGenJS.PositionProps, f = defaultPptxFont) {
   const headerRow = table.columns.map((c) => ({
     text: c.label,
     options: {
@@ -64,7 +67,7 @@ function addTable(s: Slide, table: TableSpec, area: PptxGenJS.PositionProps) {
       color: palette.primaryInk.replace('#', ''),
       fill: { color: palette.surface3.replace('#', '') },
       align: c.align ?? 'left',
-      fontFace: pptxFont,
+      fontFace: f,
       fontSize: pptxFontSize.table,
     },
   }));
@@ -74,7 +77,7 @@ function addTable(s: Slide, table: TableSpec, area: PptxGenJS.PositionProps) {
       options: {
         align: c.align ?? 'left',
         color: palette.text.replace('#', ''),
-        fontFace: pptxFont,
+        fontFace: f,
         fontSize: pptxFontSize.table,
       },
     })),
@@ -97,50 +100,50 @@ function bulletTexts(page: Page) {
   });
 }
 
-function addFooter(s: Slide, page: Page) {
+function addFooter(s: Slide, page: Page, p = palette, f = defaultPptxFont) {
   const parts = pageFooterParts(page);
   if (parts.length > 0) {
     s.addText(parts.join('　|　'), {
       x: 0.6, y: 6.9, w: 12.1, h: 0.35,
-      fontSize: pptxFontSize.footnote, color: palette.muted.replace('#', ''), fontFace: pptxFont,
+      fontSize: pptxFontSize.footnote, color: p.muted.replace('#', ''), fontFace: f,
     });
   }
 }
 
-function addCover(pptx: PptxGenJS, page: Page, brand?: { logo_data_url?: string }, p = palette) {
+function addCover(pptx: PptxGenJS, page: Page, brand?: { logo_data_url?: string }, p = palette, f = defaultPptxFont) {
   const s = pptx.addSlide();
   if (brand?.logo_data_url) {
     s.addImage({ data: brand.logo_data_url, x: 0.9, y: 1.2, h: 0.55, w: 1.1 });
   }
   s.addText(pageTypeLabels.cover, {
     x: 0.9, y: 2.0, w: 11.5, h: 0.4, align: 'left',
-    fontSize: pptxFontSize.kicker + 1, bold: true, color: p.primary.replace('#', ''), fontFace: pptxFont,
+    fontSize: pptxFontSize.kicker + 1, bold: true, color: p.primary.replace('#', ''), fontFace: f,
   });
   s.addText(page.headline, {
     x: 0.9, y: 2.5, w: 11.5, h: 1.5, align: 'left',
-    fontSize: pptxFontSize.coverTitle, bold: true, color: palette.text.replace('#', ''), fontFace: pptxFont,
+    fontSize: pptxFontSize.coverTitle, bold: true, color: palette.text.replace('#', ''), fontFace: f,
   });
   if (page.subtitle) {
     s.addText(page.subtitle, {
       x: 0.9, y: 4.05, w: 11.5, h: 0.5, align: 'left',
-      fontSize: pptxFontSize.coverSubtitle, color: palette.muted.replace('#', ''), fontFace: pptxFont,
+      fontSize: pptxFontSize.coverSubtitle, color: p.muted.replace('#', ''), fontFace: f,
     });
   }
   const metaParts = [page.meta?.period, page.meta?.audience, page.meta?.version].filter(Boolean);
   if (metaParts.length > 0) {
     s.addText(metaParts.join('　|　'), {
       x: 0.9, y: 4.75, w: 11.5, h: 0.4, align: 'left',
-      fontSize: pptxFontSize.coverMeta, color: palette.soft.replace('#', ''), fontFace: pptxFont,
+      fontSize: pptxFontSize.coverMeta, color: palette.soft.replace('#', ''), fontFace: f,
     });
   }
-  if (page.required_note) addFooter(s, page);
+  if (page.required_note) addFooter(s, page, p);
 }
 
-function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette) {
+function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
   const s = pptx.addSlide();
   s.addText(pageTypeLabels[page.type] ?? page.type, {
     x: 0.6, y: 0.32, w: 12.1, h: 0.3,
-    fontSize: pptxFontSize.kicker, bold: true, color: p.primary.replace('#', ''), fontFace: pptxFont,
+    fontSize: pptxFontSize.kicker, bold: true, color: p.primary.replace('#', ''), fontFace: f,
   });
 
   const fit = fitHeadline(page.headline, {
@@ -150,7 +153,7 @@ function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, 
   });
   s.addText(page.headline, {
     x: 0.6, y: 0.62, w: 12.1, h: 1.15, valign: 'top',
-    fontSize: fit.fontSize, bold: true, color: palette.text.replace('#', ''), fontFace: pptxFont,
+    fontSize: fit.fontSize, bold: true, color: palette.text.replace('#', ''), fontFace: f,
   });
 
   const hasBullets = (page.bullets?.length ?? 0) > 0;
@@ -161,19 +164,19 @@ function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, 
     if (chartPngCache) {
       addChartImage(chartPngCache, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 });
     } else {
-      addChart(pptx, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 });
+      addChart(pptx, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 }, f);
     }
     if (page.body) {
       s.addText(page.body, {
         x: 8.6, y: 2.15, w: 4.1, h: 4.2, valign: 'middle',
-        fontSize: pptxFontSize.body, color: palette.text.replace('#', ''), fontFace: pptxFont,
+        fontSize: pptxFontSize.body, color: palette.text.replace('#', ''), fontFace: f,
         fill: { color: p.primarySoft.replace('#', '') },
         lineSpacingMultiple: 1.4, margin: 10,
       });
     } else if (hasBullets) {
       s.addText(bulletTexts(page), {
         x: 8.6, y: 2.15, w: 4.1, h: 4.2, valign: 'top',
-        fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: pptxFont,
+        fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: f,
         lineSpacingMultiple: 1.3, margin: 6,
       });
     }
@@ -185,32 +188,32 @@ function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, 
       ],
       {
         x: 0.6, y: 2.4, w: 12.1, h: 2.6, align: 'center', valign: 'middle',
-        fontFace: pptxFont, fill: { color: palette.surface2.replace('#', '') },
+        fontFace: f, fill: { color: palette.surface2.replace('#', '') },
         line: { type: 'solid', color: palette.borderStrong.replace('#', ''), pt: 0.75 },
       },
     );
     if (hasBullets) {
       s.addText(bulletTexts(page), {
         x: 0.6, y: 5.2, w: 12.1, h: 1.5, valign: 'top',
-        fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: pptxFont,
+        fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: f,
       });
     }
   } else if (page.table) {
-    addTable(s, page.table, { x: 0.6, y: 2.0, w: 12.1, h: 4.4 });
+    addTable(s, page.table, { x: 0.6, y: 2.0, w: 12.1, h: 4.4 }, f);
   } else if (hasBullets) {
     s.addText(bulletTexts(page), {
       x: 0.6, y: 2.1, w: 12.1, h: 4.4, valign: 'top',
-      fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: pptxFont,
+      fontSize: pptxFontSize.bullet, color: palette.text.replace('#', ''), fontFace: f,
       lineSpacingMultiple: 1.4,
     });
   } else if (page.body) {
     s.addText(page.body, {
       x: 0.6, y: 2.1, w: 12.1, h: 4.4, valign: 'top',
-      fontSize: pptxFontSize.body + 1, color: palette.text.replace('#', ''), fontFace: pptxFont,
+      fontSize: pptxFontSize.body + 1, color: palette.text.replace('#', ''), fontFace: f,
       lineSpacingMultiple: 1.5,
     });
   }
-  addFooter(s, page);
+  addFooter(s, page, p, f);
 }
 
 export interface PptxRenderOptions {
@@ -264,9 +267,10 @@ export async function renderReportPptx(spec: ReportSpec, opts: PptxRenderOptions
 
   const brand = spec.theme?.brand;
   const p = withBrand(brand);
+  const f = resolveFonts(brand).pptx;
   for (const page of spec.pages) {
-    if (page.type === 'cover') addCover(pptx, page, brand, p);
-    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p);
+    if (page.type === 'cover') addCover(pptx, page, brand, p, f);
+    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p, f);
   }
   const out = await pptx.write({ outputType: 'nodebuffer' });
   return out as Buffer;

@@ -13,7 +13,9 @@ import {
 } from 'docx';
 import type { ChartSpec, Page, ReportSpec, TableSpec } from '../schema/report-spec.js';
 import { pageFooterParts } from './footer.js';
-import { palette, pptxFont, withBrand } from './theme.js';
+import { palette, pptxFont as defaultPptxFont, resolveFonts, statusSuffix, withBrand } from './theme.js';
+
+const pptxFont = defaultPptxFont; // 默认字体；品牌 font_name 时经 f 参数覆盖
 import { ImageRun } from 'docx';
 
 /**
@@ -36,7 +38,7 @@ const tableBorders = {
   insideVertical: { style: BorderStyle.SINGLE, size: 4, color: hex(palette.border) },
 };
 
-function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; header?: boolean } = {}, p = palette) {
+function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; header?: boolean } = {}, p = palette, f = defaultPptxFont) {
   return new TableCell({
     borders: tableBorders,
     shading: opts.header ? { fill: hex(p.surface3) } : undefined,
@@ -48,7 +50,7 @@ function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentTyp
             text,
             bold: opts.bold ?? opts.header,
             color: opts.header ? hex(p.primaryInk) : hex(p.text),
-            font: pptxFont,
+            font: f,
             size: 21, // 10.5pt
           }),
         ],
@@ -57,18 +59,18 @@ function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentTyp
   });
 }
 
-function specTableToDocx(t: TableSpec, p = palette): Table {
+function specTableToDocx(t: TableSpec, p = palette, f = defaultPptxFont): Table {
   const header = new TableRow({
     tableHeader: true,
     children: t.columns.map((c) =>
-      cell(c.label, { header: true, align: c.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+      cell(c.label, { header: true, align: c.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT }, p, f),
     ),
   });
   const rows = t.rows.map(
     (r) =>
       new TableRow({
         children: t.columns.map((c, i) =>
-          cell(r.cells[i] ?? '', { align: c.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+          cell(r.cells[i] ?? '', { align: c.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT }, p, f),
         ),
       }),
   );
@@ -76,7 +78,7 @@ function specTableToDocx(t: TableSpec, p = palette): Table {
 }
 
 /** 图表 → 数值表格（A2：数据可读性优先，不做图片图表） */
-function chartToDocxTable(chart: ChartSpec, p = palette): Table {
+function chartToDocxTable(chart: ChartSpec, p = palette, f = defaultPptxFont): Table {
   const header = new TableRow({
     tableHeader: true,
     children: [cell('项目', { header: true }), ...chart.series.map((ser) => cell(ser.name, { header: true }))],
@@ -91,35 +93,34 @@ function chartToDocxTable(chart: ChartSpec, p = palette): Table {
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [header, ...rows] });
 }
 
-function sectionChildren(page: Page, p = palette): (Paragraph | Table)[] {
+function sectionChildren(page: Page, p = palette, f = defaultPptxFont): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [];
   out.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: page.headline, font: pptxFont, bold: true, color: hex(p.primaryInk), size: 30 })],
+      children: [new TextRun({ text: page.headline, font: f, bold: true, color: hex(p.primaryInk), size: 30 })],
     }),
   );
   if (page.body) {
-    out.push(new Paragraph({ children: [new TextRun({ text: page.body, font: pptxFont, size: 24 })] }));
+    out.push(new Paragraph({ children: [new TextRun({ text: page.body, font: f, size: 24 })] }));
   }
   for (const b of page.bullets ?? []) {
-    const status = b.status && b.status !== 'confirmed' ? `（${b.status === 'unverified' ? '待验证' : b.status === 'needs_review' ? '待复核' : '待决'}）` : '';
     out.push(
       new Paragraph({
         bullet: { level: 0 },
         children: [
-          new TextRun({ text: `${b.label ? `${b.label}：` : ''}${b.text}${status}`, font: pptxFont, size: 24 }),
+          new TextRun({ text: `${b.label ? `${b.label}：` : ''}${b.text}${statusSuffix(b.status)}`, font: f, size: 24 }),
         ],
       }),
     );
   }
-  if (page.table) out.push(specTableToDocx(page.table, p));
-  if (page.chart) out.push(chartToDocxTable(page.chart, p));
+  if (page.table) out.push(specTableToDocx(page.table, p, f));
+  if (page.chart) out.push(chartToDocxTable(page.chart, p, f));
   const footer = pageFooterParts(page).join('　|　');
   if (footer) {
     out.push(
       new Paragraph({
-        children: [new TextRun({ text: footer, font: pptxFont, size: 18, color: hex(palette.soft), italics: true })],
+        children: [new TextRun({ text: footer, font: f, size: 18, color: hex(palette.soft), italics: true })],
         spacing: { before: 120 },
       }),
     );
@@ -131,6 +132,7 @@ function sectionChildren(page: Page, p = palette): (Paragraph | Table)[] {
 export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
   const [cover, ...sections] = spec.pages;
   const p = withBrand(spec.theme?.brand);
+  const f = resolveFonts(spec.theme?.brand).pptx;
   const children: (Paragraph | Table)[] = [];
 
   // 文档头（封面信息 + 品牌 Logo）
@@ -146,17 +148,17 @@ export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
   }
   children.push(
     new Paragraph({
-      children: [new TextRun({ text: '研究报告', font: pptxFont, bold: true, color: hex(p.primary), size: 22 })],
+      children: [new TextRun({ text: '研究报告', font: f, bold: true, color: hex(p.primary), size: 22 })],
       spacing: { after: 120 },
     }),
     new Paragraph({
       heading: HeadingLevel.TITLE,
-      children: [new TextRun({ text: cover?.headline ?? spec.report_id, font: pptxFont, bold: true, color: hex(p.primaryInk), size: 44 })],
+      children: [new TextRun({ text: cover?.headline ?? spec.report_id, font: f, bold: true, color: hex(p.primaryInk), size: 44 })],
       spacing: { after: 160 },
     }),
   );
   if (cover?.subtitle) {
-    children.push(new Paragraph({ children: [new TextRun({ text: cover.subtitle, font: pptxFont, size: 26, color: hex(palette.muted) })] }));
+    children.push(new Paragraph({ children: [new TextRun({ text: cover.subtitle, font: f, size: 26, color: hex(p.muted) })] }));
   }
   const metaParts = [spec.brief.audience, spec.brief.purpose].filter(Boolean);
   children.push(
@@ -164,7 +166,7 @@ export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
       children: [
         new TextRun({
           text: [metaParts.join('　|　'), cover?.required_note].filter(Boolean).join('　|　'),
-          font: pptxFont, size: 20, color: hex(palette.soft),
+          font: f, size: 20, color: hex(palette.soft),
         }),
       ],
       spacing: { after: 360 },
@@ -172,7 +174,7 @@ export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
   );
 
   for (const page of sections) {
-    children.push(...sectionChildren(page, p));
+    children.push(...sectionChildren(page, p, f));
   }
 
   const doc = new Document({

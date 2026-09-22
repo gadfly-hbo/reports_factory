@@ -61,7 +61,7 @@ export default function App() {
   const [ackEditable, setAckEditable] = useState(false);
   const [ackExternalShare, setAckExternalShare] = useState(false);
   const [lastPrivacy, setLastPrivacy] = useState<{ checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } | null>(null);
-  const [brandDraft, setBrandDraft] = useState<{ primary: string; accent: string; logo?: string } | null>(null);
+  const [brandDraft, setBrandDraft] = useState<{ primary: string; accent: string; logo?: string; font?: string } | null>(null);
   const [pendingSheet, setPendingSheet] = useState<{ file: File; meta: { kind: string; media_type: string }; sheets: string[]; chosen: string } | null>(null);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null);
@@ -163,7 +163,7 @@ export default function App() {
 
   const saveBrand = async () => {
     if (!currentId || !brandDraft) return;
-    const brand: Record<string, string> = { primary: brandDraft.primary, accent: brandDraft.accent };
+    const brand: Record<string, string> = { primary: brandDraft.primary, accent: brandDraft.accent, ...(brandDraft.font ? { font_name: brandDraft.font } : {}) };
     if (brandDraft.logo) brand.logo_data_url = brandDraft.logo;
     const res = await fetch(`/api/projects/${currentId}/brand`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brand }),
@@ -183,7 +183,7 @@ export default function App() {
     setBusy(true);
     try {
       const isResearch = (detail as { deliverable_type?: string } | null)?.deliverable_type === 'research_report';
-      const formats = deliverable === 'executive_summary' ? ['pptx'] : isResearch ? ['docx', 'html', 'pdf'] : ['pptx', 'pdf'];
+      const formats = deliverable === 'executive_summary' ? ['pptx', 'pdf', 'html'] : isResearch ? ['docx', 'html', 'pdf'] : ['pptx', 'pdf'];
       const res = await api.post<{ allowed: boolean; reason: string; exports: ExportRec[]; privacy?: { checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } }>(`/api/projects/${currentId}/export`, {
         mode, formats, exportScope,
         chart_data_mode: exportScope === 'external' ? chartDataMode : undefined,
@@ -440,6 +440,7 @@ export default function App() {
                 <div className="row">
                   <label className="field">主色<input type="color" value={draft.primary} onChange={(e) => setBrandDraft({ ...draft, primary: e.target.value })} style={{ width: 60 }} /></label>
                   <label className="field">强调色<input type="color" value={draft.accent} onChange={(e) => setBrandDraft({ ...draft, accent: e.target.value })} style={{ width: 60 }} /></label>
+                  <label className="field">字体名<input placeholder="如 Microsoft YaHei" value={draft.font ?? ''} onChange={(e) => setBrandDraft({ ...draft, font: e.target.value || undefined })} style={{ width: 140 }} /></label>
                   <label className="field">Logo（PNG/JPG）
                     <input type="file" accept="image/png,image/jpeg" onChange={async (e) => {
                       const f = e.target.files?.[0];

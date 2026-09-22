@@ -23,7 +23,17 @@ export function deriveExecutiveSummary(main: ReportSpec): ReportSpec {
 
   const sections: SummarySection[] = [
     { label: '问题', claim: facts[0], fallback: '待补充：尚无已确认的核心问题陈述' },
-    { label: '选择', claim: recommendations[0], fallback: '待补充：尚无可比较的方案材料' },
+    // 选择：仅当存在≥2条建议时列出方案；单条建议不构成"比较"，如实标待补充（不重复同一条）
+    {
+      label: '选择',
+      claim: recommendations.length >= 2 ? recommendations[0] : undefined,
+      fallback:
+        recommendations.length >= 2
+          ? `可选方案：${recommendations.map((r) => r.text).join('；')}`
+          : recommendations.length === 1
+            ? '待补充：仅一条建议材料，无方案比较'
+            : '待补充：尚无可比较的方案材料',
+    },
     { label: '建议', claim: recommendations[0], fallback: '待补充：尚无建议标记材料' },
     { label: '风险', claim: inferences[0], fallback: '待补充：尚无推断/不确定性材料' },
     {
@@ -70,7 +80,7 @@ export function deriveExecutiveSummary(main: ReportSpec): ReportSpec {
     revision_id: main.revision_id,
     brief: { ...main.brief, deliverable_type: 'executive_summary', page_budget: 1 },
     source_snapshot: main.source_snapshot,
-    metrics: main.metrics, // 同一指标对象——跨交付物一致性可校验
+    metrics: structuredClone(main.metrics), // 深拷贝：摘要侧编辑与主报告分叉时跨交付物校验能抓到
     claims: main.claims,
     pages: [
       {

@@ -7,6 +7,7 @@ import {
   fontStack,
   pageTypeLabels,
   palette,
+  resolveFonts,
   slide,
   statusVisual,
   withBrand,
@@ -174,7 +175,8 @@ body { font-family: ${fontStack}; color: ${palette.text}; background: ${palette.
 /** ReportSpec → 自包含 HTML 预览（应用内预览与 PDF 打印共用一份渲染） */
 export function renderReportHtml(spec: ReportSpec): string {
   const p = withBrand(spec.theme?.brand);
-  const css = baseCss.replaceAll(palette.primary, p.primary).replaceAll(palette.primaryInk, p.primaryInk).replaceAll(palette.primarySoft, p.primarySoft).replaceAll(palette.teal, p.teal);
+  const f = resolveFonts(spec.theme?.brand);
+  const css = baseCss.replaceAll(palette.primary, p.primary).replaceAll(palette.primaryInk, p.primaryInk).replaceAll(palette.primarySoft, p.primarySoft).replaceAll(palette.teal, p.teal).replaceAll(fontStack, f.stack);
   const slides = spec.pages.map((pg) => renderPageHtml(pg, spec.theme?.brand)).join('\n');
   return `<!doctype html>
 <html lang="zh-CN">

@@ -75,3 +75,37 @@
 - 终审附注：冲突解决文件损坏时静默丢失 → 已修为缺失返回空、损坏显式报错（e5d2e8d 后续提交）。
 
 最终状态：M2 工程基座阻断清零；M2 阶段门（真实重复使用）按红队约束③不宣称通过，留给用户真实使用判定（模板见 docs/m2-usage-log.md）。
+
+---
+
+# M3 轮审查记录（73f6f08..HEAD）
+
+## Standards（M3，73f6f08..HEAD）
+
+**阻断级（ship-blocking）：**
+1. **品牌参数未穿到底**：`docx.ts` 的 `cell(text, opts, p = palette)` 的调用方不传 p → 表头单元格用默认 primaryInk（品牌主色漏掉）；`renderReportDocx` 封面副标题用 `palette.muted`（brand.muted 被忽略）；`pptx.ts` 的 `addCover` 副标题与 `addFooter` 同样没拿到 p → 品牌 muted 槽位在 deck 输出静默丢失。
+2. **重复主张**：`summary.ts` 的"选择"与"建议"两段都渲染 recommendations[0]（同一文本出现两次）；`gateway.ts` researchOutline 的 7/8 页（option_comparison/action_items）在仅一条建议材料时同样重复绑定。
+
+**非阻断（记录清理项）：**
+- `theme.ts:90` 中文件 import（BrandConfig 在 pageTypeLabels 之后）；`docx.ts` 死 import matchSection；状态后缀文案在 document-html.ts/docx.ts 重复（应收 theme.ts）；document-pdf.ts 克隆 pdf.ts 浏览器生命周期（35 行可容忍）；chartToTableHtml 死三元（'项目':'项目'）；html.ts CSS replaceAll 重着色脆弱（同 hex 不同角色会误伤）；`el as unknown as {...}` 双 cast（ingest/docx.ts）。
+- `document-pdf.ts` 模块级 browser 变量与既有 pdf.ts 同构——沿用已认可的既有模式。
+
+## Spec（M3）
+
+阻断级 6 项：
+1. **document golden 从未被调用**（compareDocumentGolden 存在但 regression.mjs 未接线——gates 的 M3 门禁出现真实漏洞；与早前 regression.ts 同一文件回退事故所致）。
+2. **font_name 是死字段**（schema 冻结但零消费；UI 也无输入）。
+3. **跨交付物一致性形同虚设**：summary.metrics 与主报告同一对象引用（编辑分叉永不触发）；且 M3-G6 要求的 display 比对缺失。
+4. **研究大纲顺序偏离 §4.1/G2**：证据附录应在限制前、发现应"每发现一节"、单条建议不应有"可选方案"页。
+5. **UI 摘要导出只发 PPTX**（§1.2 要三格式）。
+6. **DOCX 人工验证记录缺失**（切片 1 验收项）。
+
+边界核验通过：无范围蔓延（品牌 token 级、无布局编辑、无 M4 渗透）；推断不升级；DOCX 图表=数值表格；schema 全 optional 向后兼容；deck golden 零漂移（门禁"不降低质量"在当前实现成立）。
+
+## 汇总（CONVERGE）
+
+**阻断（全部修复于本批次）：**
+- 标准轴 3 项：品牌参数穿到底（docx cell 调用传 p、pptx addCover/addFooter 用 p.muted）；summary.ts"选择/建议"去重（单条建议→待补充不重复）；researchOutline 7/8 页重复（单建议时不出方案比较页）
+- 规格轴 6 项：regression.mjs 接回 document golden（脚本输出验证）；font_name 经 resolveFonts 参数化贯穿四渲染器 + UI 输入框；summary metrics 改深拷贝 + cross-deliverable 增 display 比对；研究大纲按 §4.1 精确顺序重排（发现每事实一节）；UI 摘要三格式；docs/m3-docx-verification.md 落成
+
+**非阻断（记录不动）：** document-pdf/pdf 浏览器生命周期重复（35 行容忍）；html.ts CSS replaceAll 重着色脆弱（当前无同 hex 冲突，风险低）；`el as unknown` 双 cast（ingest/docx.ts，已隔离）；document-pdf 模块级 browser（沿用既有 pdf.ts 已认可模式）。

@@ -1,4 +1,5 @@
 import type { PageType } from '../schema/report-spec.js';
+import type { BrandConfig } from '../schema/brand.js';
 
 /**
  * 设计系统 token —— 采用 JuanerAI Prism 棱镜设计语言（全局规范默认基线）。
@@ -87,8 +88,6 @@ export const pageTypeLabels: Record<PageType, string> = {
   evidence_appendix: '证据附录',
 };
 
-import type { BrandConfig } from '../schema/brand.js';
-
 /** 与白色混合：amount=0 原色，=1 纯白 */
 function tint(hex: string, amount: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -107,4 +106,16 @@ export function withBrand(brand?: BrandConfig): typeof palette {
     teal: brand.accent, // 语义色槽位映射：accent 覆盖信息强调色
     ...(brand.muted ? { muted: brand.muted } : {}),
   };
+}
+
+/** 状态后缀（document 管线共用；deck 走 statusVisual 徽标） */
+export function statusSuffix(status?: string): string {
+  if (!status || status === 'confirmed') return '';
+  return `（${status === 'unverified' ? '待验证' : status === 'needs_review' ? '待复核' : '待决'}）`;
+}
+
+/** 品牌字体名 → 渲染字体（缺省全局字体栈；font_name 只进 token 不改内容） */
+export function resolveFonts(brand?: BrandConfig): { stack: string; pptx: string } {
+  if (!brand?.font_name) return { stack: fontStack, pptx: pptxFont };
+  return { stack: `"${brand.font_name}", ${fontStack}`, pptx: brand.font_name };
 }

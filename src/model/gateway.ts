@@ -60,17 +60,26 @@ function researchOutline(ctx: OutlineContext, page: typeof buildPage): OutlineDr
   const firstTable = ctx.tables[0];
   const emptyNote = (what: string) => [`材料中未找到${what}——该节留待补充，不编造`];
 
+  // §4.1 主线：问题→口径→方法→发现（每发现一节）→证据→限制→建议；单条建议不构成方案比较
   const pages: PagePlanItem[] = [
     page(1, 'cover', `${ctx.brief.purpose}`, 'info'),
-    page(2, 'summary', '问题与背景', 'conclusion', facts.slice(0, 3).map((c) => c.claim_id), [], facts.length === 0 ? emptyNote('明确的结论/背景陈述') : []),
+    // 问题与背景 = 沟通任务与问题陈述（来自汇报目标，非材料主张）；主要事实集中在"主要发现"各节，不重复绑定
+    page(2, 'summary', '问题与背景', 'conclusion', [], [], ['本节为沟通任务与问题陈述（来自汇报目标）；主要事实见下方"主要发现"各节']),
     page(3, 'evidence_appendix', '口径与方法', 'evidence', dataNotes.map((c) => c.claim_id), [], dataNotes.length === 0 ? emptyNote('口径说明') : []),
-    page(4, 'metrics_overview', '主要发现：关键指标', 'evidence', [], firstTable ? [firstTable.table_id] : [], firstTable ? [] : ['缺少汇总表格，本节留待补充']),
-    page(5, 'trend', '主要发现：趋势', 'evidence', [], firstTable && firstTable.rows.length > 2 ? [firstTable.table_id] : [], firstTable && firstTable.rows.length > 2 ? [] : ['缺少时间序列数据，本节留待补充']),
-    page(6, 'issue_breakdown', '限制与不确定性', 'conclusion', inferences.map((c) => c.claim_id), [], inferences.length === 0 ? emptyNote('推断/假设标记') : []),
-    page(7, 'option_comparison', '可选方案', 'decision', recommendations.map((c) => c.claim_id), [], recommendations.length === 0 ? emptyNote('建议标记') : []),
-    page(8, 'action_items', '建议', 'decision', recommendations.map((c) => c.claim_id), [], recommendations.length === 0 ? emptyNote('建议标记') : []),
-    page(9, 'evidence_appendix', '证据附录', 'info', dataNotes.map((c) => c.claim_id), ctx.tables.slice(1).map((t) => t.table_id), []),
   ];
+  // 发现：每事实主张一节（M3-G2）+ 指标与趋势证据页
+  facts.slice(0, 3).forEach((c, i) => {
+    pages.push(page(pages.length + 1, 'summary', `主要发现：${c.text.split(/[，。；;]/)[0]!.slice(0, 28)}`, 'conclusion', [c.claim_id], [], []));
+    void i;
+  });
+  pages.push(page(pages.length + 1, 'metrics_overview', '主要发现：关键指标', 'evidence', [], firstTable ? [firstTable.table_id] : [], firstTable ? [] : ['缺少汇总表格，本节留待补充']));
+  pages.push(page(pages.length + 1, 'trend', '主要发现：趋势', 'evidence', [], firstTable && firstTable.rows.length > 2 ? [firstTable.table_id] : [], firstTable && firstTable.rows.length > 2 ? [] : ['缺少时间序列数据，本节留待补充']));
+  pages.push(page(pages.length + 1, 'evidence_appendix', '证据附录', 'info', dataNotes.map((c) => c.claim_id), ctx.tables.slice(1).map((t) => t.table_id), []));
+  pages.push(page(pages.length + 1, 'issue_breakdown', '限制与不确定性', 'conclusion', inferences.map((c) => c.claim_id), [], inferences.length === 0 ? emptyNote('推断/假设标记') : []));
+  if (recommendations.length >= 2) {
+    pages.push(page(pages.length + 1, 'option_comparison', '可选方案', 'decision', recommendations.map((c) => c.claim_id), [], []));
+  }
+  pages.push(page(pages.length + 1, 'action_items', '建议', 'decision', recommendations.map((c) => c.claim_id), [], recommendations.length === 0 ? emptyNote('建议标记') : []));
   return {
     pages,
     open_questions: [

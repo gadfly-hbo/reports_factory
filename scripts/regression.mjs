@@ -7,6 +7,7 @@ import { renderReportHtml } from '../dist/render/html.js';
 import { renderReportPptx } from '../dist/render/pptx.js';
 import { renderReportPdf, closePdfBrowser } from '../dist/render/pdf.js';
 import JSZip from 'jszip';
+import { join } from 'node:path';
 
 const update = process.argv.includes('--update');
 let failed = 0;
@@ -41,6 +42,20 @@ if (update) {
   const r = await compareWithGolden(retailReviewSpec);
   if (r.ok) ok('golden 文本比对一致（html/pptx/pdf）');
   else for (const m of r.mismatches) bad(`[${m.format}] ${m.detail}`);
+}
+
+// 4) 研究报告样例（document 管线 golden：独立 HTML / DOCX / A4 PDF）
+const { buildResearchSample } = await import('../dist/samples/research-report.js');
+const { compareDocumentGolden, updateDocumentGolden } = await import('../dist/samples/regression.js');
+const researchSpec = await buildResearchSample(join(process.cwd(), 'tests', 'fixtures', 'materials'));
+const researchGoldenDir = join(process.cwd(), 'samples', 'research-report', 'golden');
+if (update) {
+  await updateDocumentGolden(researchSpec, researchGoldenDir);
+  ok('研究报告 golden 基线已刷新（--update）');
+} else {
+  const r2 = await compareDocumentGolden(researchSpec, researchGoldenDir);
+  if (r2.ok) ok('研究报告 golden（document 管线：html/docx/pdf）一致');
+  else for (const m of r2.mismatches) bad(`[research/${m.format}] ${m.detail}`);
 }
 
 console.log(failed === 0 ? '\n回归样例集：全部通过 ✅' : `\n回归样例集：${failed} 项失败 ❌`);

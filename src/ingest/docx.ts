@@ -1,7 +1,7 @@
 import mammoth from 'mammoth';
 import { parse, HTMLElement } from 'node-html-parser';
 import { emptyIngestResult, type IngestResult } from '../schema/assets.js';
-import { matchSection, ingestMarkdown } from './markdown.js';
+import { ingestMarkdown } from './markdown.js';
 import { recordsToTable } from './table-core.js';
 
 /**
