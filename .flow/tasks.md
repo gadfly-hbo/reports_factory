@@ -10,7 +10,7 @@
 - [x] 4. M1 存储：workspace 项目存储与版本对象
 - [x] 5. M1 材料：导入解析与证据资产
 - [x] 6. M1 编排：ReportBrief + 确定性大纲 + PrivacyGate
-- [ ] 7. M1 页面：ReportSpec 组装 + 局部编辑/锁定/页序
+- [x] 7. M1 页面：ReportSpec 组装 + 局部编辑/锁定/页序
 - [ ] 8. M1 门禁：质量检查引擎 + 计算复算 + 导出冻结快照
 - [ ] 9. M1 闭环：端到端样例链测试 + 验收样例自动化
 - [ ] 10. M1 UI：Fastify + Vite React 最小工作台（预算不足首先砍）
