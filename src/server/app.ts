@@ -90,15 +90,25 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return workbench.checks(id, body.exportScope);
   });
 
-  app.post('/api/projects/:id/resolve-conflict', async (req) => {
-    // 冲突解决记录到项目 work 目录（M1：无库存储，直接写文件）
+  app.post('/api/projects/:id/resolve-conflict', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { resolution } = req.body as { resolution: Record<string, 'source_a' | 'source_b' | 'manual_value'> };
-    const { writeFile, mkdir } = await import('node:fs/promises');
-    const dir = join(store.root, id, 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(resolution, null, 2));
-    return { ok: true };
+    const { resolution } = req.body as {
+      resolution: Record<string, 'source_a' | 'source_b' | { resolution: 'manual_value'; value: number } | string>;
+    };
+    try {
+      await workbench.resolveConflict(id, resolution);
+      return { ok: true };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // 来源替换影响面（§13.2：新材料版本到来后提示受影响页面）
+  app.get('/api/projects/:id/impact', async (req) => {
+    const { id } = req.params as { id: string };
+    return { impact: await workbench.impactMap(id) };
   });
 
   app.get('/api/projects/:id/conflict-resolutions', async (req) => {

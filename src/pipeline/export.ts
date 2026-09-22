@@ -55,7 +55,7 @@ export async function exportReport(
       revision_id: revision.revision_id,
       format,
       artifact: Buffer.isBuffer(artifact) ? artifact : Buffer.from(artifact),
-      checks: { blockers: checks.blockers, warnings: checks.warnings },
+      checks: { blockers: checks.blockers, warnings: checks.warnings, issues: checks.issues },
       is_draft: opts.mode === 'draft',
     });
     exports.push(record);

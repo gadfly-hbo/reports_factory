@@ -1,5 +1,5 @@
 import type { PagePlanItem } from '../model/gateway.js';
-import type { Claim, Page, ReportBrief, ReportSpec, SourceRef } from '../schema/report-spec.js';
+import type { Claim, Metric, Page, ReportBrief, ReportSpec, SourceRef } from '../schema/report-spec.js';
 import type { EvidenceRef } from '../schema/assets.js';
 import type { SourceConflict, TableAsset } from '../schema/assets.js';
 import { ReportSpecSchema } from '../schema/report-spec.js';
@@ -169,18 +169,55 @@ export function assemblePage(plan: PagePlanItem, ctx: AssembleContext, pageNum: 
   }
 }
 
+/** §10.2 简单计算：从表格派生变化率指标（代码计算，保留公式与输入，可复算可追溯） */
+export function deriveMetrics(tables: TableAsset[]): Metric[] {
+  const metrics: Metric[] = [];
+  for (const t of tables) {
+    const numericIdx = t.columns.findIndex((_c, i) => t.rows.some((r) => typeof r.cells[i] === 'number'));
+    if (numericIdx < 0 || t.rows.length < 2) continue;
+    const prev = t.rows[t.rows.length - 2]!;
+    const last = t.rows[t.rows.length - 1]!;
+    const previous = Number(prev.cells[numericIdx]);
+    const current = Number(last.cells[numericIdx]);
+    if (!Number.isFinite(previous) || !Number.isFinite(current) || previous === 0) continue;
+    metrics.push({
+      metric_id: `metric_${t.table_id}_latest_change`,
+      value: (current - previous) / previous,
+      unit: 'ratio',
+      display_format: '+0.0%;-0.0%',
+      scope: `${t.columns[numericIdx]!.label}：${prev.key} → ${last.key}（来自 ${t.source_id}）`,
+      formula: '(current - previous) / previous',
+      inputs: { previous, current },
+      source_ref: t.source_id,
+    });
+  }
+  return metrics;
+}
+
 export function assembleReportSpec(input: { report_id: string; ctx: AssembleContext }): ReportSpec {
   const { ctx } = input;
   const pages = ctx.pagePlans.map((plan, i) => assemblePage(plan, ctx, i + 1));
   // 组装时按页计划顺序重排页号 ID，保持稳定
   const renumbered = pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` }));
+  const metrics = deriveMetrics(ctx.tables);
+  // 趋势/指标页绑定其表格派生的指标（图表数值与指标同源可追溯）
+  const metricByTable = new Map(ctx.tables.map((t) => [t.table_id, `metric_${t.table_id}_latest_change`]));
+  for (const page of renumbered) {
+    if (page.type === 'trend' || page.type === 'metrics_overview') {
+      const bound = (page.chart?.source_ref ?? page.table?.source_ref ?? '').split('@')[0];
+      const metricId = [...metricByTable.entries()].find(([t]) => t.endsWith(bound ?? '\u0000'))?.[1];
+      if (metricId && metrics.some((m) => m.metric_id === metricId)) {
+        page.metric_refs = [...new Set([...page.metric_refs, metricId])];
+      }
+    }
+  }
   return ReportSpecSchema.parse({
     schema_version: '1.0',
     report_id: input.report_id,
     revision_id: 'rev_pending', // 由存储层落盘时分配
     brief: ctx.brief,
     source_snapshot: ctx.sourceSnapshot,
-    metrics: [],
+    metrics,
     claims: ctx.claims,
     pages: renumbered,
     export_policy: { freeze_revision: true, include_source_notes: true, external_share_allowed: false },

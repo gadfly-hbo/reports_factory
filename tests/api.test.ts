@@ -47,6 +47,10 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
       expect(res.json().ok).toBe(true);
     }
 
+    // 记录源 id（影响面断言用）
+    const detail0 = (await app.inject({ url: `/api/projects/${projectId}` })).json();
+    const csvSourceId = detail0.sources.find((x: any) => x.filename === 'sales.csv').source_id;
+
     // 3) 大纲（确定性模式）
     const outlineRes = await app.inject({
       method: 'POST', url: `/api/projects/${projectId}/outline`,
@@ -70,12 +74,23 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
     expect(blocked.allowed).toBe(false);
     expect(blocked.checks.blockers).toBeGreaterThan(0);
 
-    // 6) 解决冲突 → 正式导出放行
+    // 6) 解决冲突（记录采用值）→ 正式导出放行
     const conflictId = blocked.checks.issues.find((i: any) => i.id === 'source_conflict_unresolved')?.object_ref;
-    await app.inject({
+    const resolveRes = await app.inject({
       method: 'POST', url: `/api/projects/${projectId}/resolve-conflict`,
       payload: { resolution: { [conflictId]: 'source_a' } },
     });
+    expect(resolveRes.statusCode).toBe(200);
+    // 采用的口径值被记录（§10.2 展示冲突并由用户确认处理）
+    const resolutions = (await app.inject({ url: `/api/projects/${projectId}/conflict-resolutions` })).json();
+    expect(resolutions[conflictId].resolution).toBe('source_a');
+    expect([452, 455]).toContain(resolutions[conflictId].adopted_value);
+    // manual_value 必须带数值
+    const manualBad = await app.inject({
+      method: 'POST', url: `/api/projects/${projectId}/resolve-conflict`,
+      payload: { resolution: { [conflictId]: 'manual_value' } },
+    });
+    expect(manualBad.statusCode).toBe(400);
     const ok = (await app.inject({
       method: 'POST', url: `/api/projects/${projectId}/export`,
       payload: { mode: 'formal', formats: ['pptx', 'pdf'] },
@@ -83,12 +98,20 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
     expect(ok.allowed).toBe(true);
     expect(ok.exports).toHaveLength(2);
 
-    // 7) 局部编辑（锁定演示：改第3页标题）
+    // 7) 局部编辑（改第3页标题）→ 产生新修订（切片7验收）
+    const revsBefore = (await app.inject({ url: `/api/projects/${projectId}` })).json().revisions.length;
     const editRes = await app.inject({
       method: 'POST', url: `/api/projects/${projectId}/edit`,
       payload: { op: { kind: 'edit_text', page_id: 'page_03', field: 'headline', text: 'API 改后的标题' } },
     });
     expect(editRes.statusCode).toBe(200);
+    const revsAfter = (await app.inject({ url: `/api/projects/${projectId}` })).json().revisions.length;
+    expect(revsAfter).toBe(revsBefore + 1); // 每次实质修改产生 ReportRevision
+
+    // 7b) 来源替换影响面端点（§13.2 来源替换行）
+    const impact = (await app.inject({ url: `/api/projects/${projectId}/impact` })).json().impact;
+    expect(impact[csvSourceId]).toContain('page_03'); // 指标总览
+    expect(impact[csvSourceId]).toContain('page_04'); // 趋势页
 
     // 8) 预览包含关键内容（改后标题生效、推断保留）
     const preview = await app.inject({ method: 'GET', url: `/api/projects/${projectId}/preview` });
@@ -98,5 +121,12 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
     // 检查问题清单可查询
     const checks = (await app.inject({ method: 'POST', url: `/api/projects/${projectId}/checks`, payload: {} })).json();
     expect(typeof checks.blockers).toBe('number');
+
+    // 9) 导出记录绑定完整检查结果（§10.4：可事后重建问题清单）
+    const detailEnd = (await app.inject({ url: `/api/projects/${projectId}` })).json();
+    const formalExport = detailEnd.exports.find((e: any) => !e.is_draft);
+    expect(formalExport).toBeTruthy(); // 冲突解决后的正式导出
+    expect(Array.isArray(formalExport.checks?.issues)).toBe(true);
+    expect(formalExport.checks.blockers).toBe(0);
   });
 });

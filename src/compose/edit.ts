@@ -18,6 +18,7 @@ export type EditOp =
   | { kind: 'edit_text'; page_id: string; field: 'headline' | 'body'; text: string }
   | { kind: 'reorder'; order: string[] }
   | { kind: 'regenerate_page'; page_id: string }
+  | { kind: 'split_page'; page_id: string }
   | { kind: 'switch_layout'; page_id: string; layout_id: string }
   | { kind: 'toggle_lock'; page_id: string; locked: boolean };
 
@@ -65,6 +66,34 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
             : p,
         ),
       };
+    }
+    case 'split_page': {
+      // §5.3 "第三页拆成两页"：后半内容成为（续）页；新页 id 加后缀，不重排其余页 id（编辑稳定性）
+      const page = findPage(spec, op.page_id);
+      if (page.locked) throw new EditRejectedError(`页面 ${op.page_id} 已锁定`);
+      const secondId = `${op.page_id}b`;
+      if (spec.pages.some((p) => p.page_id === secondId)) {
+        throw new EditRejectedError(`拆分目标 id 已存在：${secondId}`);
+      }
+      let first = page;
+      let second = { ...page, page_id: secondId, headline: `${page.headline}（续）` };
+      if ((page.bullets?.length ?? 0) >= 2) {
+        const mid = Math.ceil(page.bullets!.length / 2);
+        const head = page.bullets!.slice(0, mid);
+        const tail = page.bullets!.slice(mid);
+        first = { ...page, bullets: head, claim_refs: head.map((b) => b.claim_ref).filter((x): x is string => !!x) };
+        second = { ...second, bullets: tail, claim_refs: tail.map((b) => b.claim_ref).filter((x): x is string => !!x) };
+      } else if ((page.table?.rows.length ?? 0) >= 2) {
+        const mid = Math.ceil(page.table!.rows.length / 2);
+        first = { ...page, table: { ...page.table!, rows: page.table!.rows.slice(0, mid) } };
+        second = { ...second, table: { ...page.table!, rows: page.table!.rows.slice(mid) } };
+      } else {
+        throw new EditRejectedError(`页面 ${op.page_id} 内容不足以拆分（需至少 2 条要点或 2 行表格）`);
+      }
+      const idx = spec.pages.findIndex((p) => p.page_id === op.page_id);
+      const pages = [...spec.pages];
+      pages.splice(idx, 1, first, second);
+      return { ...spec, pages };
     }
     case 'switch_layout': {
       findPage(spec, op.page_id);

@@ -10,6 +10,7 @@ import {
 } from '../src/compose/assemble.js';
 import { applyEdit, EditRejectedError } from '../src/compose/edit.js';
 import { validateReportSpec, type ReportSpec } from '../src/schema/report-spec.js';
+import { runChecks } from '../src/checks/engine.js';
 import type { Claim, ReportBrief } from '../src/schema/report-spec.js';
 
 const MAT = join(import.meta.dirname, 'fixtures/materials');
@@ -146,5 +147,49 @@ describe('单页组装器', () => {
     const rebuilt = assemblePage(plan, ctx, spec.pages.length);
     expect(rebuilt.type).toBe('metrics_overview');
     expect(rebuilt.table).toBeDefined();
+  });
+});
+
+describe('拆页操作（§5.3 "第三页拆成两页"）', () => {
+  it('拆分要点页：两页各半、后续页不变、claim_refs 随要点分配', async () => {
+    const { spec } = await buildFixture();
+    const next = applyEdit(spec, { kind: 'split_page', page_id: 'page_02' }, {});
+    expect(next.pages).toHaveLength(spec.pages.length + 1);
+    const first = next.pages.find((p) => p.page_id === 'page_02')!;
+    const second = next.pages.find((p) => p.page_id === 'page_02b')!;
+    expect(first.bullets!.length + second.bullets!.length).toBe(3);
+    expect(second.headline).toContain('（续）');
+    expect(second.type).toBe(first.type);
+    for (const p of next.pages.filter((x) => !['page_02', 'page_02b'].includes(x.page_id))) {
+      expect(p).toEqual(spec.pages.find((o) => o.page_id === p.page_id)!);
+    }
+  });
+
+  it('表格页拆分：行各半；内容不足的页面拒绝拆分', async () => {
+    const { spec } = await buildFixture();
+    const next = applyEdit(spec, { kind: 'split_page', page_id: 'page_03' }, {}); // 指标总览（表格）
+    const second = next.pages.find((p) => p.page_id === 'page_03b')!;
+    expect(second.table!.rows.length).toBeGreaterThanOrEqual(1);
+    expect(firstRows(next) + second.table!.rows.length).toBe(6); // sales.csv 六行
+    expect(() => applyEdit(spec, { kind: 'split_page', page_id: 'page_04' }, {})).toThrow(EditRejectedError); // trend 无要点/表格
+  });
+});
+
+function firstRows(spec: ReportSpec): number {
+  return spec.pages.find((p) => p.page_id === 'page_03')!.table!.rows.length;
+}
+
+describe('指标派生（§10.2 简单计算由代码完成并保留公式输入）', () => {
+  it('组装时从表格派生变化率 metric，复算通过，趋势页绑定', async () => {
+    const { spec } = await buildFixture();
+    expect(spec.metrics.length).toBeGreaterThan(0);
+    const m = spec.metrics[0]!;
+    expect(m.formula).toBe('(current - previous) / previous');
+    expect(m.inputs).toEqual({ previous: 470, current: 452 }); // 5月→6月（sales.csv）
+    expect(m.source_ref).toBeTruthy();
+    const r = runChecks(spec, { conflicts: [] });
+    expect(r.issues.find((i) => i.id === 'metric_recompute_failed')).toBeUndefined();
+    const trend = spec.pages.find((p) => p.type === 'trend')!;
+    expect(trend.metric_refs).toContain(m.metric_id);
   });
 });

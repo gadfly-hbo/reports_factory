@@ -43,6 +43,7 @@ export default function App() {
   const [brief, setBrief] = useState({ audience: '商品经营负责人', purpose: '上半年经营复盘与方案讨论', page_budget: 8 });
   const [outline, setOutline] = useState<OutlineDraft | null>(null);
   const [checks, setChecks] = useState<CheckReport | null>(null);
+  const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,13 @@ export default function App() {
 
   useEffect(() => { void reloadProjects(); }, [reloadProjects]);
   useEffect(() => { if (currentId) void reloadDetail(currentId); }, [currentId, reloadDetail]);
+  useEffect(() => {
+    if (currentId && detail?.hasSpec) {
+      void api.get<{ impact: Record<string, string[]> }>(`/api/projects/${currentId}/impact`).then((r) => setImpact(r.impact));
+    } else {
+      setImpact(null);
+    }
+  }, [currentId, detail?.hasSpec]);
 
   const createProject = async () => {
     const title = prompt('项目名称？');

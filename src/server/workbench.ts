@@ -7,6 +7,7 @@ import type { PagePlanItem, OutlineDraft } from '../model/gateway.js';
 import { createDeterministicGateway } from '../model/gateway.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
+import { pagesImpactedBySource } from '../compose/impact.js';
 import { applyEdit, type EditOp } from '../compose/edit.js';
 import { runChecks, type CheckReport } from '../checks/engine.js';
 import { detectConflicts } from '../ingest/conflicts.js';
@@ -74,7 +75,7 @@ export class WorkbenchService {
   /** 合并用户解决记录后的冲突（用于检查、导出与 UI 展示；大纲仍用原始冲突提问） */
   async getResolvedConflicts(projectId: string): Promise<SourceConflict[]> {
     const conflicts = await this.getConflicts(projectId);
-    let resolutions: Record<string, string> = {};
+    let resolutions: Record<string, { resolution: string; adopted_value?: number }> = {};
     try {
       resolutions = JSON.parse(
         await readFile(join(this.store.root, projectId, 'work', 'conflict-resolutions.json'), 'utf-8'),
@@ -84,11 +85,23 @@ export class WorkbenchService {
     }
     return conflicts.map((c) => {
       const r = resolutions[c.conflict_id];
-      if (r === 'source_a' || r === 'source_b' || r === 'manual_value') {
-        return { ...c, resolution: r };
+      if (r && (r.resolution === 'source_a' || r.resolution === 'source_b' || r.resolution === 'manual_value')) {
+        return { ...c, resolution: r.resolution };
       }
       return c;
     });
+  }
+
+  /** 来源替换影响面（§13.2）：每个来源影响的页面 */
+  async impactMap(projectId: string): Promise<Record<string, string[]>> {
+    const spec = await this.getSpec(projectId);
+    const sources = await this.store.listSourceAssets(projectId);
+    if (!spec) return {};
+    const impact: Record<string, string[]> = {};
+    for (const s of sources) {
+      impact[s.source_id] = pagesImpactedBySource(spec, s.source_id);
+    }
+    return impact;
   }
 
   private async readWork(projectId: string): Promise<WorkState> {
@@ -162,8 +175,40 @@ export class WorkbenchService {
       sourceSnapshot: [],
     };
     const next = applyEdit(work.spec, op, ctx);
+    // §10.2 用户修改行：每次实质修改产生新修订（parent 链），保留人工修改记录
+    await this.store.saveRevision(projectId, next, `编辑：${op.kind}${'page_id' in op ? ` ${op.page_id}` : ''}`);
     await this.writeWork(projectId, { ...work, spec: next });
     return next;
+  }
+
+  /** 解决冲突并记录采用的口径值（§10.2：展示冲突并由用户确认处理，留痕） */
+  async resolveConflict(
+    projectId: string,
+    resolutions: Record<string, string | { resolution: 'manual_value'; value: number }>,
+  ): Promise<void> {
+    const conflicts = await this.getConflicts(projectId);
+    const byId = new Map(conflicts.flatMap((c) => c.values.map((v) => [c.conflict_id, c] as const)).map(([id, c]) => [id, c]));
+    const record: Record<string, { resolution: string; adopted_value: number }> = {};
+    for (const [id, r] of Object.entries(resolutions)) {
+      const conflict = byId.get(id);
+      if (!conflict) throw Object.assign(new Error(`冲突不存在：${id}`), { statusCode: 400 });
+      if (r === 'source_a' || r === 'source_b') {
+        const picked = conflict.values[r === 'source_a' ? 0 : 1];
+        if (!picked) throw Object.assign(new Error(`冲突 ${id} 无 ${r} 值`), { statusCode: 400 });
+        record[id] = { resolution: r, adopted_value: Number(picked.value) };
+      } else if (typeof r === 'object' && r.resolution === 'manual_value') {
+        if (typeof r.value !== 'number' || !Number.isFinite(r.value)) {
+          throw Object.assign(new Error('manual_value 必须提供数值'), { statusCode: 400 });
+        }
+        record[id] = { resolution: 'manual_value', adopted_value: r.value };
+      } else {
+        throw Object.assign(new Error(`非法的解决方式：${JSON.stringify(r)}`), { statusCode: 400 });
+      }
+    }
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const dir = join(this.store.root, projectId, 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(record, null, 2));
   }
 
   async getSpec(projectId: string): Promise<ReportSpec | null> {
