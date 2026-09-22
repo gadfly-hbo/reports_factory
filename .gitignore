@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# flow local machine state (durable artifacts in .flow/*.md ARE committed)
+.flow/state.json
+.flow/verify-failures.md
+
+# runtime data (projects workspace, exports generated at runtime)
+data/
+*.pptx
+*.pdf
+!fixtures/**/*.pptx
+!fixtures/**/*.pdf
+
+# env & logs
+.env
+.env.*
+*.log
+
+# OS
+.DS_Store
