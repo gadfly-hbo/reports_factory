@@ -30,6 +30,7 @@ function kindOf(filename: string): { kind: string; media_type: string } | null {
     case 'md': case 'markdown': return { kind: 'markdown', media_type: 'text/markdown' };
     case 'txt': return { kind: 'text', media_type: 'text/plain' };
     case 'csv': return { kind: 'csv', media_type: 'text/csv' };
+    case 'xlsx': case 'xlsm': return { kind: 'xlsx', media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
     case 'png': return { kind: 'image', media_type: 'image/png' };
     case 'jpg': case 'jpeg': return { kind: 'image', media_type: 'image/jpeg' };
     default: return null;
@@ -93,7 +94,17 @@ export default function App() {
     const meta = kindOf(file.name);
     if (!meta) return { filename: file.name, ok: false, failure_reason: `不支持的格式（支持 md/txt/csv/png/jpg）`, counts: undefined as Record<string, number> | undefined, confirmations: [] as { question: string }[] };
     const content_base64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
-    return { filename: file.name, ...(await api.post<{ ok: boolean; failure_reason?: string; counts?: Record<string, number>; confirmations?: { question: string }[] }>(`/api/projects/${currentId}/sources`, { filename: file.name, content_base64, ...meta })) };
+    const res = await api.post<{ ok: boolean; failure_reason?: string; counts?: Record<string, number>; confirmations?: { question: string }[]; available_sheets?: string[] }>(`/api/projects/${currentId}/sources`, { filename: file.name, content_base64, ...meta });
+    // XLSX 需显式选表（§4.2）：弹出让用户选，再带表重传
+    if (!res.ok && res.available_sheets && res.available_sheets.length > 0) {
+      const sheet = prompt(`工作簿有多张工作表，请输入要导入的一张：\n${res.available_sheets.join('、')}`);
+      if (sheet && res.available_sheets.includes(sheet)) {
+        const retried = await api.post<typeof res>(`/api/projects/${currentId}/sources`, { filename: file.name, content_base64, ...meta, sheet });
+        return { filename: file.name, ...retried, available_sheets: undefined };
+      }
+      return { filename: file.name, ok: false, failure_reason: `未选择有效工作表（可用：${res.available_sheets.join('、')}）`, counts: undefined, confirmations: [] };
+    }
+    return { filename: file.name, ...res, available_sheets: undefined };
   };
 
   const uploadFiles = async (files: File[]) => {

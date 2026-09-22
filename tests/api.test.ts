@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import ExcelJS from 'exceljs';
 import { join as pjoin } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 
@@ -251,5 +252,51 @@ describe('对外导出隐私链（§12.2 端到端）', () => {
     const blocked3 = (await app.inject({ method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pptx'], exportScope: 'external', ack_external_share: true, chart_data_mode: 'aggregate_only' } })).json();
     expect(blocked3.allowed).toBe(false);
     expect(blocked3.checks.issues.map((i: any) => i.id)).toContain('privacy_sensitive_sources');
+  });
+});
+
+describe('XLSX 上传的显式选表流程（API）', () => {
+  let app: import('fastify').FastifyInstance;
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rs-xlsx-'));
+    app = buildServer(new WorkspaceStore(dir));
+  });
+  afterEach(async () => {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('未选表 → 返回工作表清单；显式选表 → 解析成功', async () => {
+    const createRes = await app.inject({ method: 'POST', url: '/api/projects', payload: { title: 'XLSX 测试' } });
+    const id = createRes.json().project.project_id;
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('汇总');
+    ws.addRow(['月份', '销售额（万元）']);
+    ws.addRow(['1月', 505]);
+    ws.addRow(['2月', 510]);
+    wb.addWorksheet('明细').addRow(['SKU', '数量']);
+    const content_base64 = Buffer.from(await wb.xlsx.writeBuffer()).toString('base64');
+
+    // 未选表
+    const r1 = (await app.inject({
+      method: 'POST', url: `/api/projects/${id}/sources`,
+      payload: { filename: 'sales.xlsx', content_base64, kind: 'xlsx', media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    })).json();
+    expect(r1.ok).toBe(false);
+    expect(r1.available_sheets).toEqual(['汇总', '明细']);
+    expect(r1.source.parse_status).toBe('pending'); // 待选表，不算失败
+
+    // 显式选表
+    const r2 = (await app.inject({
+      method: 'POST', url: `/api/projects/${id}/sources`,
+      payload: { filename: 'sales.xlsx', content_base64, kind: 'xlsx', media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sheet: '汇总' },
+    })).json();
+    expect(r2.ok).toBe(true);
+    expect(r2.counts.tables).toBe(1);
+
+    const detail = (await app.inject({ url: `/api/projects/${id}` })).json();
+    expect(detail.sources.filter((x: any) => x.kind === 'xlsx').map((x: any) => x.parse_status)).toContain('parsed');
   });
 });

@@ -26,7 +26,7 @@ export const ProjectSchema = z.object({
   stage: ProjectStageSchema.default('materials'),
 });
 
-export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table']);
+export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx']);
 
 export const ParseStatusSchema = z.enum(['pending', 'parsed', 'failed']);
 

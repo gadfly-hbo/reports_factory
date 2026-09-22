@@ -82,9 +82,10 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       content: Buffer.from(body.content_base64, 'base64'),
       kind: body.kind,
       media_type: body.media_type,
+      sheet: body.sheet,
     });
-    const { ok, failure_reason, claims, evidence, tables, notes, confirmations } = result;
-    return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations };
+    const { ok, failure_reason, claims, evidence, tables, notes, confirmations, available_sheets } = result;
+    return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined, available_sheets: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations, available_sheets };
   });
 
   app.post('/api/projects/:id/outline', async (req, reply) => {

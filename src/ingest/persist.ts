@@ -2,6 +2,7 @@ import { emptyIngestResult, type IngestResult } from '../schema/assets.js';
 import type { SourceAsset } from '../schema/project.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ingestCsv } from './csv.js';
+import { ingestXlsx } from './xlsx.js';
 import { ingestMarkdown } from './markdown.js';
 
 export interface IngestInput {
@@ -10,6 +11,7 @@ export interface IngestInput {
   kind: SourceAsset['kind'];
   media_type: string;
   sensitivity?: SourceAsset['sensitivity'];
+  sheet?: string; // XLSX 显式选表
 }
 
 /**
@@ -36,6 +38,13 @@ export async function ingestAndSave(
     result = ingestMarkdown(input.content.toString('utf-8'), asset.source_id, asset.version);
   } else if (input.kind === 'csv') {
     result = ingestCsv(input.content.toString('utf-8'), asset.source_id);
+  } else if (input.kind === 'xlsx') {
+    result = await ingestXlsx(input.content, asset.source_id, input.sheet);
+    if (!result.ok && result.available_sheets) {
+      // 待选表：保持 pending（不算解析失败），用户选表后重试
+      await store.markSourceParse(projectId, asset.source_id, 'pending');
+      return { ...asset, parse_status: 'pending', ...result };
+    }
   } else if (input.kind === 'image') {
     result = emptyIngestResult(asset.source_id, {
       notes: ['图片材料：无底层数据，作为图片保留；修改数值需补充原始表格'],

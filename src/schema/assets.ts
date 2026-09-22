@@ -59,6 +59,8 @@ export const IngestResultSchema = z.object({
   confirmations: z
     .array(z.object({ field: z.string(), question: z.string() }))
     .default([]),
+  /** XLSX 未选表时返回工作表清单（§4.2 显式选表） */
+  available_sheets: z.array(z.string()).optional(),
 });
 
 export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;

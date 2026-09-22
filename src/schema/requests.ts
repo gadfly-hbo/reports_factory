@@ -15,6 +15,7 @@ export const SourceUploadRequestSchema = z.object({
   content_base64: z.string().min(1),
   kind: SourceKindSchema,
   media_type: z.string().min(1),
+  sheet: z.string().optional(), // XLSX 显式选表
 });
 
 export const OutlineRequestSchema = z.object({
