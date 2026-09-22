@@ -25,4 +25,5 @@ data/
 # OS
 .DS_Store
 samples/
+!samples/**/golden/
 web-dist/
