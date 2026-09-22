@@ -56,7 +56,7 @@ export const ClaimSchema = z.object({
 
 export const ChartSeriesSchema = z.object({
   name: z.string().min(1),
-  data: z.array(z.object({ label: z.string(), value: z.number() })).min(1),
+  data: z.array(z.object({ label: z.string(), value: z.number() })),
 });
 
 export const ChartSpecSchema = z.object({
@@ -64,6 +64,25 @@ export const ChartSpecSchema = z.object({
   type: z.enum(['bar', 'line', 'pie', 'donut']),
   title: z.string().optional(),
   series: z.array(ChartSeriesSchema).min(1),
+  source_ref: z.string().optional(),
+});
+
+export const BulletSchema = z.object({
+  label: z.string().optional(),
+  text: z.string().min(1),
+  claim_ref: z.string().optional(),
+  status: z.enum(['confirmed', 'needs_review', 'unverified', 'pending']).optional(),
+});
+
+export const TableSpecSchema = z.object({
+  columns: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      align: z.enum(['left', 'right', 'center']).optional(),
+    }),
+  ).min(1),
+  rows: z.array(z.object({ key: z.string(), cells: z.array(z.string()) })).optional().default([]),
   source_ref: z.string().optional(),
 });
 
@@ -82,7 +101,17 @@ export const PageSchema = z.object({
   page_id: z.string().min(1),
   type: PageTypeSchema,
   headline: z.string().min(1),
+  subtitle: z.string().optional(),
+  meta: z
+    .object({
+      period: z.string().optional(),
+      audience: z.string().optional(),
+      version: z.string().optional(),
+    })
+    .optional(),
   body: z.string().optional(),
+  bullets: z.array(BulletSchema).optional(),
+  table: TableSpecSchema.optional(),
   claim_refs: z.array(z.string()).optional().default([]),
   metric_refs: z.array(z.string()).optional().default([]),
   evidence_refs: z.array(z.string()).optional().default([]),
@@ -123,6 +152,8 @@ export type SourceRef = z.infer<typeof SourceRefSchema>;
 export type Metric = z.infer<typeof MetricSchema>;
 export type Claim = z.infer<typeof ClaimSchema>;
 export type ChartSpec = z.infer<typeof ChartSpecSchema>;
+export type Bullet = z.infer<typeof BulletSchema>;
+export type TableSpec = z.infer<typeof TableSpecSchema>;
 export type PageType = z.infer<typeof PageTypeSchema>;
 export type Page = z.infer<typeof PageSchema>;
 export type ReportBrief = z.infer<typeof ReportBriefSchema>;
