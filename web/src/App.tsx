@@ -31,6 +31,7 @@ function kindOf(filename: string): { kind: string; media_type: string } | null {
     case 'txt': return { kind: 'text', media_type: 'text/plain' };
     case 'csv': return { kind: 'csv', media_type: 'text/csv' };
     case 'xlsx': case 'xlsm': return { kind: 'xlsx', media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+    case 'docx': return { kind: 'docx', media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
     case 'png': return { kind: 'image', media_type: 'image/png' };
     case 'jpg': case 'jpeg': return { kind: 'image', media_type: 'image/jpeg' };
     default: return null;
@@ -244,7 +245,7 @@ export default function App() {
       <div className="card">
         <h2>① 材料（解析失败的项不影响其他材料）</h2>
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void uploadFiles(files); }} />
-        <button onClick={() => fileRef.current?.click()}>上传材料（md / txt / csv / xlsx / png / jpg）</button>
+        <button onClick={() => fileRef.current?.click()}>上传材料（md / txt / csv / xlsx / docx / png / jpg）</button>
         <table className="list" style={{ marginTop: 12 }}>
           <thead><tr><th>文件</th><th>类型</th><th>状态</th><th>底层数据</th><th>影响页面</th></tr></thead>
           <tbody>

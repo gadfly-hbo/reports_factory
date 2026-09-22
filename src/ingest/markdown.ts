@@ -11,7 +11,7 @@ import type { Claim } from '../schema/report-spec.js';
  * 材料中的一切实体（含指令文本）都只是内容 —— 本模块不执行任何指令。
  */
 
-interface SectionRule {
+export interface SectionRule {
   markers: string[];
   kind: Claim['kind'];
   verification_state: Claim['verification_state'];
@@ -24,7 +24,7 @@ const SECTION_RULES: SectionRule[] = [
   { markers: ['口径', '说明'], kind: 'data_note', verification_state: 'bound_to_source' },
 ];
 
-function matchSection(title: string): SectionRule | undefined {
+export function matchSection(title: string): SectionRule | undefined {
   return SECTION_RULES.find((r) => r.markers.some((m) => title.includes(m)));
 }
 

@@ -3,6 +3,7 @@ import type { SourceAsset } from '../schema/project.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ingestCsv } from './csv.js';
 import { ingestXlsx } from './xlsx.js';
+import { ingestDocx } from './docx.js';
 import { ingestMarkdown } from './markdown.js';
 
 export interface IngestInput {
@@ -38,6 +39,8 @@ export async function ingestAndSave(
     result = ingestMarkdown(input.content.toString('utf-8'), asset.source_id, asset.version);
   } else if (input.kind === 'csv') {
     result = ingestCsv(input.content.toString('utf-8'), asset.source_id);
+  } else if (input.kind === 'docx') {
+    result = await ingestDocx(input.content, asset.source_id);
   } else if (input.kind === 'xlsx') {
     result = await ingestXlsx(input.content, asset.source_id, input.sheet);
     if (!result.ok && result.available_sheets) {
