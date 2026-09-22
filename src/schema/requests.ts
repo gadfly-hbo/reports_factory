@@ -62,7 +62,7 @@ export const ResolveConflictRequestSchema = z.object({
 
 export const ExportRequestSchema = z.object({
   mode: z.enum(['formal', 'draft']),
-  formats: z.array(z.enum(['pptx', 'pdf', 'html'])).min(1),
+  formats: z.array(z.enum(['pptx', 'pdf', 'html', 'docx'])).min(1),
   exportScope: z.enum(['internal', 'external']).optional(),
   chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
   ack_editable_data: z.boolean().optional(),

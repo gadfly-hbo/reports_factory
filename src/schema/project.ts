@@ -54,7 +54,7 @@ export const ReportRevisionSchema = z.object({
   note: z.string().optional(),
 });
 
-export const ExportFormatSchema = z.enum(['pptx', 'pdf', 'html']);
+export const ExportFormatSchema = z.enum(['pptx', 'pdf', 'html', 'docx']);
 
 export const ExportRecordSchema = z.object({
   export_id: z.string().min(1),

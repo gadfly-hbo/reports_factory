@@ -121,6 +121,8 @@ export const PageSchema = z.object({
   locked: z.boolean().optional().default(false),
 });
 
+export const DeliverableTypeSchema = z.enum(['meeting_deck', 'research_report', 'executive_summary']);
+
 export const ReportBriefSchema = z.object({
   audience: z.string().min(1),
   purpose: z.string().min(1),
@@ -128,6 +130,8 @@ export const ReportBriefSchema = z.object({
   page_budget: z.number().int().positive(),
   language: z.string().optional().default('zh-CN'),
   style: z.string().optional(),
+  /** M3：交付物类型决定渲染管线（缺省 meeting_deck，向后兼容） */
+  deliverable_type: DeliverableTypeSchema.optional(),
 });
 
 export const ExportPolicySchema = z.object({

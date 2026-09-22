@@ -219,6 +219,11 @@ export class WorkbenchService {
   async previewHtml(projectId: string): Promise<string> {
     const spec = await this.getSpec(projectId);
     if (!spec) throw new Error('尚未组装报告');
+    // document 管线（研究报告）走 A4 文档流预览
+    if (spec.brief.deliverable_type === 'research_report') {
+      const { renderDocumentHtml } = await import('../render/document-html.js');
+      return renderDocumentHtml(spec);
+    }
     return renderReportHtml(spec);
   }
 }

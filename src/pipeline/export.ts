@@ -7,6 +7,9 @@ import { checkPrivacy, type PrivacyReport } from '../checks/privacy.js';
 import { renderReportHtml } from '../render/html.js';
 import { renderReportPptx } from '../render/pptx.js';
 import { renderReportPdf, closePdfBrowser } from '../render/pdf.js';
+import { renderDocumentHtml } from '../render/document-html.js';
+import { renderDocumentPdf, closeDocumentPdfBrowser } from '../render/document-pdf.js';
+import { renderReportDocx } from '../render/docx.js';
 
 /**
  * 导出编排（F10/F11）：检查 → 门禁 → 渲染 → 冻结导出记录。
@@ -15,7 +18,7 @@ import { renderReportPdf, closePdfBrowser } from '../render/pdf.js';
 
 export interface ExportOptions {
   mode: 'formal' | 'draft';
-  formats: ('pptx' | 'pdf' | 'html')[];
+  formats: ('pptx' | 'pdf' | 'html' | 'docx')[];
   conflicts?: SourceConflict[];
   exportScope?: 'internal' | 'external';
   /** 对外分享时图表底层数据的取舍（§12.2 明确选择） */
@@ -84,12 +87,14 @@ export async function exportReport(
   const exports: ExportRecord[] = [];
   for (const format of opts.formats) {
     let artifact: Buffer | string;
+    const isDocument = specUsed.brief.deliverable_type === 'research_report';
     if (format === 'pptx')
       artifact = await renderReportPptx(specUsed, {
         chartDataMode: scope === 'external' ? (opts.chartDataMode ?? 'keep_editable') : 'keep_editable',
       });
-    else if (format === 'pdf') artifact = await renderReportPdf(specUsed);
-    else artifact = renderReportHtml(specUsed);
+    else if (format === 'docx') artifact = await renderReportDocx(specUsed);
+    else if (format === 'pdf') artifact = isDocument ? await renderDocumentPdf(specUsed) : await renderReportPdf(specUsed);
+    else artifact = isDocument ? renderDocumentHtml(specUsed) : renderReportHtml(specUsed);
     const record = await store.saveExport(projectId, {
       revision_id: revision.revision_id,
       format,
@@ -103,5 +108,6 @@ export async function exportReport(
     exports.push(record);
   }
   await closePdfBrowser();
+  await closeDocumentPdfBrowser();
   return { gate, checks, revisionId: revision.revision_id, exports, specUsed, privacy };
 }
