@@ -43,6 +43,8 @@ export const SourceAssetSchema = z.object({
   parse_status: ParseStatusSchema.optional().default('pending'),
   parse_error: z.string().optional(),
   replaces: z.string().optional(), // 替换前版本的 source_id
+  /** 图片类材料无底层数据：true=有结构化数据可编辑/计算 */
+  has_data: z.boolean().optional().default(true),
 });
 
 export const ReportRevisionSchema = z.object({

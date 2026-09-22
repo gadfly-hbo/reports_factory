@@ -38,6 +38,7 @@ export interface SaveSourceInput {
   kind: SourceAsset['kind'];
   sensitivity?: SourceAsset['sensitivity'];
   replaces?: string;
+  has_data?: boolean;
 }
 
 export interface SaveExportInput {
@@ -163,6 +164,7 @@ export class WorkspaceStore {
       sensitivity: input.sensitivity,
       parse_status: 'pending',
       replaces: input.replaces,
+      has_data: input.has_data ?? true,
     });
     await writeFile(join(dir, `${sourceId}.json`), JSON.stringify(asset, null, 2));
     await this.touch(projectId);
@@ -178,7 +180,7 @@ export class WorkspaceStore {
       return [];
     }
     const assets: SourceAsset[] = [];
-    for (const f of files.filter((x) => x.endsWith('.json'))) {
+    for (const f of files.filter((x) => x.endsWith('.json') && !x.endsWith('.assets.json'))) {
       assets.push(SourceAssetSchema.parse(JSON.parse(await readFile(join(dir, f), 'utf-8'))));
     }
     return assets.sort((a, b) => a.imported_at.localeCompare(b.imported_at));
