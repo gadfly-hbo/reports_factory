@@ -7,7 +7,7 @@
 - [x] 1. M3 tracer：document 管线——DOCX 渲染器 + 研究报告模板 + 三产物
 - [x] 2. 一页决策摘要：派生 + 跨交付物一致性 + 导出
 - [x] 3. DOCX 导入：mammoth → 主张/表格通道
-- [ ] 4. 品牌配置：BrandConfig + UI + 三适配器消费 + 冻结
+- [x] 4. 品牌配置：BrandConfig + UI + 三适配器消费 + 冻结
 - [ ] 5. M3 收口：全交付物 E2E + regression 扩展 + 冒烟扩展 + 文档
 
 ---

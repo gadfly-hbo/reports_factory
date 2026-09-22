@@ -10,6 +10,7 @@ import {
   pptxFontSize,
   slide,
   statusVisual,
+  withBrand,
 } from './theme.js';
 
 /**
@@ -106,11 +107,14 @@ function addFooter(s: Slide, page: Page) {
   }
 }
 
-function addCover(pptx: PptxGenJS, page: Page) {
+function addCover(pptx: PptxGenJS, page: Page, brand?: { logo_data_url?: string }, p = palette) {
   const s = pptx.addSlide();
+  if (brand?.logo_data_url) {
+    s.addImage({ data: brand.logo_data_url, x: 0.9, y: 1.2, h: 0.55, w: 1.1 });
+  }
   s.addText(pageTypeLabels.cover, {
     x: 0.9, y: 2.0, w: 11.5, h: 0.4, align: 'left',
-    fontSize: pptxFontSize.kicker + 1, bold: true, color: palette.primary.replace('#', ''), fontFace: pptxFont,
+    fontSize: pptxFontSize.kicker + 1, bold: true, color: p.primary.replace('#', ''), fontFace: pptxFont,
   });
   s.addText(page.headline, {
     x: 0.9, y: 2.5, w: 11.5, h: 1.5, align: 'left',
@@ -132,11 +136,11 @@ function addCover(pptx: PptxGenJS, page: Page) {
   if (page.required_note) addFooter(s, page);
 }
 
-function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null) {
+function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette) {
   const s = pptx.addSlide();
   s.addText(pageTypeLabels[page.type] ?? page.type, {
     x: 0.6, y: 0.32, w: 12.1, h: 0.3,
-    fontSize: pptxFontSize.kicker, bold: true, color: palette.primary.replace('#', ''), fontFace: pptxFont,
+    fontSize: pptxFontSize.kicker, bold: true, color: p.primary.replace('#', ''), fontFace: pptxFont,
   });
 
   const fit = fitHeadline(page.headline, {
@@ -163,7 +167,7 @@ function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, 
       s.addText(page.body, {
         x: 8.6, y: 2.15, w: 4.1, h: 4.2, valign: 'middle',
         fontSize: pptxFontSize.body, color: palette.text.replace('#', ''), fontFace: pptxFont,
-        fill: { color: palette.primarySoft.replace('#', '') },
+        fill: { color: p.primarySoft.replace('#', '') },
         lineSpacingMultiple: 1.4, margin: 10,
       });
     } else if (hasBullets) {
@@ -258,9 +262,11 @@ export async function renderReportPptx(spec: ReportSpec, opts: PptxRenderOptions
     }
   }
 
+  const brand = spec.theme?.brand;
+  const p = withBrand(brand);
   for (const page of spec.pages) {
-    if (page.type === 'cover') addCover(pptx, page);
-    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null);
+    if (page.type === 'cover') addCover(pptx, page, brand, p);
+    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p);
   }
   const out = await pptx.write({ outputType: 'nodebuffer' });
   return out as Buffer;

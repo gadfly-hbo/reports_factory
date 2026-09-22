@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BrandConfigSchema } from './brand.js';
 
 /**
  * ReportSpec schema v1.0（proposal §9 的最小可用集）。
@@ -145,6 +146,7 @@ export const ReportSpecSchema = z.object({
   report_id: z.string().min(1),
   revision_id: z.string().min(1),
   brief: ReportBriefSchema,
+  theme: z.object({ brand: BrandConfigSchema.optional() }).optional(),
   source_snapshot: z.array(SourceRefSchema).optional().default([]),
   metrics: z.array(MetricSchema).optional().default([]),
   claims: z.array(ClaimSchema).optional().default([]),

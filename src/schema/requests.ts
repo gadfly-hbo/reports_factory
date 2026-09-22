@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PrivacyPolicySchema, SourceKindSchema } from './project.js';
 import { ReportBriefSchema } from './report-spec.js';
+import { BrandConfigSchema } from './brand.js';
 
 /** API 请求体 schema（边界类型化：全部请求体经 zod 校验，替代裸 cast） */
 
@@ -76,3 +77,6 @@ export type OutlineRequest = z.infer<typeof OutlineRequestSchema>;
 export type EditRequest = z.infer<typeof EditRequestSchema>;
 export type ResolveConflictRequest = z.infer<typeof ResolveConflictRequestSchema>;
 export type ExportRequest = z.infer<typeof ExportRequestSchema>;
+
+export const BrandRequestSchema = z.object({ brand: BrandConfigSchema });
+export type BrandRequest = z.infer<typeof BrandRequestSchema>;

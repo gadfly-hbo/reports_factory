@@ -61,6 +61,7 @@ export default function App() {
   const [ackEditable, setAckEditable] = useState(false);
   const [ackExternalShare, setAckExternalShare] = useState(false);
   const [lastPrivacy, setLastPrivacy] = useState<{ checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } | null>(null);
+  const [brandDraft, setBrandDraft] = useState<{ primary: string; accent: string; logo?: string } | null>(null);
   const [pendingSheet, setPendingSheet] = useState<{ file: File; meta: { kind: string; media_type: string }; sheets: string[]; chosen: string } | null>(null);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null);
@@ -158,6 +159,17 @@ export default function App() {
     if (!currentId) return;
     await api.post(`/api/projects/${currentId}/resolve-conflict`, { resolution: { [c.conflict_id]: resolution } });
     await reloadDetail(currentId);
+  };
+
+  const saveBrand = async () => {
+    if (!currentId || !brandDraft) return;
+    const brand: Record<string, string> = { primary: brandDraft.primary, accent: brandDraft.accent };
+    if (brandDraft.logo) brand.logo_data_url = brandDraft.logo;
+    const res = await fetch(`/api/projects/${currentId}/brand`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brand }),
+    }).then((r) => r.json());
+    setMessage({ kind: res.ok ? 'info' : 'error', text: res.ok ? '品牌已应用（仅视觉，内容不变，下次导出生效）' : (res.error ?? '品牌应用失败') });
+    setBrandDraft(null);
   };
 
   const doDiff = async () => {
@@ -408,6 +420,26 @@ export default function App() {
                 </tbody>
               </table>
             )}
+          </div>
+          <div className="card">
+            <h2>品牌设置（仅视觉 token：色板 / Logo）</h2>
+            {(() => {
+              const current = (detail as any)?.project?.brand;
+              const draft = brandDraft ?? { primary: current?.primary ?? '#155e75', accent: current?.accent ?? '#0f766e', logo: current?.logo_data_url };
+              return (
+                <div className="row">
+                  <label className="field">主色<input type="color" value={draft.primary} onChange={(e) => setBrandDraft({ ...draft, primary: e.target.value })} style={{ width: 60 }} /></label>
+                  <label className="field">强调色<input type="color" value={draft.accent} onChange={(e) => setBrandDraft({ ...draft, accent: e.target.value })} style={{ width: 60 }} /></label>
+                  <label className="field">Logo（PNG/JPG）
+                    <input type="file" accept="image/png,image/jpeg" onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (f) setBrandDraft({ ...draft, logo: await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(f); }) });
+                    }} />
+                  </label>
+                  <button className="small primary" disabled={!brandDraft} onClick={saveBrand}>应用品牌</button>
+                </div>
+              );
+            })()}
           </div>
           <div className="card">
             <h2>版本比较（修订之间差异）</h2>

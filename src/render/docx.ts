@@ -13,7 +13,8 @@ import {
 } from 'docx';
 import type { ChartSpec, Page, ReportSpec, TableSpec } from '../schema/report-spec.js';
 import { pageFooterParts } from './footer.js';
-import { palette, pptxFont } from './theme.js';
+import { palette, pptxFont, withBrand } from './theme.js';
+import { ImageRun } from 'docx';
 
 /**
  * document 管线：DOCX 渲染（研究报告）。
@@ -35,10 +36,10 @@ const tableBorders = {
   insideVertical: { style: BorderStyle.SINGLE, size: 4, color: hex(palette.border) },
 };
 
-function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; header?: boolean } = {}) {
+function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; header?: boolean } = {}, p = palette) {
   return new TableCell({
     borders: tableBorders,
-    shading: opts.header ? { fill: hex(palette.surface3) } : undefined,
+    shading: opts.header ? { fill: hex(p.surface3) } : undefined,
     children: [
       new Paragraph({
         alignment: opts.align,
@@ -46,7 +47,7 @@ function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentTyp
           new TextRun({
             text,
             bold: opts.bold ?? opts.header,
-            color: opts.header ? hex(palette.primaryInk) : hex(palette.text),
+            color: opts.header ? hex(p.primaryInk) : hex(p.text),
             font: pptxFont,
             size: 21, // 10.5pt
           }),
@@ -56,7 +57,7 @@ function cell(text: string, opts: { bold?: boolean; align?: (typeof AlignmentTyp
   });
 }
 
-function specTableToDocx(t: TableSpec): Table {
+function specTableToDocx(t: TableSpec, p = palette): Table {
   const header = new TableRow({
     tableHeader: true,
     children: t.columns.map((c) =>
@@ -75,7 +76,7 @@ function specTableToDocx(t: TableSpec): Table {
 }
 
 /** 图表 → 数值表格（A2：数据可读性优先，不做图片图表） */
-function chartToDocxTable(chart: ChartSpec): Table {
+function chartToDocxTable(chart: ChartSpec, p = palette): Table {
   const header = new TableRow({
     tableHeader: true,
     children: [cell('项目', { header: true }), ...chart.series.map((ser) => cell(ser.name, { header: true }))],
@@ -90,12 +91,12 @@ function chartToDocxTable(chart: ChartSpec): Table {
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [header, ...rows] });
 }
 
-function sectionChildren(page: Page): (Paragraph | Table)[] {
+function sectionChildren(page: Page, p = palette): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [];
   out.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: page.headline, font: pptxFont, bold: true, color: hex(palette.primaryInk), size: 30 })],
+      children: [new TextRun({ text: page.headline, font: pptxFont, bold: true, color: hex(p.primaryInk), size: 30 })],
     }),
   );
   if (page.body) {
@@ -112,8 +113,8 @@ function sectionChildren(page: Page): (Paragraph | Table)[] {
       }),
     );
   }
-  if (page.table) out.push(specTableToDocx(page.table));
-  if (page.chart) out.push(chartToDocxTable(page.chart));
+  if (page.table) out.push(specTableToDocx(page.table, p));
+  if (page.chart) out.push(chartToDocxTable(page.chart, p));
   const footer = pageFooterParts(page).join('　|　');
   if (footer) {
     out.push(
@@ -129,17 +130,28 @@ function sectionChildren(page: Page): (Paragraph | Table)[] {
 
 export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
   const [cover, ...sections] = spec.pages;
+  const p = withBrand(spec.theme?.brand);
   const children: (Paragraph | Table)[] = [];
 
-  // 文档头（封面信息）
+  // 文档头（封面信息 + 品牌 Logo）
+  if (spec.theme?.brand?.logo_data_url) {
+    const b64 = spec.theme.brand.logo_data_url.split(',')[1] ?? '';
+    const ext = spec.theme.brand.logo_data_url.match(/^data:image\/(png|jpe?g)/)?.[1] ?? 'png';
+    children.push(
+      new Paragraph({
+        children: [new ImageRun({ type: ext === 'jpg' ? 'jpg' : 'png', data: Buffer.from(b64, 'base64'), transformation: { width: 72, height: 28 } })],
+        spacing: { after: 120 },
+      }),
+    );
+  }
   children.push(
     new Paragraph({
-      children: [new TextRun({ text: '研究报告', font: pptxFont, bold: true, color: hex(palette.primary), size: 22 })],
+      children: [new TextRun({ text: '研究报告', font: pptxFont, bold: true, color: hex(p.primary), size: 22 })],
       spacing: { after: 120 },
     }),
     new Paragraph({
       heading: HeadingLevel.TITLE,
-      children: [new TextRun({ text: cover?.headline ?? spec.report_id, font: pptxFont, bold: true, color: hex(palette.primaryInk), size: 44 })],
+      children: [new TextRun({ text: cover?.headline ?? spec.report_id, font: pptxFont, bold: true, color: hex(p.primaryInk), size: 44 })],
       spacing: { after: 160 },
     }),
   );
@@ -160,7 +172,7 @@ export async function renderReportDocx(spec: ReportSpec): Promise<Buffer> {
   );
 
   for (const page of sections) {
-    children.push(...sectionChildren(page));
+    children.push(...sectionChildren(page, p));
   }
 
   const doc = new Document({

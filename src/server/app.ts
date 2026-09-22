@@ -8,6 +8,7 @@ import { exportReport } from '../pipeline/export.js';
 import { WorkbenchService } from './workbench.js';
 import {
   AssembleRequestSchema,
+  BrandRequestSchema,
   CreateProjectRequestSchema,
   EditRequestSchema,
   ExportRequestSchema,
@@ -119,6 +120,20 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     } catch (e) {
       const err = e as Error & { statusCode?: number };
       if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // 品牌配置（M3：token 级，换品牌不重生成内容）
+  app.put('/api/projects/:id/brand', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(BrandRequestSchema, req.body);
+    try {
+      const spec = await workbench.applyBrand(id, body.brand);
+      return { ok: true, spec_theme: spec.theme };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
       return { ok: false, error: err.message };
     }
   });

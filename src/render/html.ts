@@ -9,6 +9,7 @@ import {
   palette,
   slide,
   statusVisual,
+  withBrand,
 } from './theme.js';
 
 export function escapeHtml(s: string): string {
@@ -74,11 +75,15 @@ function noteHtml(page: Page): string {
   return `<div class="note-panel"><p>${escapeHtml(page.body)}</p></div>`;
 }
 
-function renderCoverHtml(page: Page): string {
+function renderCoverHtml(page: Page, brand?: { logo_data_url?: string }): string {
   const metaParts = [page.meta?.period, page.meta?.audience, page.meta?.version].filter(Boolean);
+  const logo = brand?.logo_data_url
+    ? `<img class="cover-logo" src="${brand.logo_data_url}" alt="logo" style="height:44px;margin-bottom:22px" />`
+    : '';
   return `
   <section class="slide cover" data-page-id="${escapeHtml(page.page_id)}">
     <div class="cover-block">
+      ${logo}
       <p class="cover-kicker">${escapeHtml(pageTypeLabels.cover)}</p>
       <h1 class="cover-title">${escapeHtml(page.headline)}</h1>
       ${page.subtitle ? `<p class="cover-subtitle">${escapeHtml(page.subtitle)}</p>` : ''}
@@ -88,8 +93,8 @@ function renderCoverHtml(page: Page): string {
   </section>`;
 }
 
-function renderPageHtml(page: Page): string {
-  if (page.type === 'cover') return renderCoverHtml(page);
+function renderPageHtml(page: Page, brand?: { logo_data_url?: string }): string {
+  if (page.type === 'cover') return renderCoverHtml(page, brand);
 
   const fit = fitHeadline(page.headline, {
     base: fontSize.headlineBase,
@@ -132,7 +137,7 @@ function renderPageHtml(page: Page): string {
   </section>`;
 }
 
-const css = `
+const baseCss = `
 @page { size: ${slide.widthPx}px ${slide.heightPx}px; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: ${fontStack}; color: ${palette.text}; background: ${palette.surface}; font-variant-numeric: tabular-nums; }
@@ -168,7 +173,9 @@ body { font-family: ${fontStack}; color: ${palette.text}; background: ${palette.
 
 /** ReportSpec → 自包含 HTML 预览（应用内预览与 PDF 打印共用一份渲染） */
 export function renderReportHtml(spec: ReportSpec): string {
-  const slides = spec.pages.map(renderPageHtml).join('\n');
+  const p = withBrand(spec.theme?.brand);
+  const css = baseCss.replaceAll(palette.primary, p.primary).replaceAll(palette.primaryInk, p.primaryInk).replaceAll(palette.primarySoft, p.primarySoft).replaceAll(palette.teal, p.teal);
+  const slides = spec.pages.map((pg) => renderPageHtml(pg, spec.theme?.brand)).join('\n');
   return `<!doctype html>
 <html lang="zh-CN">
 <head>

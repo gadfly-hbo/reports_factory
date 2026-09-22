@@ -86,3 +86,25 @@ export const pageTypeLabels: Record<PageType, string> = {
   action_items: '行动与待决',
   evidence_appendix: '证据附录',
 };
+
+import type { BrandConfig } from '../schema/brand.js';
+
+/** 与白色混合：amount=0 原色，=1 纯白 */
+function tint(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (v: number) => Math.round(v + (255 - v) * amount);
+  return `#${[mix((n >> 16) & 255), mix((n >> 8) & 255), mix(n & 255)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** 品牌覆盖：只换 token 颜色/字体，未配置时与默认 palette 完全一致（回归零漂移的前提） */
+export function withBrand(brand?: BrandConfig): typeof palette {
+  if (!brand) return palette;
+  return {
+    ...palette,
+    primary: brand.primary,
+    primaryInk: brand.primary,
+    primarySoft: tint(brand.primary, 0.86),
+    teal: brand.accent, // 语义色槽位映射：accent 覆盖信息强调色
+    ...(brand.muted ? { muted: brand.muted } : {}),
+  };
+}

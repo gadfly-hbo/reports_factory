@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BrandConfigSchema } from './brand.js';
 
 /** 项目与存储对象（proposal §9.1）：首期用结构化文件 + 轻量元数据，不建库。 */
 
@@ -24,6 +25,7 @@ export const ProjectSchema = z.object({
   updated_at: z.string(),
   privacy_policy: PrivacyPolicySchema.default('local_only'),
   stage: ProjectStageSchema.default('materials'),
+  brand: BrandConfigSchema.optional(),
 });
 
 export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx']);

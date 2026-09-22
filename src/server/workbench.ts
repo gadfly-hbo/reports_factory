@@ -1,4 +1,5 @@
 import type { WorkspaceStore } from '../storage/workspace.js';
+import type { BrandConfig } from '../schema/brand.js';
 import type { Claim, ReportBrief, ReportSpec } from '../schema/report-spec.js';
 import type { SourceConflict, TableAsset, EvidenceRef } from '../schema/assets.js';
 import type { PagePlanItem, OutlineDraft } from '../model/gateway.js';
@@ -83,6 +84,17 @@ export class WorkbenchService {
     });
   }
 
+  /** 应用品牌：只改 spec.theme（视觉 token），内容字段零变化（换品牌不重生成内容） */
+  async applyBrand(projectId: string, brand: BrandConfig): Promise<ReportSpec> {
+    const work = await this.readWork(projectId);
+    if (!work.spec) throw Object.assign(new Error('尚未组装报告'), { statusCode: 400 });
+    const next = { ...work.spec, theme: { brand } };
+    await this.store.updateProject(projectId, { brand });
+    await this.store.saveRevision(projectId, next, '品牌更新（仅视觉）');
+    await this.writeWork(projectId, { ...work, spec: next });
+    return next;
+  }
+
   /** 版本比较：两个修订的结构化差异；数字或绑定变化时重触发检查（§5.3 后半句） */
   async diff(projectId: string, revA: string, revB: string): Promise<{ diff: SpecDiff; recheck?: CheckReport }> {
     const a = await this.store.getRevision(projectId, revA);
@@ -152,6 +164,9 @@ export class WorkbenchService {
       sourceSnapshot: sources.map((s) => ({ source_id: s.source_id, version: s.version, is_demo: s.has_data !== false })),
     };
     const spec = assembleReportSpec({ report_id: `report_${projectId}`, ctx });
+    // 品牌配置注入（项目级 → spec 冻结快照）
+    const project = await this.store.getProject(projectId);
+    if (project?.brand) spec.theme = { brand: project.brand };
     await this.writeWork(projectId, { ...work, outline: { ...work.outline, pages: pagePlans }, spec });
     await this.store.updateProject(projectId, { stage: 'draft' });
     return spec;
