@@ -82,6 +82,20 @@
 - DOCX 内嵌原生图表（数值以表格呈现——明示此边界）。
 - Windows/Word 真机验收（沿用 C1 延后；本机 Pages/WPS 验证，范围明示）。
 
+## M3 GRILL 决议（留白自答；差异门用户未作答、A1–A6 纯新增已自我批准；范围=全量 M3 砍尾序；DOCX 验收沿用 C1）
+
+| # | 留白问题 | 决议 |
+|---|---|---|
+| M3-G1 | 研究报告的渲染形态 | **双管线**：deck 管线（16:9 slide HTML/PPTX/PDF，现状不动）+ document 管线（A4 文档流：DOCX + 独立 HTML + A4 PDF）；deliverable_type 选管线；一页摘要走 deck 管线单页 |
+| M3-G2 | 研究报告大纲 | gateway 新增 research 模板：封面/问题与背景/口径与方法/主要发现(每发现一节)/证据附录/限制与不确定性/建议——全部映射现有 8 页型，不新增页型 |
+| M3-G3 | DOCX 版式 | A4 纵向、边距 2.5cm、正文 12pt、标题 Heading1/2、表格带表头、每节末尾"来源："段落（docx 页脚机制不稳妥，来源行用节尾段落） |
+| M3-G4 | 独立 HTML | 文档流 HTML + 顶部报告元信息 + 节导航锚点；单文件自包含；导出 formats 增 'docx' 与 'html'（独立分发语义） |
+| M3-G5 | 一页摘要构建 | compose/summary.ts：deriveExecutiveSummary(assets) → 单页 spec（五段 bullets 全 claim/metric 绑定，缺失段标待补充）；不走大纲确认，预览中直接改 |
+| M3-G6 | 跨交付物一致性 | checks/cross-deliverable.ts：共享 metric_id 的 value/display 不一致 → blocker |
+| M3-G7 | 品牌存储 | project.json 增 brand 字段；UI 项目设置卡；assemble 注入 spec.theme.brand；三适配器 token 覆盖；进冻结快照 |
+| M3-G8 | DOCX 导入解析 | mammoth → HTML → node-html-parser（轻量）解析标题/段落/表格 → 复用 markdown 主张通道与 table-core |
+| M3-G9 | UI 入口 | 新建项目可选交付物类型（会议汇报/研究报告/一页摘要）；大纲确认流程复用 |
+
 ## 附录：PRD 相对 M3 proposal 的差异清单（送用户确认）
 
 **新增（留白具体化）：**
