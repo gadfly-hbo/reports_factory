@@ -1,5 +1,5 @@
 import { parse } from 'csv-parse/sync';
-import { IngestResultSchema, type IngestResult, type TableColumn, type TableRow } from '../schema/assets.js';
+import { emptyIngestResult, type IngestResult, type TableColumn, type TableRow } from '../schema/assets.js';
 
 /**
  * CSV 解析：列口径登记 + 数值保留。单位从表头括号或 % 推断；
@@ -58,11 +58,7 @@ export function ingestCsv(text: string, sourceId: string): IngestResult {
       }),
     }));
 
-    return IngestResultSchema.parse({
-      source_id: sourceId,
-      ok: true,
-      claims: [],
-      evidence: [],
+    return emptyIngestResult(sourceId, {
       tables: [
         {
           table_id: `tbl_${sourceId}`,
@@ -72,21 +68,12 @@ export function ingestCsv(text: string, sourceId: string): IngestResult {
           rows,
         },
       ],
-      notes: [],
-      conflicts: [],
       confirmations,
     });
   } catch (e) {
-    return IngestResultSchema.parse({
-      source_id: sourceId,
+    return emptyIngestResult(sourceId, {
       ok: false,
       failure_reason: `CSV 解析失败：${e instanceof Error ? e.message : String(e)}`,
-      claims: [],
-      evidence: [],
-      tables: [],
-      notes: [],
-      conflicts: [],
-      confirmations: [],
     });
   }
 }

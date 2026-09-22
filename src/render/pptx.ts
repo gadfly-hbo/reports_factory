@@ -95,11 +95,10 @@ function bulletTexts(page: Page) {
   });
 }
 
+import { pageFooterParts } from './footer.js';
+
 function addFooter(s: Slide, page: Page) {
-  const parts: string[] = [];
-  if (page.chart?.source_ref) parts.push(`来源：${page.chart.source_ref}`);
-  if (page.table?.source_ref) parts.push(`来源：${page.table.source_ref}`);
-  if (page.required_note) parts.push(page.required_note);
+  const parts = pageFooterParts(page);
   if (parts.length > 0) {
     s.addText(parts.join('　|　'), {
       x: 0.6, y: 6.9, w: 12.1, h: 0.35,

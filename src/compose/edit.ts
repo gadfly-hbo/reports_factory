@@ -28,17 +28,17 @@ function findPage(spec: ReportSpec, pageId: string) {
   return page;
 }
 
+/** 只更新目标页、其余页原样返回（编辑稳定性的单一实现点） */
+function updatePage(spec: ReportSpec, pageId: string, patch: (p: ReportSpec['pages'][number]) => ReportSpec['pages'][number]): ReportSpec {
+  return { ...spec, pages: spec.pages.map((p) => (p.page_id === pageId ? patch(p) : p)) };
+}
+
 export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleContext>): ReportSpec {
   switch (op.kind) {
     case 'edit_text': {
       const page = findPage(spec, op.page_id);
       if (page.locked) throw new EditRejectedError(`页面 ${op.page_id} 已锁定`);
-      return {
-        ...spec,
-        pages: spec.pages.map((p) =>
-          p.page_id === op.page_id ? { ...p, [op.field]: op.text } : p,
-        ),
-      };
+      return updatePage(spec, op.page_id, (p) => ({ ...p, [op.field]: op.text }));
     }
     case 'reorder': {
       const current = new Set(spec.pages.map((p) => p.page_id));
@@ -58,14 +58,12 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
       }
       const pageNum = spec.pages.findIndex((p) => p.page_id === op.page_id) + 1;
       const rebuilt = assemblePage(plan, ctx as AssembleContext, pageNum);
-      return {
-        ...spec,
-        pages: spec.pages.map((p) =>
-          p.page_id === op.page_id
-            ? { ...rebuilt, page_id: op.page_id, locked: p.locked, layout_id: p.layout_id ?? rebuilt.layout_id }
-            : p,
-        ),
-      };
+      return updatePage(spec, op.page_id, (p) => ({
+        ...rebuilt,
+        page_id: op.page_id,
+        locked: p.locked,
+        layout_id: p.layout_id ?? rebuilt.layout_id,
+      }));
     }
     case 'split_page': {
       // §5.3 "第三页拆成两页"：后半内容成为（续）页；新页 id 加后缀，不重排其余页 id（编辑稳定性）
@@ -97,17 +95,11 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
     }
     case 'switch_layout': {
       findPage(spec, op.page_id);
-      return {
-        ...spec,
-        pages: spec.pages.map((p) => (p.page_id === op.page_id ? { ...p, layout_id: op.layout_id } : p)),
-      };
+      return updatePage(spec, op.page_id, (p) => ({ ...p, layout_id: op.layout_id }));
     }
     case 'toggle_lock': {
       findPage(spec, op.page_id);
-      return {
-        ...spec,
-        pages: spec.pages.map((p) => (p.page_id === op.page_id ? { ...p, locked: op.locked } : p)),
-      };
+      return updatePage(spec, op.page_id, (p) => ({ ...p, locked: op.locked }));
     }
   }
 }

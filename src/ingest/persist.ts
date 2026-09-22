@@ -1,6 +1,4 @@
-import { join } from 'node:path';
-import { writeFile } from 'node:fs/promises';
-import type { IngestResult } from '../schema/assets.js';
+import { emptyIngestResult, type IngestResult } from '../schema/assets.js';
 import type { SourceAsset } from '../schema/project.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ingestCsv } from './csv.js';
@@ -39,43 +37,25 @@ export async function ingestAndSave(
   } else if (input.kind === 'csv') {
     result = ingestCsv(input.content.toString('utf-8'), asset.source_id);
   } else if (input.kind === 'image') {
-    result = {
-      source_id: asset.source_id,
-      ok: true,
-      claims: [],
-      evidence: [],
-      tables: [],
+    result = emptyIngestResult(asset.source_id, {
       notes: ['图片材料：无底层数据，作为图片保留；修改数值需补充原始表格'],
-      conflicts: [],
-      confirmations: [],
-    };
+    });
   } else {
-    result = {
-      source_id: asset.source_id,
+    result = emptyIngestResult(asset.source_id, {
       ok: false,
       failure_reason: `暂不支持的类型：${input.kind}`,
-      claims: [],
-      evidence: [],
-      tables: [],
-      notes: [],
-      conflicts: [],
-      confirmations: [],
-    };
+    });
   }
 
   await store.markSourceParse(projectId, asset.source_id, result.ok ? 'parsed' : 'failed', result.failure_reason);
   if (result.ok) {
-    const derived = {
+    await store.saveDerivedAssets(projectId, asset.source_id, {
       claims: result.claims,
       evidence: result.evidence,
       tables: result.tables,
       notes: result.notes,
       confirmations: result.confirmations,
-    };
-    await writeFile(
-      join(store.root, projectId, 'sources', `${asset.source_id}.assets.json`),
-      JSON.stringify(derived, null, 2),
-    );
+    });
   }
   return {
     ...asset,

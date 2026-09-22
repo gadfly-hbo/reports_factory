@@ -37,7 +37,7 @@ export async function exportReport(
     conflicts: opts.conflicts ?? [],
     exportScope: opts.exportScope ?? 'internal',
   });
-  const gate = exportGate(spec, checks, { mode: opts.mode });
+  const gate = exportGate(checks, { mode: opts.mode });
   if (!gate.allowed) {
     return { gate, checks, revisionId: '', exports: [], specUsed: spec };
   }

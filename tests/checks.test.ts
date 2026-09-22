@@ -117,9 +117,9 @@ describe('材料冲突与导出门禁（§10.3）', () => {
     const r = runChecks(s, { conflicts: [conflict] });
     expect(r.issues.find((i) => i.id === 'source_conflict_unresolved')?.severity).toBe('blocker');
 
-    const formal = exportGate(s, r, { mode: 'formal' });
+    const formal = exportGate(r, { mode: 'formal' });
     expect(formal.allowed).toBe(false);
-    const draft = exportGate(s, r, { mode: 'draft' });
+    const draft = exportGate(r, { mode: 'draft' });
     expect(draft.allowed).toBe(true);
 
     const draftSpec = draftExportSpec(s, r);
@@ -136,21 +136,21 @@ describe('材料冲突与导出门禁（§10.3）', () => {
     };
     const r = runChecks(s, { conflicts: [resolved] });
     expect(r.issues.find((i) => i.id === 'source_conflict_unresolved')).toBeUndefined();
-    expect(exportGate(s, r, { mode: 'formal' }).allowed).toBe(true);
+    expect(exportGate(r, { mode: 'formal' }).allowed).toBe(true);
   });
 
   it('外部分享越权 → 阻断（F12 导出行）', () => {
     const s = specWith(() => {});
     const r = runChecks(s, { conflicts: [], exportScope: 'external' });
     expect(r.issues.find((i) => i.id === 'external_share_violation')?.severity).toBe('blocker');
-    expect(exportGate(s, r, { mode: 'formal' }).allowed).toBe(false);
+    expect(exportGate(r, { mode: 'formal' }).allowed).toBe(false);
   });
 
   it('干净样例：正式导出放行（零阻断）', () => {
     const s = specWith(() => {});
     const r = runChecks(s, { conflicts: [] });
     expect(r.issues.filter((i) => i.severity === 'blocker')).toEqual([]);
-    expect(exportGate(s, r, { mode: 'formal' }).allowed).toBe(true);
+    expect(exportGate(r, { mode: 'formal' }).allowed).toBe(true);
   });
 });
 
@@ -169,6 +169,6 @@ describe('警告项（可发布但需确认）', () => {
     expect(r.issues.find((i) => i.id === 'claim_missing_evidence')?.severity).toBe('warning');
     expect(r.issues.find((i) => i.id === 'page_too_dense')?.severity).toBe('warning');
     expect(r.issues.find((i) => i.id === 'claim_unverified')?.severity).toBe('warning');
-    expect(exportGate(s, r, { mode: 'formal' }).allowed).toBe(true);
+    expect(exportGate(r, { mode: 'formal' }).allowed).toBe(true);
   });
 });

@@ -52,6 +52,21 @@ export interface SaveExportInput {
 export class WorkspaceStore {
   constructor(readonly root: string) {}
 
+  /** 读目录 JSON 列表的单一实现（此前在四个 list* 方法重复四次） */
+  private async listJsonDir<T>(dir: string, schema: { parse: (x: unknown) => T }, exclude?: string): Promise<T[]> {
+    let files: string[];
+    try {
+      files = await readdir(dir);
+    } catch {
+      return [];
+    }
+    const out: T[] = [];
+    for (const f of files.filter((x) => x.endsWith('.json') && (!exclude || !x.endsWith(exclude)))) {
+      out.push(schema.parse(JSON.parse(await readFile(join(dir, f), 'utf-8'))));
+    }
+    return out;
+  }
+
   /** 默认打开：env REPORT_STUDIO_HOME，缺省 ./data（G12） */
   static open(): WorkspaceStore {
     return new WorkspaceStore(process.env['REPORT_STUDIO_HOME'] ?? './data');
@@ -59,6 +74,54 @@ export class WorkspaceStore {
 
   private projectDir(projectId: string): string {
     return join(this.root, projectId);
+  }
+
+  // ---- 布局收口：派生资产 / 工作状态 / 冲突解决（此前路径知识泄漏在 persist/app/workbench 三处） ----
+
+  async saveDerivedAssets(projectId: string, sourceId: string, derived: unknown): Promise<void> {
+    await writeFile(
+      join(this.projectDir(projectId), 'sources', `${sourceId}.assets.json`),
+      JSON.stringify(derived, null, 2),
+    );
+  }
+
+  async readDerivedAssets(projectId: string, sourceId: string): Promise<Record<string, unknown> | null> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'sources', `${sourceId}.assets.json`), 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  async readWorkState(projectId: string): Promise<Record<string, unknown> | null> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'state.json'), 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  async writeWorkState(projectId: string, state: unknown): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'state.json'), JSON.stringify(state, null, 2));
+  }
+
+  async readConflictResolutions(projectId: string): Promise<Record<string, { resolution: string; adopted_value?: number }>> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'conflict-resolutions.json'), 'utf-8'));
+    } catch {
+      return {};
+    }
+  }
+
+  async writeConflictResolutions(
+    projectId: string,
+    records: Record<string, { resolution: string; adopted_value?: number }>,
+  ): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(records, null, 2));
   }
 
   async createProject(input: { title: string; purpose?: string }): Promise<Project> {
@@ -173,16 +236,7 @@ export class WorkspaceStore {
 
   async listSourceAssets(projectId: string): Promise<SourceAsset[]> {
     const dir = join(this.projectDir(projectId), 'sources');
-    let files: string[];
-    try {
-      files = await readdir(dir);
-    } catch {
-      return [];
-    }
-    const assets: SourceAsset[] = [];
-    for (const f of files.filter((x) => x.endsWith('.json') && !x.endsWith('.assets.json'))) {
-      assets.push(SourceAssetSchema.parse(JSON.parse(await readFile(join(dir, f), 'utf-8'))));
-    }
+    const assets = await this.listJsonDir(dir, SourceAssetSchema, '.assets.json');
     return assets.sort((a, b) => a.imported_at.localeCompare(b.imported_at));
   }
 
@@ -282,17 +336,8 @@ export class WorkspaceStore {
 
   async listExports(projectId: string): Promise<ExportRecord[]> {
     const dir = join(this.projectDir(projectId), 'exports');
-    let files: string[];
-    try {
-      files = await readdir(dir);
-    } catch {
-      return [];
-    }
-    const out: ExportRecord[] = [];
-    for (const f of files.filter((x) => x.endsWith('.json')).sort()) {
-      out.push(ExportRecordSchema.parse(JSON.parse(await readFile(join(dir, f), 'utf-8'))));
-    }
-    return out;
+    const out = await this.listJsonDir(dir, ExportRecordSchema);
+    return out.sort((a, b) => a.export_id.localeCompare(b.export_id));
   }
 
   async getExport(projectId: string, exportId: string): Promise<ExportRecord | null> {

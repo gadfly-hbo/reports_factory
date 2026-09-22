@@ -60,7 +60,7 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
     expect(outlineRes.statusCode).toBe(200);
     const draft = outlineRes.json().draft;
     expect(draft.pages).toHaveLength(8);
-    expect(draft.open_questions.some((q: string) => q.includes('冲突'))).toBe(true);
+    expect(draft.open_questions.some((q: any) => q.kind === 'conflict')).toBe(true);
 
     // 4) 组装
     const assembleRes = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/assemble`, payload: {} });

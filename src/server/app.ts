@@ -3,11 +3,33 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceStore } from '../storage/workspace.js';
-import { ingestAndSave, type IngestInput } from '../ingest/persist.js';
+import { ingestAndSave } from '../ingest/persist.js';
 import { exportReport } from '../pipeline/export.js';
 import { WorkbenchService } from './workbench.js';
-import type { ReportBrief } from '../schema/report-spec.js';
+import {
+  AssembleRequestSchema,
+  CreateProjectRequestSchema,
+  EditRequestSchema,
+  ExportRequestSchema,
+  OutlineRequestSchema,
+  ResolveConflictRequestSchema,
+  SourceUploadRequestSchema,
+} from '../schema/requests.js';
 import type { EditOp } from '../compose/edit.js';
+import { ZodError } from 'zod';
+
+/** 请求体校验：zod 失败 → 400（替代裸 cast 边界） */
+function parseBody<T>(schema: { parse: (x: unknown) => T }, body: unknown, reply: { code: (n: number) => unknown }): T | null {
+  try {
+    return schema.parse(body);
+  } catch (e) {
+    if (e instanceof ZodError) {
+      reply.code(400);
+      throw Object.assign(new Error('请求体非法'), { statusCode: 400 });
+    }
+    throw e;
+  }
+}
 
 function httpError(statusCode: number, message: string): Error & { statusCode: number } {
   return Object.assign(new Error(message), { statusCode });
@@ -23,8 +45,9 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { projects };
   });
 
-  app.post('/api/projects', async (req) => {
-    const body = req.body as { title: string; purpose?: string; privacy_policy?: 'local_only' | 'allow_external_with_approval' | 'allow_external' };
+  app.post('/api/projects', async (req, reply) => {
+    const body = parseBody(CreateProjectRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
     const project = await store.createProject({ title: body.title, purpose: body.purpose });
     if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
     return { project };
@@ -50,9 +73,10 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec };
   });
 
-  app.post('/api/projects/:id/sources', async (req) => {
+  app.post('/api/projects/:id/sources', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { filename: string; content_base64: string; kind: IngestInput['kind']; media_type: string };
+    const body = parseBody(SourceUploadRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
     const result = await ingestAndSave(store, id, {
       filename: body.filename,
       content: Buffer.from(body.content_base64, 'base64'),
@@ -63,24 +87,27 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations };
   });
 
-  app.post('/api/projects/:id/outline', async (req) => {
+  app.post('/api/projects/:id/outline', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { brief: ReportBrief };
+    const body = parseBody(OutlineRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
     const draft = await workbench.composeOutline(id, body.brief);
     return { draft };
   });
 
-  app.post('/api/projects/:id/assemble', async (req) => {
+  app.post('/api/projects/:id/assemble', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = (req.body ?? {}) as { pages?: never };
-    const spec = await workbench.assemble(id, body.pages);
+    const body = parseBody(AssembleRequestSchema, req.body ?? {}, reply);
+    if (!body) return { error: '请求体非法' };
+    const spec = await workbench.assemble(id, body.pages as never);
     return { spec };
   });
 
-  app.post('/api/projects/:id/edit', async (req) => {
+  app.post('/api/projects/:id/edit', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { op } = req.body as { op: EditOp };
-    const spec = await workbench.edit(id, op);
+    const body = parseBody(EditRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
+    const spec = await workbench.edit(id, body.op as EditOp);
     return { spec };
   });
 
@@ -92,9 +119,9 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects/:id/resolve-conflict', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { resolution } = req.body as {
-      resolution: Record<string, 'source_a' | 'source_b' | { resolution: 'manual_value'; value: number } | string>;
-    };
+    const body = parseBody(ResolveConflictRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
+    const { resolution } = body;
     try {
       await workbench.resolveConflict(id, resolution);
       return { ok: true };
@@ -113,16 +140,13 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.get('/api/projects/:id/conflict-resolutions', async (req) => {
     const { id } = req.params as { id: string };
-    try {
-      return JSON.parse(await readFile(join(store.root, id, 'work', 'conflict-resolutions.json'), 'utf-8'));
-    } catch {
-      return {};
-    }
+    return store.readConflictResolutions(id);
   });
 
-  app.post('/api/projects/:id/export', async (req) => {
+  app.post('/api/projects/:id/export', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { mode: 'formal' | 'draft'; formats: ('pptx' | 'pdf' | 'html')[]; exportScope?: 'internal' | 'external' };
+    const body = parseBody(ExportRequestSchema, req.body, reply);
+    if (!body) return { error: '请求体非法' };
     const spec = await workbench.getSpec(id);
     if (!spec) throw httpError(400, '尚未组装报告，无法导出');
     const outcome = await exportReport(store, id, spec, {

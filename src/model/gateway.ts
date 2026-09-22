@@ -21,10 +21,17 @@ export interface PagePlanItem {
   locked: boolean;
 }
 
+/** 待用户回答的问题（结构化：UI 按 kind 过滤而非子串猜测） */
+export interface OpenQuestion {
+  text: string;
+  kind: 'conflict' | 'confirmation' | 'gap';
+  ref?: string;
+}
+
 export interface OutlineDraft {
   pages: PagePlanItem[];
   /** 需要用户回答的口径/冲突/缺口问题 */
-  open_questions: string[];
+  open_questions: OpenQuestion[];
 }
 
 export interface OutlineContext {
@@ -64,18 +71,6 @@ function page(
     locked: false,
   };
 }
-
-/** 复盘主线页型模板顺序（proposal §13.1） */
-const TEMPLATE: PageType[] = [
-  'cover',
-  'summary',
-  'metrics_overview',
-  'trend',
-  'issue_breakdown',
-  'option_comparison',
-  'action_items',
-  'evidence_appendix',
-];
 
 export function createDeterministicGateway(): ModelGateway {
   return {
@@ -167,21 +162,20 @@ export function createDeterministicGateway(): ModelGateway {
         pages[7]!.gap_notes.push(...ctx.notes.slice(0, 5));
       }
 
-      const open_questions = [
+      const open_questions: OpenQuestion[] = [
         ...(ctx.claims.length === 0 && ctx.tables.length === 0
-          ? ['当前没有任何可用材料——请先导入材料，或从空白大纲手动开始（不编造内容）']
+          ? [{ text: '当前没有任何可用材料——请先导入材料，或从空白大纲手动开始（不编造内容）', kind: 'gap' as const }]
           : []),
-        ...ctx.confirmations.map((c) => c.question),
-        ...ctx.conflicts.map(
-          (c) =>
-            `材料冲突：${c.row_key}「${c.column_label}」在不同来源中为 ${c.values
-              .map((v) => `${v.value}（${v.source_id}）`)
-              .join(' vs ')}，请确认采用哪个口径`,
-        ),
+        ...ctx.confirmations.map((c) => ({ text: c.question, kind: 'confirmation' as const, ref: c.field })),
+        ...ctx.conflicts.map((c) => ({
+          text: `材料冲突：${c.row_key}「${c.column_label}」在不同来源中为 ${c.values
+            .map((v) => `${v.value}（${v.source_id}）`)
+            .join(' vs ')}，请确认采用哪个口径`,
+          kind: 'conflict' as const,
+          ref: c.conflict_id,
+        })),
       ];
 
-      // 模板页型固定 8 类；页数预算小于模板时由用户在确认阶段删减
-      void TEMPLATE;
       return { pages, open_questions };
     },
   };

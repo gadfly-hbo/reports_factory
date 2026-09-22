@@ -4,7 +4,8 @@ interface Project { project_id: string; title: string; purpose?: string; created
 interface SourceAsset { source_id: string; filename: string; kind: string; parse_status: string; parse_error?: string; has_data?: boolean; imported_at: string }
 interface Conflict { conflict_id: string; row_key: string; column_label: string; values: { source_id: string; value: string | number }[]; resolution: string }
 interface PagePlan { page_id: string; type: string; headline: string; intent: string; claim_refs: string[]; table_ids: string[]; gap_notes: string[]; locked: boolean }
-interface OutlineDraft { pages: PagePlan[]; open_questions: string[] }
+interface OpenQuestion { text: string; kind: 'conflict' | 'confirmation' | 'gap'; ref?: string }
+interface OutlineDraft { pages: PagePlan[]; open_questions: OpenQuestion[] }
 interface Issue { id: string; severity: 'blocker' | 'warning'; page_id?: string; object_ref: string; message: string }
 interface CheckReport { issues: Issue[]; blockers: number; warnings: number }
 interface ExportRec { export_id: string; format: string; artifact_path: string; is_draft: boolean }
@@ -109,7 +110,7 @@ export default function App() {
     try {
       const { draft } = await api.post<{ draft: OutlineDraft }>(`/api/projects/${currentId}/outline`, { brief });
       setOutline(draft);
-      const conflictQs = draft.open_questions.filter((q) => q.includes('冲突'));
+      const conflictQs = draft.open_questions.filter((q) => q.kind === 'conflict');
       setMessage({ kind: conflictQs.length > 0 ? 'warn' : 'info', text: conflictQs.length > 0 ? `大纲已生成，但存在 ${conflictQs.length} 项材料冲突需要处理` : '大纲已生成，请确认每页主旨后组装报告' });
     } finally { setBusy(false); }
   };
@@ -256,7 +257,7 @@ export default function App() {
             {outline.open_questions.length > 0 && (
               <div className="notice warn" style={{ marginTop: 10 }}>
                 <b>需要你确认的问题：</b>
-                <ul style={{ margin: '6px 0 0 18px' }}>{outline.open_questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+                <ul style={{ margin: '6px 0 0 18px' }}>{outline.open_questions.map((q, i) => <li key={i}>{q.text}</li>)}</ul>
               </div>
             )}
             <button className="primary" style={{ marginTop: 12 }} disabled={busy} onClick={confirmOutline}>确认大纲 → 组装报告</button>

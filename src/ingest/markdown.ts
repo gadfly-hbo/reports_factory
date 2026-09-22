@@ -1,4 +1,4 @@
-import { IngestResultSchema, type EvidenceRef, type IngestResult } from '../schema/assets.js';
+import { emptyIngestResult, type EvidenceRef, type IngestResult } from '../schema/assets.js';
 import type { Claim } from '../schema/report-spec.js';
 
 /**
@@ -100,14 +100,5 @@ export function ingestMarkdown(text: string, sourceId: string, sourceVersion = '
   }
   flushParagraph();
 
-  return IngestResultSchema.parse({
-    source_id: sourceId,
-    ok: true,
-    claims,
-    evidence,
-    tables: [],
-    notes,
-    conflicts: [],
-    confirmations: [],
-  });
+  return emptyIngestResult(sourceId, { claims, evidence, notes });
 }

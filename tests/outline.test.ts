@@ -60,7 +60,7 @@ describe('确定性大纲编排（F05，G11）', () => {
     expect(inf.verification_state).toBe('unverified');
 
     // 待确认问题进入 open_questions（单位确认）
-    expect(draft.open_questions.some((q) => q.includes('客单价'))).toBe(true);
+    expect(draft.open_questions.some((q) => q.kind === 'confirmation' && q.text.includes('客单价'))).toBe(true);
   });
 
   it('材料不足：生成待补充提示，不编造故事', async () => {
@@ -138,11 +138,11 @@ describe('PrivacyGate 出站门禁（F12）', () => {
     const fakeExternal = {
       id: 'fake',
       external: true,
-      composeOutline: async (ctx: any) => ({ pages: [], open_questions: [`claims:${ctx.claims.length}`] }),
+      composeOutline: async (ctx: any) => ({ pages: [], open_questions: [{ text: `claims:${ctx.claims.length}`, kind: 'gap' }] }),
     };
     const gate = new PrivacyGate(fakeExternal, { policy: () => 'allow_external' });
     const draft = await gate.composeOutline(await buildContext());
-    expect(draft.open_questions[0]).toContain('claims:');
+    expect(draft.open_questions[0]!.text).toContain('claims:');
     const log = gate.outboundLog[0]!;
     expect(log.blocked).toBe(false);
     expect(log.summary.claim_count).toBeGreaterThan(0);

@@ -50,16 +50,6 @@ export const statusVisual: Record<string, { fg: string; bg: string; label: strin
   pending: { fg: palette.muted, bg: palette.surface3, label: '待决' },
 };
 
-/** 主张四分类色（Prism 语义）：事实=teal，计算结果=primary，推断=amber，建议=violet */
-export const claimKindVisual: Record<string, { fg: string; label: string }> = {
-  fact_statement: { fg: palette.teal, label: '事实' },
-  computed_statement: { fg: palette.primary, label: '计算结果' },
-  inference: { fg: palette.amber, label: '推断' },
-  recommendation: { fg: palette.violet, label: '建议' },
-  user_supplement: { fg: palette.muted, label: '人工补充' },
-  data_note: { fg: palette.soft, label: '资料说明' },
-};
-
 export const fontSize = {
   kicker: 13,
   headlineBase: 34,
@@ -84,7 +74,9 @@ export const pptxFontSize = {
   coverMeta: 12,
 };
 
-export const pageTypeLabels: Record<string, string> = {
+import type { PageType } from '../schema/report-spec.js';
+
+export const pageTypeLabels: Record<PageType, string> = {
   cover: '封面',
   summary: '结论摘要',
   metrics_overview: '指标总览',

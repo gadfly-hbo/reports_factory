@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { Claim, ReportBrief, ReportSpec } from '../schema/report-spec.js';
 import type { SourceConflict, TableAsset, EvidenceRef } from '../schema/assets.js';
@@ -44,9 +42,8 @@ export class WorkbenchService {
       if (s.parse_status !== 'parsed' && s.kind !== 'image') continue;
       let derived: DerivedAssets = { claims: [], evidence: [], tables: [], notes: [], confirmations: [] };
       try {
-        const raw = JSON.parse(
-          await readFile(join(this.store.root, projectId, 'sources', `${s.source_id}.assets.json`), 'utf-8'),
-        );
+        const raw = (await this.store.readDerivedAssets(projectId, s.source_id)) as Record<string, any> | null;
+        if (!raw) throw new Error('no derived');
         derived = {
           claims: raw.claims ?? [],
           evidence: raw.evidence ?? [],
@@ -75,14 +72,7 @@ export class WorkbenchService {
   /** 合并用户解决记录后的冲突（用于检查、导出与 UI 展示；大纲仍用原始冲突提问） */
   async getResolvedConflicts(projectId: string): Promise<SourceConflict[]> {
     const conflicts = await this.getConflicts(projectId);
-    let resolutions: Record<string, { resolution: string; adopted_value?: number }> = {};
-    try {
-      resolutions = JSON.parse(
-        await readFile(join(this.store.root, projectId, 'work', 'conflict-resolutions.json'), 'utf-8'),
-      );
-    } catch {
-      // 无解决记录
-    }
+    const resolutions = await this.store.readConflictResolutions(projectId);
     return conflicts.map((c) => {
       const r = resolutions[c.conflict_id];
       if (r && (r.resolution === 'source_a' || r.resolution === 'source_b' || r.resolution === 'manual_value')) {
@@ -105,18 +95,11 @@ export class WorkbenchService {
   }
 
   private async readWork(projectId: string): Promise<WorkState> {
-    try {
-      return JSON.parse(await readFile(join(this.store.root, projectId, 'work', 'state.json'), 'utf-8'));
-    } catch {
-      return {};
-    }
+    return ((await this.store.readWorkState(projectId)) as WorkState | null) ?? {};
   }
 
   private async writeWork(projectId: string, work: WorkState): Promise<void> {
-    const { mkdir, writeFile } = await import('node:fs/promises');
-    const dir = join(this.store.root, projectId, 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'state.json'), JSON.stringify(work, null, 2));
+    await this.store.writeWorkState(projectId, work);
   }
 
   /** 确定性大纲（模型经 PrivacyGate 包装：local_only 下也只有本地确定性通道可用） */
@@ -189,14 +172,7 @@ export class WorkbenchService {
     const conflicts = await this.getConflicts(projectId);
     const byId = new Map(conflicts.flatMap((c) => c.values.map((v) => [c.conflict_id, c] as const)).map(([id, c]) => [id, c]));
     // 逐次解决不得覆盖之前的决定：先读历史记录再合并
-    let record: Record<string, { resolution: string; adopted_value: number }> = {};
-    try {
-      record = JSON.parse(
-        await readFile(join(this.store.root, projectId, 'work', 'conflict-resolutions.json'), 'utf-8'),
-      );
-    } catch {
-      // 无历史记录
-    }
+    const record = await this.store.readConflictResolutions(projectId);
     for (const [id, r] of Object.entries(resolutions)) {
       const conflict = byId.get(id);
       if (!conflict) throw Object.assign(new Error(`冲突不存在：${id}`), { statusCode: 400 });
@@ -213,10 +189,7 @@ export class WorkbenchService {
         throw Object.assign(new Error(`非法的解决方式：${JSON.stringify(r)}`), { statusCode: 400 });
       }
     }
-    const { mkdir, writeFile } = await import('node:fs/promises');
-    const dir = join(this.store.root, projectId, 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(record, null, 2));
+    await this.store.writeConflictResolutions(projectId, record as Record<string, { resolution: string; adopted_value?: number }>);
   }
 
   async getSpec(projectId: string): Promise<ReportSpec | null> {

@@ -67,3 +67,18 @@ export type TableRow = z.infer<typeof TableRowSchema>;
 export type TableAsset = z.infer<typeof TableAssetSchema>;
 export type SourceConflict = z.infer<typeof SourceConflictSchema>;
 export type IngestResult = z.infer<typeof IngestResultSchema>;
+
+/** 空导入结果的单一构造点（此前在 csv/persist/markdown 三处拼写字面量五次） */
+export function emptyIngestResult(sourceId: string, overrides: Partial<IngestResult> = {}): IngestResult {
+  return IngestResultSchema.parse({
+    source_id: sourceId,
+    ok: true,
+    claims: [],
+    evidence: [],
+    tables: [],
+    notes: [],
+    conflicts: [],
+    confirmations: [],
+    ...overrides,
+  });
+}

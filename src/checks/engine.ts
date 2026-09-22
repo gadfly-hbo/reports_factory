@@ -208,7 +208,7 @@ export interface ExportGateDecision {
 }
 
 /** 发布门禁（§10.3）：阻断未清零禁止正式定稿；草稿允许但需标识 */
-export function exportGate(spec: ReportSpec, report: CheckReport, input: ExportGateInput): ExportGateDecision {
+export function exportGate(report: CheckReport, input: ExportGateInput): ExportGateDecision {
   if (input.mode === 'draft') return { allowed: true, reason: '草稿导出（带未解决问题标识）' };
   if (report.blockers > 0) {
     return {
@@ -216,7 +216,6 @@ export function exportGate(spec: ReportSpec, report: CheckReport, input: ExportG
       reason: `存在 ${report.blockers} 个未解决阻断项，修复前不得生成正式定稿（可导出草稿）`,
     };
   }
-  void spec;
   return { allowed: true, reason: '检查通过' };
 }
 
