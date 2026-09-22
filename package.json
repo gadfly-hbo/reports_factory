@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsc",
+    "sample": "tsc && node dist/cli/samples.js"
   },
   "keywords": [],
   "author": "",
