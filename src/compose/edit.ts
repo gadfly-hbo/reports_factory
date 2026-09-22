@@ -82,7 +82,7 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
         const head = page.bullets!.slice(0, mid);
         const tail = page.bullets!.slice(mid);
         first = { ...page, bullets: head, claim_refs: head.map((b) => b.claim_ref).filter((x): x is string => !!x) };
-        second = { ...second, bullets: tail, claim_refs: tail.map((b) => b.claim_ref).filter((x): x is string => !!x) };
+        second = { ...second, bullets: tail, table: undefined, claim_refs: tail.map((b) => b.claim_ref).filter((x): x is string => !!x) };
       } else if ((page.table?.rows.length ?? 0) >= 2) {
         const mid = Math.ceil(page.table!.rows.length / 2);
         first = { ...page, table: { ...page.table!, rows: page.table!.rows.slice(0, mid) } };

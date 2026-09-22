@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join as pjoin } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 
@@ -128,5 +129,64 @@ describe('工作台 API：无 UI 也能完成完整闭环', () => {
     expect(formalExport).toBeTruthy(); // 冲突解决后的正式导出
     expect(Array.isArray(formalExport.checks?.issues)).toBe(true);
     expect(formalExport.checks.blockers).toBe(0);
+  });
+});
+
+describe('多冲突逐次解决（回归：之前的决定不被覆盖）', () => {
+  let app: import('fastify').FastifyInstance;
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rs-api2-'));
+    app = buildServer(new WorkspaceStore(dir));
+  });
+  afterEach(async () => {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it('两个冲突一次解决一个，历史决定保留，最终可正式导出', async () => {
+    const createRes = await app.inject({ method: 'POST', url: '/api/projects', payload: { title: '多冲突测试' } });
+    const id = createRes.json().project.project_id;
+
+    for (const f of ['sales.csv', 'sales-conflict-2rows.csv']) {
+      const content_base64 = readFileSync(join(MAT, f)).toString('base64');
+      await app.inject({
+        method: 'POST', url: `/api/projects/${id}/sources`,
+        payload: { filename: f, content_base64, kind: 'csv', media_type: 'text/csv' },
+      });
+    }
+    await app.inject({
+      method: 'POST', url: `/api/projects/${id}/outline`,
+      payload: { brief: { audience: '商品经营负责人', purpose: '复盘', page_budget: 8 } },
+    });
+    await app.inject({ method: 'POST', url: `/api/projects/${id}/assemble`, payload: {} });
+
+    const blocked = (await app.inject({
+      method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pdf'] },
+    })).json();
+    const ids = blocked.checks.issues
+      .filter((i: any) => i.id === 'source_conflict_unresolved')
+      .map((i: any) => i.object_ref);
+    expect(ids.length).toBe(2); // 5月与6月两行口径冲突
+
+    // 模拟 UI 逐次点击解决
+    await app.inject({
+      method: 'POST', url: `/api/projects/${id}/resolve-conflict`,
+      payload: { resolution: { [ids[0]!]: 'source_a' } },
+    });
+    await app.inject({
+      method: 'POST', url: `/api/projects/${id}/resolve-conflict`,
+      payload: { resolution: { [ids[1]!]: 'source_b' } },
+    });
+
+    const res = (await app.inject({ url: `/api/projects/${id}/conflict-resolutions` })).json();
+    expect(res[ids[0]!].resolution).toBe('source_a'); // 回归点：曾被第二次调用整文件覆盖
+    expect(res[ids[1]!].resolution).toBe('source_b');
+    expect(res[ids[0]!].adopted_value).toBeDefined();
+    expect(res[ids[1]!].adopted_value).toBeDefined();
+
+    const ok = (await app.inject({
+      method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pdf'] },
+    })).json();
+    expect(ok.allowed).toBe(true);
   });
 });

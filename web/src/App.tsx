@@ -204,16 +204,19 @@ export default function App() {
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void uploadFiles(files); }} />
         <button onClick={() => fileRef.current?.click()}>上传材料（md / txt / csv / png / jpg）</button>
         <table className="list" style={{ marginTop: 12 }}>
-          <thead><tr><th>文件</th><th>类型</th><th>状态</th><th>底层数据</th></tr></thead>
+          <thead><tr><th>文件</th><th>类型</th><th>状态</th><th>底层数据</th><th>影响页面</th></tr></thead>
           <tbody>
             {sources.map((s) => (
               <tr key={s.source_id}>
                 <td>{s.filename}</td><td>{s.kind}</td>
                 <td>{parseBadge(s)}</td>
                 <td>{s.has_data === false ? <span className="badge amber">图片（不可改数）</span> : <span className="badge green">有</span>}</td>
+                <td title={impact?.[s.source_id]?.join('、')}>
+                  {impact?.[s.source_id]?.length ? `${impact[s.source_id]!.length} 页（替换后需复核）` : '—'}
+                </td>
               </tr>
             ))}
-            {sources.length === 0 && <tr><td colSpan={4} style={{ color: 'var(--soft)' }}>尚未导入材料。示例：一份 markdown 结论文本 + 一份 csv 汇总表。</td></tr>}
+            {sources.length === 0 && <tr><td colSpan={5} style={{ color: 'var(--soft)' }}>尚未导入材料。示例：一份 markdown 结论文本 + 一份 csv 汇总表。</td></tr>}
           </tbody>
         </table>
         {conflicts.filter((c) => c.resolution === 'unresolved').length > 0 && (

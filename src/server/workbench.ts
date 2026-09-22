@@ -188,7 +188,15 @@ export class WorkbenchService {
   ): Promise<void> {
     const conflicts = await this.getConflicts(projectId);
     const byId = new Map(conflicts.flatMap((c) => c.values.map((v) => [c.conflict_id, c] as const)).map(([id, c]) => [id, c]));
-    const record: Record<string, { resolution: string; adopted_value: number }> = {};
+    // 逐次解决不得覆盖之前的决定：先读历史记录再合并
+    let record: Record<string, { resolution: string; adopted_value: number }> = {};
+    try {
+      record = JSON.parse(
+        await readFile(join(this.store.root, projectId, 'work', 'conflict-resolutions.json'), 'utf-8'),
+      );
+    } catch {
+      // 无历史记录
+    }
     for (const [id, r] of Object.entries(resolutions)) {
       const conflict = byId.get(id);
       if (!conflict) throw Object.assign(new Error(`冲突不存在：${id}`), { statusCode: 400 });

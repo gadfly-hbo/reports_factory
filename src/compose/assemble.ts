@@ -200,12 +200,14 @@ export function assembleReportSpec(input: { report_id: string; ctx: AssembleCont
   // 组装时按页计划顺序重排页号 ID，保持稳定
   const renumbered = pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` }));
   const metrics = deriveMetrics(ctx.tables);
-  // 趋势/指标页绑定其表格派生的指标（图表数值与指标同源可追溯）
-  const metricByTable = new Map(ctx.tables.map((t) => [t.table_id, `metric_${t.table_id}_latest_change`]));
+  // 趋势/指标页绑定其来源派生的指标（图表数值与指标同源可追溯；精确按 source_id 匹配）
+  const metricIdBySource = new Map(
+    ctx.tables.map((t) => [t.source_id, `metric_${t.table_id}_latest_change`]),
+  );
   for (const page of renumbered) {
     if (page.type === 'trend' || page.type === 'metrics_overview') {
-      const bound = (page.chart?.source_ref ?? page.table?.source_ref ?? '').split('@')[0];
-      const metricId = [...metricByTable.entries()].find(([t]) => t.endsWith(bound ?? '\u0000'))?.[1];
+      const bound = (page.chart?.source_ref ?? page.table?.source_ref ?? '').split('@')[0] ?? '';
+      const metricId = metricIdBySource.get(bound);
       if (metricId && metrics.some((m) => m.metric_id === metricId)) {
         page.metric_refs = [...new Set([...page.metric_refs, metricId])];
       }
