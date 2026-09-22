@@ -10,6 +10,8 @@ import { renderReportPdf, closePdfBrowser } from '../render/pdf.js';
 import { renderDocumentHtml } from '../render/document-html.js';
 import { renderDocumentPdf, closeDocumentPdfBrowser } from '../render/document-pdf.js';
 import { renderReportDocx } from '../render/docx.js';
+import { deriveExecutiveSummary } from '../compose/summary.js';
+import { checkCrossDeliverable } from '../checks/cross-deliverable.js';
 
 /**
  * 导出编排（F10/F11）：检查 → 门禁 → 渲染 → 冻结导出记录。
@@ -27,6 +29,8 @@ export interface ExportOptions {
   ackEditableData?: boolean;
   /** 显式确认对外分享（报告默认禁止对外） */
   ackExternalShare?: boolean;
+  /** M3：导出一页决策摘要（从主 spec 派生 + 跨交付物一致性校验） */
+  deliverable?: 'executive_summary';
 }
 
 export interface ExportOutcome {
@@ -45,11 +49,24 @@ export async function exportReport(
   opts: ExportOptions,
 ): Promise<ExportOutcome> {
   const scope = opts.exportScope ?? 'internal';
-  let checks = runChecks(spec, {
+  // 一页决策摘要：从主 spec 派生（§4.1 独立形态），并与主报告做跨交付物一致性校验
+  let specUsedBase = spec;
+  if (opts.deliverable === 'executive_summary') {
+    specUsedBase = deriveExecutiveSummary(spec);
+  }
+  let checks = runChecks(specUsedBase, {
     conflicts: opts.conflicts ?? [],
     exportScope: scope,
     ackExternalShare: opts.ackExternalShare,
   });
+  if (opts.deliverable === 'executive_summary') {
+    const cross = checkCrossDeliverable(spec, specUsedBase);
+    checks = {
+      issues: [...checks.issues, ...cross.issues],
+      blockers: checks.blockers + cross.blockers,
+      warnings: checks.warnings + cross.warnings,
+    };
+  }
 
   // 对外导出的隐私检查（§12.2 对外导出行）：flag 项并入阻断
   let privacy: PrivacyReport | null = null;
@@ -78,10 +95,10 @@ export async function exportReport(
 
   const gate = exportGate(checks, { mode: opts.mode });
   if (!gate.allowed) {
-    return { gate, checks, revisionId: '', exports: [], specUsed: spec, privacy };
+    return { gate, checks, revisionId: '', exports: [], specUsed: specUsedBase, privacy };
   }
 
-  const specUsed = opts.mode === 'draft' ? draftExportSpec(spec, checks) : spec;
+  const specUsed = opts.mode === 'draft' ? draftExportSpec(specUsedBase, checks) : specUsedBase;
   const revision = await store.saveRevision(projectId, specUsed, opts.mode === 'draft' ? '草稿导出' : '正式导出');
 
   const exports: ExportRecord[] = [];

@@ -67,6 +67,7 @@ export const ExportRequestSchema = z.object({
   chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
   ack_editable_data: z.boolean().optional(),
   ack_external_share: z.boolean().optional(),
+  deliverable: z.enum(['executive_summary']).optional(),
 });
 
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;

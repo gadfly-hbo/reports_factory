@@ -161,6 +161,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       chartDataMode: body.chart_data_mode,
       ackEditableData: body.ack_editable_data,
       ackExternalShare: body.ack_external_share,
+      deliverable: body.deliverable,
     });
     return {
       allowed: outcome.gate.allowed,
