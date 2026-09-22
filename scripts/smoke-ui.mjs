@@ -82,6 +82,36 @@ try {
   await page.waitForSelector('tr:has-text("定稿")');
   ok('阻断清零后正式导出成功');
 
+  // 9) 版本比较：页面内调用编辑 API 铸新修订 → 刷新 → 比较两版本
+  const editViaApi = await page.evaluate(async () => {
+    // 列表接口按更新时间倒序，本项目即最新者
+    const res = await fetch('/api/projects').then((r) => r.json());
+    const id = res.projects[0].project_id;
+    const edit = await fetch(`/api/projects/${id}/edit`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op: { kind: 'edit_text', page_id: 'page_03', field: 'headline', text: '版本比较演示标题' } }),
+    }).then((r) => r.json());
+    return { id, ok: !!edit.spec };
+  });
+  if (!editViaApi.ok) throw new Error('编辑 API 调用失败');
+  ok('编辑铸新修订（S3 链路）');
+
+  // 刷新详情后使用版本比较卡（应用内导航：回列表再进项目，页面状态在 React 内存中）
+  await page.click('button:has-text("← 项目列表")');
+  await page.waitForSelector('button:has-text("继续编辑")');
+  await page.click('button:has-text("继续编辑")');
+  await page.waitForSelector('h1:has-text("冒烟测试项目")');
+  await page.waitForSelector('h2:has-text("版本比较")');
+  await page.selectOption('div.card:has(h2:text("版本比较")) select >> nth=0', 'rev_001');
+  const lastRev = await page.evaluate(async (id) => {
+    const d = await fetch(`/api/projects/${id}`).then((r) => r.json());
+    return d.revisions.at(-1).revision_id;
+  }, editViaApi.id);
+  await page.selectOption('div.card:has(h2:text("版本比较")) select >> nth=1', lastRev);
+  await page.click('div.card:has(h2:text("版本比较")) button:has-text("比较")');
+  await page.waitForSelector('text=版本比较演示标题');
+  ok('版本比较：差异清单可见（改后标题命中）');
+
   await browser.close();
   console.log(failed === 0 ? '\nUI 冒烟走查：全部通过 ✅' : `\nUI 冒烟走查：${failed} 项失败 ❌`);
   process.exitCode = failed === 0 ? 0 : 1;

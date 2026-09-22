@@ -9,6 +9,13 @@ interface OutlineDraft { pages: PagePlan[]; open_questions: OpenQuestion[] }
 interface Issue { id: string; severity: 'blocker' | 'warning'; page_id?: string; object_ref: string; message: string }
 interface CheckReport { issues: Issue[]; blockers: number; warnings: number }
 interface ExportRec { export_id: string; format: string; artifact_path: string; is_draft: boolean }
+interface RevisionMeta { revision_id: string; created_at: string; note?: string }
+interface SpecDiff {
+  pages_added: string[]; pages_removed: string[]; pages_reordered: string[];
+  pages_changed: { page_id: string; changes: { field: string; locator?: string; before?: string; after?: string }[] }[];
+  metrics_changed: { metric_id: string; field: string; before?: string; after?: string }[];
+  claims_changed: { claim_id: string; field: string; before?: string; after?: string }[];
+}
 
 const api = {
   get: async <T,>(url: string): Promise<T> => (await fetch(url)).json(),
@@ -45,6 +52,9 @@ export default function App() {
   const [outline, setOutline] = useState<OutlineDraft | null>(null);
   const [checks, setChecks] = useState<CheckReport | null>(null);
   const [exportScope, setExportScope] = useState<'internal' | 'external'>('internal');
+  const [diffA, setDiffA] = useState('');
+  const [diffB, setDiffB] = useState('');
+  const [diffResult, setDiffResult] = useState<{ diff: SpecDiff; recheck?: CheckReport } | null>(null);
   const [chartDataMode, setChartDataMode] = useState<'keep_editable' | 'aggregate_only'>('keep_editable');
   const [ackEditable, setAckEditable] = useState(false);
   const [ackExternalShare, setAckExternalShare] = useState(false);
@@ -138,6 +148,12 @@ export default function App() {
     if (!currentId) return;
     await api.post(`/api/projects/${currentId}/resolve-conflict`, { resolution: { [c.conflict_id]: resolution } });
     await reloadDetail(currentId);
+  };
+
+  const doDiff = async () => {
+    if (!currentId || !diffA || !diffB) return;
+    const res = await api.get<{ diff: SpecDiff; recheck?: CheckReport }>(`/api/projects/${currentId}/diff?a=${diffA}&b=${diffB}`);
+    setDiffResult(res);
   };
 
   const doExport = async (mode: 'formal' | 'draft') => {
@@ -346,6 +362,54 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+          <div className="card">
+            <h2>版本比较（修订之间差异）</h2>
+            {(detail as any)?.revisions?.length > 1 ? (
+              <>
+                <div className="row">
+                  <select value={diffA} onChange={(e) => setDiffA(e.target.value)}>
+                    <option value="">旧版本…</option>
+                    {(detail as any).revisions.map((r: RevisionMeta) => <option key={r.revision_id} value={r.revision_id}>{r.revision_id}（{r.note ?? '无备注'}）</option>)}
+                  </select>
+                  <span>→</span>
+                  <select value={diffB} onChange={(e) => setDiffB(e.target.value)}>
+                    <option value="">新版本…</option>
+                    {(detail as any).revisions.map((r: RevisionMeta) => <option key={r.revision_id} value={r.revision_id}>{r.revision_id}（{r.note ?? '无备注'}）</option>)}
+                  </select>
+                  <button disabled={!diffA || !diffB} onClick={doDiff}>比较</button>
+                </div>
+                {diffResult && (
+                  <div style={{ marginTop: 10 }}>
+                    {diffResult.diff.pages_changed.length === 0 && diffResult.diff.pages_added.length === 0 && diffResult.diff.pages_removed.length === 0 && (
+                      <p style={{ color: 'var(--green)' }}>两个版本内容一致</p>
+                    )}
+                    {diffResult.diff.pages_added.length > 0 && <p><span className="badge green">新增页</span> {diffResult.diff.pages_added.join('、')}</p>}
+                    {diffResult.diff.pages_removed.length > 0 && <p><span className="badge red">删除页</span> {diffResult.diff.pages_removed.join('、')}</p>}
+                    {diffResult.diff.pages_reordered.length > 0 && <p><span className="badge neutral">顺序变化</span> {diffResult.diff.pages_reordered.join('、')}</p>}
+                    {diffResult.diff.pages_changed.map((p) => (
+                      <div key={p.page_id} style={{ marginTop: 8 }}>
+                        <b style={{ color: 'var(--primary-ink)' }}>{p.page_id}</b>
+                        {p.changes.map((c, i) => (
+                          <div className="issue" key={i}>
+                            <span className="badge neutral">{c.field}</span>
+                            <span className="msg">{c.locator ? `${c.locator}：` : ''}{c.before ?? '（空）'} → {c.after ?? '（空）'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    {diffResult.diff.metrics_changed.length > 0 && (
+                      <p><span className="badge amber">指标变化</span> {diffResult.diff.metrics_changed.map((m) => `${m.metric_id}.${m.field}: ${m.before} → ${m.after}`).join('；')}</p>
+                    )}
+                    {diffResult.recheck && (
+                      <p><span className={`badge ${diffResult.recheck.blockers > 0 ? 'red' : 'amber'}`}>数字/绑定变化已重触发检查：{diffResult.recheck.blockers} 阻断 / {diffResult.recheck.warnings} 警告</span></p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={{ color: 'var(--soft)' }}>导出或编辑产生至少两个修订后可比较版本差异。</p>
             )}
           </div>
         </>

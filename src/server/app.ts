@@ -132,6 +132,20 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // 版本比较（§5.3：差异显示；数字/绑定变化时重触发检查）
+  app.get('/api/projects/:id/diff', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { a?: string; b?: string };
+    if (!q.a || !q.b) return reply.code(400).send({ error: '需要 a 与 b 两个修订 id' });
+    try {
+      return await workbench.diff(id, q.a, q.b);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { error: err.message };
+    }
+  });
+
   // 来源替换影响面（§13.2：新材料版本到来后提示受影响页面）
   app.get('/api/projects/:id/impact', async (req) => {
     const { id } = req.params as { id: string };

@@ -6,6 +6,7 @@ import { createDeterministicGateway } from '../model/gateway.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
 import { pagesImpactedBySource } from '../compose/impact.js';
+import { diffSpecs, type SpecDiff } from '../compose/diff.js';
 import { applyEdit, type EditOp } from '../compose/edit.js';
 import { runChecks, type CheckReport } from '../checks/engine.js';
 import { detectConflicts } from '../ingest/conflicts.js';
@@ -80,6 +81,19 @@ export class WorkbenchService {
       }
       return c;
     });
+  }
+
+  /** 版本比较：两个修订的结构化差异；数字或绑定变化时重触发检查（§5.3 后半句） */
+  async diff(projectId: string, revA: string, revB: string): Promise<{ diff: SpecDiff; recheck?: CheckReport }> {
+    const a = await this.store.getRevision(projectId, revA);
+    const b = await this.store.getRevision(projectId, revB);
+    if (!a || !b) throw Object.assign(new Error('修订不存在'), { statusCode: 404 });
+    const diff = diffSpecs(a.spec, b.spec);
+    if (diff.metrics_changed.length > 0 || diff.claims_changed.length > 0) {
+      const recheck = runChecks(b.spec, { conflicts: await this.getResolvedConflicts(projectId) });
+      return { diff, recheck };
+    }
+    return { diff };
   }
 
   /** 来源替换影响面（§13.2）：每个来源影响的页面 */
