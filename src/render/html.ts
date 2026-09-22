@@ -1,6 +1,7 @@
 import type { Page, ReportSpec } from '../schema/report-spec.js';
 import { isChartEmpty, renderChartSvg } from './charts.js';
 import { fitHeadline } from './text-fit.js';
+import { pageFooterParts } from './footer.js';
 import {
   fontSize,
   fontStack,
@@ -22,11 +23,7 @@ export function escapeHtml(s: string): string {
 const CONTENT_WIDTH_PX = slide.widthPx - 128;
 
 function sourceLine(page: Page): string {
-  const parts: string[] = [];
-  if (page.chart?.source_ref) parts.push(`来源：${page.chart.source_ref}`);
-  if (page.table?.source_ref) parts.push(`来源：${page.table.source_ref}`);
-  if (page.required_note) parts.push(page.required_note);
-  return parts.join('　|　');
+  return pageFooterParts(page).join('　|　');
 }
 
 function statusBadge(status?: string): string {

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>report_m0_page_types</title>
+<style>
+@page { size: 1280px 720px; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif; color: #17202a; background: #ffffff; font-variant-numeric: tabular-nums; }
+.slide { width: 1280px; height: 720px; padding: 44px 64px 36px; display: flex; flex-direction: column; page-break-after: always; background: #ffffff; }
+.slide:last-child { page-break-after: auto; }
+.kicker { font-size: 13px; letter-spacing: 0.12em; color: #155e75; font-weight: 600; }
+.headline { line-height: 1.3; margin-top: 10px; font-weight: 600; }
+.slide-body { flex: 1; display: flex; gap: 28px; margin-top: 22px; min-height: 0; align-items: stretch; }
+.slide-body.column { flex-direction: column; gap: 18px; }
+.chart-panel { flex: 1.7; display: flex; min-width: 0; }
+.chart-panel svg { width: 100%; height: 100%; }
+.chart-placeholder { flex: 1.7; border: 1.5px dashed #c2ccd8; background: #f9fafb; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #5d6b7d; font-size: 18px; }
+.chart-placeholder span { font-size: 13px; color: #8a96a6; }
+.side-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.note-panel { background: #e2eff3; border-radius: 8px; padding: 22px 24px; font-size: 16px; line-height: 1.8; display: flex; align-items: center; }
+.bullets { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.bullets li { display: flex; align-items: baseline; gap: 10px; font-size: 16px; line-height: 1.6; flex-wrap: wrap; }
+.bullet-label { flex-shrink: 0; font-weight: 600; color: #0c3b4a; }
+.bullet-text { flex: 1; min-width: 240px; }
+.badge { flex-shrink: 0; font-size: 12px; padding: 2px 10px; border-radius: 999px; }
+.table-area { flex: 0 1 auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.data-table th { text-align: left; background: #eef2f6; color: #0c3b4a; font-weight: 600; padding: 10px 14px; border-bottom: 1.5px solid #c2ccd8; }
+.data-table td { padding: 10px 14px; border-bottom: 1px solid #dce3ea; }
+.slide-footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid #dce3ea; font-size: 12px; color: #5d6b7d; }
+.cover { justify-content: center; align-items: flex-start; }
+.cover-block { border-left: 6px solid #155e75; padding-left: 36px; }
+.cover-kicker { font-size: 13px; letter-spacing: 0.2em; color: #155e75; font-weight: 600; margin-bottom: 18px; }
+.cover-title { font-size: 44px; font-weight: 600; line-height: 1.25; }
+.cover-subtitle { font-size: 20px; color: #5d6b7d; margin-top: 14px; }
+.cover-meta { font-size: 13px; color: #8a96a6; margin-top: 28px; }
+</style>
+</head>
+<body>
+
+  <section class="slide cover" data-page-id="page_cover">
+    <div class="cover-block">
+      <p class="cover-kicker">封面</p>
+      <h1 class="cover-title">2026年上半年经营复盘</h1>
+      <p class="cover-subtitle">商品经营例会汇报（演示数据）</p>
+      <p class="cover-meta">2026-01 ~ 2026-06　|　商品经营负责人　|　v1 草稿</p>
+    </div>
+    
+  </section>
+
+  <section class="slide" data-page-id="page_summary">
+    <header class="slide-header">
+      <p class="kicker">结论摘要</p>
+      <h1 class="headline" style="font-size: 34px">销售下降已确认，原因待验证，本次需要决策验证方案</h1>
+    </header>
+    <div class="slide-body column"><ul class="bullets"><li><span class="bullet-label">发现</span><span class="bullet-text">上半年销售额同比下降 7.1%，降幅逐月扩大</span><span class="badge" style="color:#156f43;background:#e5f6ed">已确认</span></li>
+<li><span class="bullet-label">限制</span><span class="bullet-text">缺货与销售的因果关系尚未证实</span><span class="badge" style="color:#8f6100;background:#fff3cf">待验证</span></li>
+<li><span class="bullet-label">待决</span><span class="bullet-text">是否批准缺货专项验证（本周内）</span><span class="badge" style="color:#5d6b7d;background:#eef2f6">待决</span></li></ul></div>
+    
+  </section>
+
+  <section class="slide" data-page-id="page_metrics">
+    <header class="slide-header">
+      <p class="kicker">指标总览</p>
+      <h1 class="headline" style="font-size: 34px">关键指标：销售下降，客单价平稳，缺货率上升</h1>
+    </header>
+    <div class="slide-body column"><table class="data-table"><thead><tr><th>指标</th><th style="text-align:right">本期</th><th style="text-align:right">基准</th><th style="text-align:right">变化</th><th>口径</th></tr></thead><tbody><tr><td>销售额（万元）</td><td style="text-align:right">2,921</td><td style="text-align:right">3,143</td><td style="text-align:right">-7.1%</td><td>含税，门店口径</td></tr><tr><td>客单价（元）</td><td style="text-align:right">86.5</td><td style="text-align:right">86.2</td><td style="text-align:right">+0.3%</td><td>会员口径</td></tr><tr><td>缺货率</td><td style="text-align:right">6.8%</td><td style="text-align:right">5.2%</td><td style="text-align:right">+1.6个百分点</td><td>门店盘点</td></tr></tbody></table></div>
+    <footer class="slide-footer"><span>来源：src_sales_summary@v1</span></footer>
+  </section>
+
+  <section class="slide" data-page-id="page_trend">
+    <header class="slide-header">
+      <p class="kicker">趋势对比</p>
+      <h1 class="headline" style="font-size: 34px">销售额出现下降，需要进一步验证原因</h1>
+    </header>
+    <div class="slide-body"><div class="chart-panel"><svg width="720" height="420" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 720 420">
+<rect width="720" height="420" x="0" y="0" fill="none"></rect>
+<path d="M56 384.5L696 384.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 328.5L696 328.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 272.5L696 272.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 216.5L696 216.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 160.5L696 160.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 104.5L696 104.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 48.5L696 48.5" fill="none" pointer-events="visible" stroke="#dce3ea" class="zr0-cls-0"></path>
+<path d="M56 384.5L696 384.5" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 384)" fill="#5d6b7d">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 328)" fill="#5d6b7d">100</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 272)" fill="#5d6b7d">200</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 216)" fill="#5d6b7d">300</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 160)" fill="#5d6b7d">400</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 104)" fill="#5d6b7d">500</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" transform="translate(48 48)" fill="#5d6b7d">600</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(109.3333 392)" fill="#5d6b7d">1月</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(216 392)" fill="#5d6b7d">2月</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(322.6667 392)" fill="#5d6b7d">3月</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(429.3333 392)" fill="#5d6b7d">4月</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(536 392)" fill="#5d6b7d">5月</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" y="6" transform="translate(642.6667 392)" fill="#5d6b7d">6月</text>
+<path d="M79.9 384l28 0l0 -291.2l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M186.6 384l28 0l0 -299.6l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M293.3 384l28 0l0 -306.9l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M399.9 384l28 0l0 -296.8l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="3" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M506.6 384l28 0l0 -286.7l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="4" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M613.3 384l28 0l0 -278.9l-28 0Z" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="5" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M110.7 384l28 0l0 -282.8l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M217.4 384l28 0l0 -285.6l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M324.1 384l28 0l0 -278.9l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M430.7 384l28 0l0 -272.2l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="3" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M537.4 384l28 0l0 -263.2l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="4" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M644.1 384l28 0l0 -253.1l-28 0Z" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="5" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M-5 -5l128 0l0 22l-128 0Z" transform="translate(589 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#b7b9be" stroke-width="0" class="zr0-cls-0"></path>
+<path d="M2 0L12 0A2 2 0 0 1 14 2L14 6A2 2 0 0 1 12 8L2 8A2 2 0 0 1 0 6L0 2A2 2 0 0 1 2 0Z" transform="translate(589 11)" fill="#155e75" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" x="19" y="4" transform="translate(589 11)" fill="#5d6b7d">去年同期</text>
+<path d="M0 -2l67 0l0 12l-67 0Z" transform="translate(589 11)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" class="zr0-cls-3"></path>
+<path d="M2 0L12 0A2 2 0 0 1 14 2L14 6A2 2 0 0 1 12 8L2 8A2 2 0 0 1 0 6L0 2A2 2 0 0 1 2 0Z" transform="translate(664 11)" fill="#0f766e" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:12px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;" x="19" y="4" transform="translate(664 11)" fill="#5d6b7d">本期</text>
+<path d="M0 -2l43 0l0 12l-43 0Z" transform="translate(664 11)" fill="none" pointer-events="visible" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="legend" class="zr0-cls-3"></path>
+<path d="M-5 -5l164 0l0 24l-164 0Z" transform="translate(13 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:14px;font-family:Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;font-weight:600;" y="7" transform="translate(13 9)" fill="#17202a">月度销售额对比（万元）</text>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(23,103,128,1);
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+fill:rgba(16,129,121,1);
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+fill:rgba(0,0,0,0);
+}
+
+]]>
+
+</style>
+</svg></div><div class="side-panel"><div class="note-panel"><p>示例：6月销售额同比下降 9.2%，下降原因尚未证实。</p></div></div></div>
+    <footer class="slide-footer"><span>来源：src_sales_summary@v1</span></footer>
+  </section>
+
+  <section class="slide" data-page-id="page_issue">
+    <header class="slide-header">
+      <p class="kicker">问题拆解</p>
+      <h1 class="headline" style="font-size: 34px">销售下降的可能原因：三个方向，两种待验证</h1>
+    </header>
+    <div class="slide-body column"><ul class="bullets"><li><span class="bullet-label">库存周转</span><span class="bullet-text">门店盘点显示缺货率 6.8%（+1.6个百分点）</span><span class="badge" style="color:#8f6100;background:#fff3cf">待复核</span></li>
+<li><span class="bullet-label">缺货影响</span><span class="bullet-text">店长反馈缺货集中在畅销单品，影响未量化</span><span class="badge" style="color:#8f6100;background:#fff3cf">待验证</span></li>
+<li><span class="bullet-label">价格竞争</span><span class="bullet-text">竞对促销海报为定性观察，待收集价格带数据</span><span class="badge" style="color:#8f6100;background:#fff3cf">待验证</span></li></ul></div>
+    
+  </section>
+
+  <section class="slide" data-page-id="page_options">
+    <header class="slide-header">
+      <p class="kicker">方案比较</p>
+      <h1 class="headline" style="font-size: 34px">应对方案比较：先验证，再决定是否扩大动作</h1>
+    </header>
+    <div class="slide-body column"><table class="data-table"><thead><tr><th>维度</th><th>方案A 补货提速</th><th>方案B 促销让利</th><th>方案C 先验证再决策</th></tr></thead><tbody><tr><td>预计投入</td><td>待确认</td><td>80万元</td><td>0</td></tr><tr><td>见效周期</td><td>待确认</td><td>2-4周</td><td>4-8周</td></tr><tr><td>主要风险</td><td>仓储压力</td><td>毛利侵蚀</td><td>延误应对</td></tr><tr><td>待补信息</td><td>供应商交期</td><td>毛利弹性</td><td>无</td></tr></tbody></table></div>
+    
+  </section>
+
+  <section class="slide" data-page-id="page_actions">
+    <header class="slide-header">
+      <p class="kicker">行动与待决</p>
+      <h1 class="headline" style="font-size: 34px">本次需要批准与跟进的事项</h1>
+    </header>
+    <div class="slide-body column"><table class="data-table"><thead><tr><th>事项</th><th>责任人</th><th>时间</th><th>状态</th></tr></thead><tbody><tr><td>缺货专项验证</td><td>待定</td><td>本周内</td><td>待批准</td></tr><tr><td>6月品类明细复核</td><td>张三</td><td>7月10日前</td><td>进行中</td></tr></tbody></table></div>
+    
+  </section>
+
+  <section class="slide" data-page-id="page_appendix">
+    <header class="slide-header">
+      <p class="kicker">证据附录</p>
+      <h1 class="headline" style="font-size: 34px">附录：口径、方法与来源</h1>
+    </header>
+    <div class="slide-body column"><ul class="bullets"><li><span class="bullet-label">口径</span><span class="bullet-text">销售额为含税、门店口径；同比为与去年同期对比</span></li>
+<li><span class="bullet-label">来源</span><span class="bullet-text">src_sales_summary@v1（演示数据汇总表）</span></li>
+<li><span class="bullet-label">限制</span><span class="bullet-text">缺货影响未量化，本报告不构成原因结论</span></li></ul></div>
+    <footer class="slide-footer"><span>演示数据，非真实经营结论</span></footer>
+  </section>
+</body>
+</html>

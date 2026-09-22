@@ -61,7 +61,8 @@ export async function exportReport(
       .filter((i) => i.status === 'flag')
       .map((i) => ({
         id: `privacy_${i.item}`,
-        severity: 'blocker',
+        severity: 'blocker' as const,
+        category: 'policy' as const,
         object_ref: i.item,
         message: i.detail ?? i.item,
       }));

@@ -107,3 +107,30 @@ describe('导出门禁的隐私集成（external scope）', () => {
     expect(exportGate(baseChecks, { mode: 'formal' }).allowed).toBe(true);
   });
 });
+
+describe('草稿导出不得绕过外发门禁（规格轴修复）', () => {
+  it('external 草稿 + 敏感来源 → 阻断；internal 草稿 + 内容阻断 → 仍允许（行为不变）', () => {
+    const baseChecks = runChecks(retailReviewSpec, { conflicts: [] });
+    // policy 阻断：敏感来源
+    const privacy = checkPrivacy(retailReviewSpec, {
+      sources: [sensitiveSource], chartDataMode: 'aggregate_only', ackEditableData: false,
+    });
+    const policyIssues = privacy.items
+      .filter((i) => i.status === 'flag')
+      .map((i) => ({ id: `privacy_${i.item}`, severity: 'blocker' as const, category: 'policy' as const, object_ref: i.item, message: i.detail ?? i.item }));
+    expect(policyIssues.length).toBeGreaterThan(0);
+    const merged = {
+      issues: [...baseChecks.issues, ...policyIssues],
+      blockers: baseChecks.blockers + policyIssues.length,
+      warnings: baseChecks.warnings,
+    };
+    expect(exportGate(merged, { mode: 'draft' }).allowed).toBe(false); // 草稿也阻断
+    // 纯内容类阻断（如未解决冲突）→ 草稿仍允许
+    const contentOnly = {
+      issues: [{ id: 'source_conflict_unresolved', severity: 'blocker' as const, object_ref: 'c', message: 'x' }],
+      blockers: 1,
+      warnings: 0,
+    };
+    expect(exportGate(contentOnly, { mode: 'draft' }).allowed).toBe(true);
+  });
+});

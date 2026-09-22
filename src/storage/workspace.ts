@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  ConflictResolutionRecordSchema,
   ProjectSchema,
   ReportRevisionSchema,
   SourceAssetSchema,
@@ -112,7 +113,9 @@ export class WorkspaceStore {
 
   async readConflictResolutions(projectId: string): Promise<Record<string, { resolution: string; adopted_value?: number }>> {
     try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'conflict-resolutions.json'), 'utf-8'));
+      return ConflictResolutionRecordSchema.parse(
+        JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'conflict-resolutions.json'), 'utf-8')),
+      );
     } catch {
       return {};
     }

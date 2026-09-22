@@ -15,6 +15,8 @@ export interface CheckIssue {
   page_id?: string;
   object_ref: string;
   message: string;
+  /** policy=隐私/外发策略类：草稿导出同样被阻断；content=内容质量类：草稿可带标识导出 */
+  category?: 'content' | 'policy';
 }
 
 export interface CheckContext {
@@ -155,7 +157,7 @@ export function runChecks(spec: ReportSpec, ctx: CheckContext): CheckReport {
     !ctx.ackExternalShare
   ) {
     issues.push({
-      id: 'external_share_violation', severity: 'blocker',
+      id: 'external_share_violation', severity: 'blocker', category: 'policy',
       object_ref: 'export_policy',
       message: '报告默认禁止对外分享；确需外发请显式确认对外分享（报告内敏感内容请配合"只分享聚合结果"）',
     });
@@ -216,7 +218,17 @@ export interface ExportGateDecision {
 
 /** 发布门禁（§10.3）：阻断未清零禁止正式定稿；草稿允许但需标识 */
 export function exportGate(report: CheckReport, input: ExportGateInput): ExportGateDecision {
-  if (input.mode === 'draft') return { allowed: true, reason: '草稿导出（带未解决问题标识）' };
+  if (input.mode === 'draft') {
+    // 隐私/策略类阻断（policy）即使在草稿导出也阻断——草稿不是外发绕过通道（§12.2）
+    const policyBlockers = report.issues.filter((i) => i.severity === 'blocker' && i.category === 'policy');
+    if (policyBlockers.length > 0) {
+      return {
+        allowed: false,
+        reason: `存在 ${policyBlockers.length} 个隐私/策略阻断项，草稿导出同样被阻止（不可绕过外发门禁）`,
+      };
+    }
+    return { allowed: true, reason: '草稿导出（带未解决问题标识）' };
+  }
   if (report.blockers > 0) {
     return {
       allowed: false,

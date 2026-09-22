@@ -15,18 +15,14 @@ import {
   ResolveConflictRequestSchema,
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
-import type { EditOp } from '../compose/edit.js';
 import { ZodError } from 'zod';
 
-/** 请求体校验：zod 失败 → 400（替代裸 cast 边界） */
-function parseBody<T>(schema: { parse: (x: unknown) => T }, body: unknown, reply: { code: (n: number) => unknown }): T | null {
+/** 请求体校验：zod 失败即抛 400（替代裸 cast 边界） */
+function parseBody<T>(schema: { parse: (x: unknown) => T }, body: unknown): T {
   try {
     return schema.parse(body);
   } catch (e) {
-    if (e instanceof ZodError) {
-      reply.code(400);
-      throw Object.assign(new Error('请求体非法'), { statusCode: 400 });
-    }
+    if (e instanceof ZodError) throw httpError(400, '请求体非法');
     throw e;
   }
 }
@@ -46,8 +42,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
   });
 
   app.post('/api/projects', async (req, reply) => {
-    const body = parseBody(CreateProjectRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
+    const body = parseBody(CreateProjectRequestSchema, req.body);
     const project = await store.createProject({ title: body.title, purpose: body.purpose });
     if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
     return { project };
@@ -75,8 +70,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects/:id/sources', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(SourceUploadRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
+    const body = parseBody(SourceUploadRequestSchema, req.body);
     const result = await ingestAndSave(store, id, {
       filename: body.filename,
       content: Buffer.from(body.content_base64, 'base64'),
@@ -90,25 +84,22 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects/:id/outline', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(OutlineRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
+    const body = parseBody(OutlineRequestSchema, req.body);
     const draft = await workbench.composeOutline(id, body.brief);
     return { draft };
   });
 
   app.post('/api/projects/:id/assemble', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(AssembleRequestSchema, req.body ?? {}, reply);
-    if (!body) return { error: '请求体非法' };
-    const spec = await workbench.assemble(id, body.pages as never);
+    const body = parseBody(AssembleRequestSchema, req.body ?? {});
+    const spec = await workbench.assemble(id, body.pages);
     return { spec };
   });
 
   app.post('/api/projects/:id/edit', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(EditRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
-    const spec = await workbench.edit(id, body.op as EditOp);
+    const body = parseBody(EditRequestSchema, req.body);
+    const spec = await workbench.edit(id, body.op);
     return { spec };
   });
 
@@ -120,8 +111,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects/:id/resolve-conflict', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(ResolveConflictRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
+    const body = parseBody(ResolveConflictRequestSchema, req.body);
     const { resolution } = body;
     try {
       await workbench.resolveConflict(id, resolution);
@@ -160,8 +150,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects/:id/export', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(ExportRequestSchema, req.body, reply);
-    if (!body) return { error: '请求体非法' };
+    const body = parseBody(ExportRequestSchema, req.body);
     const spec = await workbench.getSpec(id);
     if (!spec) throw httpError(400, '尚未组装报告，无法导出');
     const outcome = await exportReport(store, id, spec, {

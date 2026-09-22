@@ -2,6 +2,7 @@ import PptxGenJS from 'pptxgenjs';
 import type { ChartSpec, Page, ReportSpec, TableSpec } from '../schema/report-spec.js';
 import { isChartEmpty } from './charts.js';
 import { fitHeadline } from './text-fit.js';
+import { pageFooterParts } from './footer.js';
 import {
   pageTypeLabels,
   palette,
@@ -94,8 +95,6 @@ function bulletTexts(page: Page) {
     return { text: `${label}${b.text}${status}`, options: { bullet: true, breakLine: true } };
   });
 }
-
-import { pageFooterParts } from './footer.js';
 
 function addFooter(s: Slide, page: Page) {
   const parts = pageFooterParts(page);

@@ -1,4 +1,6 @@
 import type { ReportSpec } from '../schema/report-spec.js';
+import { EditOpSchema } from '../schema/requests.js';
+import type { z } from 'zod';
 import { assemblePage, type AssembleContext } from './assemble.js';
 
 /**
@@ -14,13 +16,8 @@ export class EditRejectedError extends Error {
   }
 }
 
-export type EditOp =
-  | { kind: 'edit_text'; page_id: string; field: 'headline' | 'body'; text: string }
-  | { kind: 'reorder'; order: string[] }
-  | { kind: 'regenerate_page'; page_id: string }
-  | { kind: 'split_page'; page_id: string }
-  | { kind: 'switch_layout'; page_id: string; layout_id: string }
-  | { kind: 'toggle_lock'; page_id: string; locked: boolean };
+// EditOp 单一来源：zod schema（API 边界校验与内部类型同一份定义）
+export type EditOp = z.infer<typeof EditOpSchema>;
 
 function findPage(spec: ReportSpec, pageId: string) {
   const page = spec.pages.find((p) => p.page_id === pageId);

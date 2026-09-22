@@ -1,3 +1,5 @@
+import type { PageType } from '../schema/report-spec.js';
+
 /**
  * 设计系统 token —— 采用 JuanerAI Prism 棱镜设计语言（全局规范默认基线）。
  * 语义色固定含义（Colors）：green 已确认 / amber 待复核·待验证 / red 风险 /
@@ -73,8 +75,6 @@ export const pptxFontSize = {
   coverSubtitle: 18,
   coverMeta: 12,
 };
-
-import type { PageType } from '../schema/report-spec.js';
 
 export const pageTypeLabels: Record<PageType, string> = {
   cover: '封面',

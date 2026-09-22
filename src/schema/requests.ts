@@ -22,8 +22,19 @@ export const OutlineRequestSchema = z.object({
   brief: ReportBriefSchema,
 });
 
+export const PagePlanItemSchema = z.object({
+  page_id: z.string().min(1),
+  type: z.enum(['cover', 'summary', 'metrics_overview', 'trend', 'issue_breakdown', 'option_comparison', 'action_items', 'evidence_appendix']),
+  headline: z.string().min(1),
+  intent: z.enum(['conclusion', 'evidence', 'decision', 'info']),
+  claim_refs: z.array(z.string()).default([]),
+  table_ids: z.array(z.string()).default([]),
+  gap_notes: z.array(z.string()).default([]),
+  locked: z.boolean().default(false),
+});
+
 export const AssembleRequestSchema = z.object({
-  pages: z.array(z.unknown()).optional(),
+  pages: z.array(PagePlanItemSchema).optional(),
 });
 
 export const EditOpSchema = z.discriminatedUnion('kind', [

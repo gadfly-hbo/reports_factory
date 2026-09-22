@@ -16,6 +16,7 @@ data/
 *.pdf
 !fixtures/**/*.pptx
 !fixtures/**/*.pdf
+!samples/**/golden/*.txt
 
 # env & logs
 .env
@@ -24,6 +25,8 @@ data/
 
 # OS
 .DS_Store
-samples/
-!samples/**/golden/
+samples/*.html
+samples/**/*.pptx
+samples/**/*.pdf
+samples/**/page-*.png
 web-dist/

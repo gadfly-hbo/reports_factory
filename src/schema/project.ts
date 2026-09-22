@@ -78,3 +78,12 @@ export type SourceKind = z.infer<typeof SourceKindSchema>;
 export type SourceAsset = z.infer<typeof SourceAssetSchema>;
 export type ReportRevisionMeta = z.infer<typeof ReportRevisionSchema>;
 export type ExportRecord = z.infer<typeof ExportRecordSchema>;
+
+export const ConflictResolutionRecordSchema = z.record(
+  z.string(),
+  z.object({
+    resolution: z.enum(['source_a', 'source_b', 'manual_value']),
+    adopted_value: z.number().optional(),
+  }),
+);
+export type ConflictResolutionRecord = z.infer<typeof ConflictResolutionRecordSchema>;

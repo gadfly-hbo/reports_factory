@@ -59,6 +59,8 @@ export default function App() {
   const [chartDataMode, setChartDataMode] = useState<'keep_editable' | 'aggregate_only'>('keep_editable');
   const [ackEditable, setAckEditable] = useState(false);
   const [ackExternalShare, setAckExternalShare] = useState(false);
+  const [lastPrivacy, setLastPrivacy] = useState<{ checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } | null>(null);
+  const [pendingSheet, setPendingSheet] = useState<{ file: File; meta: { kind: string; media_type: string }; sheets: string[]; chosen: string } | null>(null);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,14 +97,10 @@ export default function App() {
     if (!meta) return { filename: file.name, ok: false, failure_reason: `不支持的格式（支持 md/txt/csv/png/jpg）`, counts: undefined as Record<string, number> | undefined, confirmations: [] as { question: string }[] };
     const content_base64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
     const res = await api.post<{ ok: boolean; failure_reason?: string; counts?: Record<string, number>; confirmations?: { question: string }[]; available_sheets?: string[] }>(`/api/projects/${currentId}/sources`, { filename: file.name, content_base64, ...meta });
-    // XLSX 需显式选表（§4.2）：弹出让用户选，再带表重传
+    // XLSX 需显式选表（§4.2）：内联选择器（走确认通道，不弹 prompt）
     if (!res.ok && res.available_sheets && res.available_sheets.length > 0) {
-      const sheet = prompt(`工作簿有多张工作表，请输入要导入的一张：\n${res.available_sheets.join('、')}`);
-      if (sheet && res.available_sheets.includes(sheet)) {
-        const retried = await api.post<typeof res>(`/api/projects/${currentId}/sources`, { filename: file.name, content_base64, ...meta, sheet });
-        return { filename: file.name, ...retried, available_sheets: undefined };
-      }
-      return { filename: file.name, ok: false, failure_reason: `未选择有效工作表（可用：${res.available_sheets.join('、')}）`, counts: undefined, confirmations: [] };
+      setPendingSheet({ file, meta, sheets: res.available_sheets, chosen: res.available_sheets[0]! });
+      return { filename: file.name, ok: false, failure_reason: undefined, counts: undefined, confirmations: [], deferred: true } as never;
     }
     return { filename: file.name, ...res, available_sheets: undefined };
   };
@@ -114,7 +112,7 @@ export default function App() {
       const results = [];
       for (const f of files) results.push(await uploadOne(f)); // 串行：避免并发响应乱序覆盖状态
       await reloadDetail(currentId); // 全部入库后统一刷新一次
-      const failed = results.filter((r) => r && !r.ok);
+      const failed = results.filter((r) => r && !r.ok && !(r as { deferred?: boolean }).deferred);
       const okRes = results.filter((r) => r?.ok);
       if (failed.length > 0) {
         setMessage({ kind: 'warn', text: `${failed.map((f) => `「${f!.filename}」${f!.failure_reason}`).join('；')}（不影响其他材料）` });
@@ -178,6 +176,7 @@ export default function App() {
         ack_external_share: ackExternalShare,
       });
       const privacyNote = res.privacy ? `（隐私检查：${res.privacy.checked_count} 项已检查 / ${res.privacy.not_checked_count} 项未覆盖）` : '';
+      if (res.privacy) setLastPrivacy(res.privacy);
       setMessage({
         kind: res.allowed ? 'info' : 'error',
         text: res.allowed
@@ -245,7 +244,7 @@ export default function App() {
       <div className="card">
         <h2>① 材料（解析失败的项不影响其他材料）</h2>
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; void uploadFiles(files); }} />
-        <button onClick={() => fileRef.current?.click()}>上传材料（md / txt / csv / png / jpg）</button>
+        <button onClick={() => fileRef.current?.click()}>上传材料（md / txt / csv / xlsx / png / jpg）</button>
         <table className="list" style={{ marginTop: 12 }}>
           <thead><tr><th>文件</th><th>类型</th><th>状态</th><th>底层数据</th><th>影响页面</th></tr></thead>
           <tbody>
@@ -262,6 +261,26 @@ export default function App() {
             {sources.length === 0 && <tr><td colSpan={5} style={{ color: 'var(--soft)' }}>尚未导入材料。示例：一份 markdown 结论文本 + 一份 csv 汇总表。</td></tr>}
           </tbody>
         </table>
+        {pendingSheet && (
+          <div className="notice" style={{ marginTop: 12 }}>
+            <b>XLSX 工作簿需显式选择工作表（§4.2）：</b>
+            <div className="row" style={{ marginTop: 6 }}>
+              <span>{pendingSheet.file.name}</span>
+              <select value={pendingSheet.chosen} onChange={(e) => setPendingSheet({ ...pendingSheet, chosen: e.target.value })}>
+                {pendingSheet.sheets.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <button className="small primary" onClick={async () => {
+                if (!currentId || !pendingSheet) return;
+                const content_base64 = btoa(String.fromCharCode(...new Uint8Array(await pendingSheet.file.arrayBuffer())));
+                const res = await api.post<{ ok: boolean; failure_reason?: string }>(`/api/projects/${currentId}/sources`, { filename: pendingSheet.file.name, content_base64, ...pendingSheet.meta, sheet: pendingSheet.chosen });
+                setPendingSheet(null);
+                setMessage({ kind: res.ok ? 'info' : 'error', text: res.ok ? `「${pendingSheet.file.name}」已按工作表「${pendingSheet.chosen}」导入` : (res.failure_reason ?? '导入失败') });
+                await reloadDetail(currentId);
+              }}>导入所选工作表</button>
+              <button className="small" onClick={() => setPendingSheet(null)}>取消</button>
+            </div>
+          </div>
+        )}
         {conflicts.filter((c) => c.resolution === 'unresolved').length > 0 && (
           <div className="notice warn" style={{ marginTop: 12 }}>
             <b>材料冲突（必须处理后才可正式导出）：</b>
@@ -364,6 +383,20 @@ export default function App() {
               <button className="primary" disabled={busy} onClick={() => doExport('formal')}>正式导出（PPTX + PDF）</button>
               <button disabled={busy} onClick={() => doExport('draft')}>草稿导出（带未解决标识）</button>
             </div>
+            {lastPrivacy && (
+              <div style={{ marginTop: 10 }}>
+                <b style={{ fontSize: 13 }}>隐私检查明细（逐项）：</b>
+                {lastPrivacy.items.map((i) => (
+                  <div className="issue" key={i.item}>
+                    <span className={`badge ${i.status === 'pass' ? 'green' : i.status === 'flag' ? 'red' : 'neutral'}`}>
+                      {i.status === 'pass' ? '已检查' : i.status === 'flag' ? '阻断' : '未覆盖'}
+                    </span>
+                    <span className="msg">{i.item}</span>
+                    {i.detail && <span className="ref">{i.detail}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
             {(detail?.exports ?? []).length > 0 && (
               <table className="list" style={{ marginTop: 12 }}>
                 <thead><tr><th>导出</th><th>格式</th><th>类型</th></tr></thead>
