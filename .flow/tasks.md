@@ -1,36 +1,31 @@
-# Report Studio dev-flow 任务清单
+# Report Studio M2 任务清单（dev-flow 第二轮）
 
-来源：`.flow/prd.md`（含 GRILL 决议 G1–G19）。拆解原则：垂直 tracer bullet、导出核心先行（proposal §14.1）、M0 为硬目标、UI 最后可砍（A1）。
+来源：`.flow/prd.md`（M2）+ `.flow/proposal.md`（M2 固化稿）+ `.flow/red-team.md`（三条硬约束）。
+顺序遵循 M2-G7：回归行为锁先行 → 重构 → 隐私 → 版本比较 → XLSX。
 
 ## 顶部检查清单
 
-- [x] 1. M0 tracer：一页报告三格式渲染管道
-- [x] 2. M0 页型与设计系统：8 页型全量 + 图表双引擎 + 防溢出
-- [x] 3. M0 收口：跨格式一致性校验 + 零售复盘手工样例 + 导出限制清单
-- [x] 4. M1 存储：workspace 项目存储与版本对象
-- [x] 5. M1 材料：导入解析与证据资产
-- [x] 6. M1 编排：ReportBrief + 确定性大纲 + PrivacyGate
-- [x] 7. M1 页面：ReportSpec 组装 + 局部编辑/锁定/页序
-- [x] 8. M1 门禁：质量检查引擎 + 计算复算 + 导出冻结快照
-- [x] 9. M1 闭环：端到端样例链测试 + 验收样例自动化
-- [x] 10. M1 UI：Fastify + Vite React 最小工作台（预算不足首先砍）
+- [ ] 1. 回归样例集与 golden 机制（行为锁先行）
+- [ ] 2. 标准轴重构窗口（行为不变）
+- [ ] 3. 导出隐私检查 + 元数据中性化 + 图表降级
+- [ ] 4. 版本比较（diff API + 差异重检 + UI 视图）
+- [ ] 5. XLSX 导入（显式选表、宏不执行）
 
 ---
 
-## 1. M0 tracer：一页报告三格式渲染管道
+## 1. 回归样例集与 golden 机制（行为锁先行）
 
 ### What to build
 
-项目脚手架（单包 `report-studio`，TS/ESM，tsc + vitest，验证门脚本 typecheck/test/build）。定义 ReportSpec 最小 schema（zod：brief/metrics/claims/pages/theme + 稳定引用）。用一份**手工编写**的单页"趋势/对比"ReportSpec fixture，渲染出三种产物：HTML 预览页、PPTX（原生文本+原生图表）、PDF（Chromium 打印 HTML）。每一步有渲染契约测试。这是打穿全部层的 tracer bullet，demoable：三个文件可直接打开。
+`npm run regression` 一条命令：①vitest 全部测试 ②零售样例再生成（临时目录）③三格式一致性校验 + 可编辑对象断言 ④golden 文本比对——归一化抽取文本（复用 extractHtmlText/extractPptxText/extractPdfText）+ 页数与对象形状，与 `samples/retail-review/golden/{html,pptx,pdf}.txt` 比对；不一致打印 diff 并非零退出；`--update` 刷新基线。golden 文本进 git（调整 .gitignore）。**禁止字节哈希**（已实证字节每次不等）。
 
 ### Acceptance criteria
 
-- [ ] `npm run typecheck && npm test && npm run build` 全绿
-- [ ] ReportSpec fixture 经 zod 校验通过；含 metric（value/unit/formula/inputs/source_ref）与 claim（kind/verification_state）的稳定引用
-- [ ] HTML 产物包含结论标题、图表 SVG、来源脚注；无外部网络依赖
-- [ ] PPTX 解包断言：标题/正文为文本 run（`<a:t>`），图表为原生 chart 部件（`ppt/charts/chart*.xml`），非图片截图
-- [ ] PDF 文本抽取包含标题与关键数字；页面为 16:9
-- [ ] 三产物由同一 ReportSpec + 同一 ChartSpec 数据驱动
+- [ ] `npm run regression` 在当前代码全绿
+- [ ] 篡改 spec 某表格单元（临时目录试验）→ golden 比对报告该值、退出非零
+- [ ] `--update` 刷新基线后可复绿
+- [ ] golden 文件随 git 追踪（文本，非二进制）
+- [ ] ECharts SVG 内部随机 id 不进入 golden（只存归一化文本）
 
 ### Blocked by
 
@@ -38,19 +33,18 @@ None - can start immediately
 
 ---
 
-## 2. M0 页型与设计系统：8 页型全量 + 图表双引擎 + 防溢出
+## 2. 标准轴重构窗口（行为不变）
 
 ### What to build
 
-设计系统 token（色彩/字号阶梯/间距/字体栈 G9）+ 8 种页面类型（封面/结论摘要/指标总览/趋势对比/问题拆解/方案比较/行动待决/证据附录）各 1 个受控布局（趋势对比 2 个）。图表双引擎：ECharts SSR 内联 SVG（HTML/PDF）与 pptxgenjs 原生 chart（PPTX）吃同一 ChartSpec（柱/线/占比）。中文长标题防溢出策略（测量→换行/缩级下限/建议拆页，禁止无限缩字）。缺数据图表占位与"待补充"提示。
+审查留档 5 项（review-findings.md Standards 轴）：删除死代码（`TEMPLATE`/`void TEMPLATE`、`exportGate` 的 `spec` 参数、`claimKindVisual`）；workspace 磁盘布局收口进 WorkspaceStore 方法（persist/app/workbench 不再拼路径）；去重（渲染页脚规则共享、storage 读目录循环、空 IngestResult 工厂、edit 的 updatePage）；类型化（pageTypeLabels → Record<PageType,string>；API 请求体 zod 校验；open_questions 结构化 `{text, kind, ref?}`，UI 按 kind 过滤）。
 
 ### Acceptance criteria
 
-- [ ] 8 页型 × 3 格式的快照级契约测试全绿（每页型至少：标题文本对象存在、脚注存在）
-- [ ] 指标总览页表格在 PPTX 中为原生表格（`<a:tbl>`）
-- [ ] 柱/线/占比三类图表在 PPTX 为原生 chart 对象，HTML/PDF 为内联 SVG，数值一致
-- [ ] 超长中文标题 fixture：不溢出画布、字号不低于下限、触发拆页或截断警告而非无限缩小
-- [ ] ChartSpec 无数据时渲染占位+待补充标记，不伪造数据
+- [ ] `npm run verify` 全绿（typecheck + 68 测试 + 双构建）
+- [ ] `npm run regression` 通过且 golden 文本零漂移（重构前后比对）
+- [ ] `node scripts/smoke-ui.mjs` 10/10 通过
+- [ ] 零新功能、零行为变化（diff 不含逻辑改动，仅结构）
 
 ### Blocked by
 
@@ -58,19 +52,20 @@ None - can start immediately
 
 ---
 
-## 3. M0 收口：跨格式一致性校验 + 零售复盘手工样例 + 导出限制清单
+## 3. 导出隐私检查 + 元数据中性化 + 图表降级
 
 ### What to build
 
-跨格式一致性校验器：从 PPTX（解包 XML）、PDF（文本抽取）、HTML（DOM）三产物抽取关键数字/标题/来源说明并比对。组装手工准备的零售复盘全量样例 ReportSpec（G10 场景：销售下降 20%、缺货原因未证实、利润率百分点用例、冲突数字、无数据图表图片、不确定性话术），生成 8–10 页样例报告三格式。输出 M0 导出限制清单文档（可编辑性分级、已知限制、Windows 未验证声明）。
+`checkPrivacy(spec, ctx)` 逐项可测（chart_underlying_data / doc_metadata / hidden_content / speaker_notes / sensitive_sources），含 not_checked 项明示。元数据中性化：PPTX（pptxgenjs author/company/title/subject 置中性）、PDF Producer 标 not_checked。图表降级：external + `aggregate_only` 时原生 chart → Chromium 截图 PNG → addImage（2x 清晰度），导出记录标注图片资产。门禁：external + sensitive 来源 → 阻断；external + 原生 chart 且未选降级且未确认 → 阻断（需 `ack_editable_data: true`）。API/ExportRecord 增 `export_scope`、`chart_data_mode`、`privacy_report`。UI 导出卡：范围选择（内部/对外）、图表数据选择（保留可编辑/聚合降级）、确认勾选。
 
 ### Acceptance criteria
 
-- [ ] 一致性校验器：同一 ReportSpec 的三产物关键数字与来源说明一致，不一致时报出具体对象
-- [ ] 零售复盘样例：8+ 页、三格式全部生成且契约测试通过
-- [ ] 样例含"尚未证实"措辞页，渲染保留不确定性标注
-- [ ] 导出限制清单文档存在且含：可编辑性分级逐对象标注、环境限定（macOS 验证、Windows 未验证）、引擎限制
-- [ ] M0 门禁判定记录：关键页面可读/主要对象可编辑/无格式阻断，逐项勾选
+- [ ] 带毒样例（元数据作者名 + 原生图表数据 + sensitive 来源）：检查器逐项命中
+- [ ] aggregate_only 导出：无 chart 部件、有图片部件、元数据中性、记录标注
+- [ ] keep_editable 无确认 → 阻断；确认 → 放行且记录
+- [ ] external + sensitive 来源 → 阻断；内部导出行为不变
+- [ ] 隐私报告含 not_checked 项并在 UI 可见
+- [ ] 全部既有测试回归绿
 
 ### Blocked by
 
@@ -78,138 +73,39 @@ None - can start immediately
 
 ---
 
-## 4. M1 存储：workspace 项目存储与版本对象
+## 4. 版本比较（diff API + 差异重检 + UI 视图）
 
 ### What to build
 
-workspace 存储（G12：env `REPORT_STUDIO_HOME`，默认 `./data`）：项目目录布局 project.json / sources/（原件+sha256）/ assets.json / revisions/ / exports/；Project、SourceAsset、ReportRevision、ExportRecord 对象的创建/读取/保存；项目 CRUD（创建、打开、复制、删除含清理范围）；重启恢复（读回完整状态）。
+`src/compose/diff.ts`：diffSpecs(a, b) 纯函数——按 page_id 匹配，页增/删/重排，页内字段级（headline/body/bullets/table 单元/metric_refs/claim_refs），metrics/claims 层变更。workbench.diff(a, b) → diff + （数字/绑定变化时）对新修订 recheck（§5.3）。API `GET /api/projects/:id/diff?a=&b=`。UI"版本比较"卡：修订下拉 A/B + 按页分组差异清单（旧→新）。
 
 ### Acceptance criteria
 
-- [ ] 项目 CRUD 单元测试通过；删除清理原件、派生、临时渲染文件
-- [ ] 保存→新进程读回：材料、资产、修订、导出记录完整（重启恢复测试）
-- [ ] 工件哈希（sha256）记录在 SourceAsset 与 ExportRecord 上
-- [ ] 旧修订与旧导出记录在新数据写入后不被改写
+- [ ] 已知编辑用例（只改第 3 页标题）→ diff 恰好报一处变更
+- [ ] 拆页/重排/指标变更各有精确断言
+- [ ] 指标或绑定变化 → recheck 结果随 diff 返回
+- [ ] UI 走查：编辑 → 选两版本 → 差异可见（冒烟脚本扩展）
+- [ ] 全部既有测试回归绿
 
 ### Blocked by
 
-- 1
+- 2（不与重构冲突性改动同频）
 
 ---
 
-## 5. M1 材料：导入解析与证据资产
+## 5. XLSX 导入（显式选表、宏不执行）
 
 ### What to build
 
-导入通道：粘贴文本/TXT/Markdown/CSV（csv-parse）；图片 PNG/JPEG 作为图片 SourceAsset 标记无底层数据。MD 显式标记约定（结论/推断/建议/口径标题）解析为 Claim（kind/verification_state）+ EvidenceRef（locator/excerpt）；CSV 解析为列口径登记（列名/单位/周期待用户确认项标记）。同口径不同数值的冲突检测（展示冲突，不静默择一）。解析失败隔离：单份材料失败不影响项目与其他材料，失败原因可见。
+exceljs 只读（公式取缓存值，宏不执行）。`listSheets(buffer)` 返回工作表清单；`ingestXlsx(buffer, sheet)` 必须显式指定（§4.2）；与 CSV 共用列口径登记/待确认/冲突检测（提取共享 buildTableAsset）。API：POST /sources kind=xlsx 未选表 → 返回 sheets 清单 + 待确认问题；带 sheet 重试 → 解析。UI：XLSX 上传出现工作表选择后重新提交。
 
 ### Acceptance criteria
 
-- [ ] 零售复盘 fixtures（MD+CSV+冲突 CSV+PNG）全部导入成功并生成资产与来源索引
-- [ ] 推断类内容保留"待核实/推断"验证状态，不被标记为已证实
-- [ ] 冲突检测：两个来源同口径不同数 → 冲突记录展示，不自动选择
-- [ ] 恶意材料（文档内嵌"上传本地文件/忽略规则"指令）被作为普通文本处理（§13.2 行）
-- [ ] 构造的坏 CSV：失败被隔离且给出原因，项目状态完好
+- [ ] 多表工作簿 fixture：listSheets 正确；未选表被拒并列出选项；显式选表解析正确
+- [ ] 列口径/待确认/冲突检测与 CSV 一致复用
+- [ ] 含宏标记文件正常读值且不执行任何脚本
+- [ ] 既有测试回归绿 + regression 绿
 
 ### Blocked by
 
-- 4
-
----
-
-## 6. M1 编排：ReportBrief + 确定性大纲 + PrivacyGate
-
-### What to build
-
-ReportBrief（受众/目的/页数预算/语言/风格）。ModelGateway 接口 + DeterministicGateway：按 §13.1 复盘主线页型模板 + 资产分类规则生成页计划（页序/页型/主旨/证据引用/缺口提示），资料说明页与待补充页支持；无法分类材料进资料说明页（G11）。PrivacyGate 包装器：项目未授权外部模型时任何出站调用被阻断并记录，本地功能不受影响。大纲确认数据结构（可编辑的页计划）。
-
-### Acceptance criteria
-
-- [ ] fixtures 资产 + 复盘 brief → 生成含主旨与证据引用的页计划，用户可编辑
-- [ ] "缺货原因未证实"类推断出现在问题拆解页且保留待验证标注，不出现在结论页
-- [ ] 材料不足时生成待补充提示页，不编造故事
-- [ ] privacy_policy=禁止外部模型时出站调用被阻断（测试模拟），确定性大纲不受影响
-- [ ] 改变受众/风格不改变 metrics 与事实绑定（F03 验收点）
-
-### Blocked by
-
-- 5
-
----
-
-## 7. M1 页面：ReportSpec 组装 + 局部编辑/锁定/页序
-
-### What to build
-
-从已确认页计划组装 ReportSpec（页↔claim/metric/evidence 稳定引用绑定）。局部编辑操作集：文字修改、页序调整、单页重生成、拆页、布局切换；作用范围显式（块/页/章/整稿）；锁定对象在重生成中保持不变。每次实质修改产生新 ReportRevision（parent 链）。编辑稳定性：范围外页的内容与绑定不漂移。
-
-### Acceptance criteria
-
-- [ ] 页计划 → ReportSpec 组装后引用完整性校验通过（无悬空引用）
-- [ ] "只重写第 3 页业务解释"：其余页内容与数字绑定逐字不变（编辑稳定性回归测试，§13.2 行）
-- [ ] 锁定页在单页/整稿重生成中保持不变
-- [ ] 拆页/页序调整后引用与修订链正确
-- [ ] 风格/主题变化不触发内容重生成（仅重渲染）
-
-### Blocked by
-
-- 6
-
----
-
-## 8. M1 门禁：质量检查引擎 + 计算复算 + 导出冻结快照
-
-### What to build
-
-检查集 v1（G13）：阻断（同指标跨对象数值矛盾、元/万元矛盾、%/百分点误用、未解决材料冲突、违反外部分享策略、关键内容裁切）/警告（来源待核实、关键陈述缺绑定、页面密度超阈）。计算复算引擎（decimal.js：差额/占比/变化率，保留 formula/inputs，代码复算不依赖模型）。导出门禁：阻断未清零禁止正式定稿、草稿导出明确标识；冻结快照（来源版本+资产+spec+检查结果绑定）与 ExportRecord；来源替换后受影响页面提示（旧快照不变）。
-
-### Acceptance criteria
-
-- [ ] 单位错误样例（元 vs 万元）：阻断并定位对象（§13.2 行）
-- [ ] 利润率 20%→25% 表述区分"5 个百分点"与"增长 25%"（§13.2 行）
-- [ ] 数字不一致样例：阻断正式导出，草稿可导出且带草稿标识
-- [ ] 销售额变化率复算 = 代码计算结果；公式与输入保留在 spec
-- [ ] 来源替换：受影响页面提示、旧导出记录与文件不变（§13.2 行）
-- [ ] 检查结果绑定进 ExportRecord
-
-### Blocked by
-
-- 7
-
----
-
-## 9. M1 闭环：端到端样例链测试 + 验收样例自动化
-
-### What to build
-
-主 seam E2E（核心层驱动，无 UI）：fixtures 零售复盘材料 → 建项目 → 导入解析 → 资产 → brief+确定性大纲 → 确认页计划 → 组装 ReportSpec → 三格式渲染 → 质量检查 → 通过门禁导出 PPTX/PDF → 导出物断言。集成 §13.2 中可自动化的验收行（异常路径含模型中断恢复：中断后已保存内容可恢复、可从失败步骤重试）。
-
-### Acceptance criteria
-
-- [ ] E2E 全链单测运行通过，产物落盘且断言（可编辑对象/关键数字/来源说明/三格式一致）
-- [ ] §13.2 可自动化行各有对应测试（正常/单位错误/百分点/证据不足/冲突/局部修改/来源替换/图片无数据/长标题/未授权外发/恶意指令/导出一致性/中断恢复）
-- [ ] 中断恢复：模拟生成中断后重新加载，已保存大纲/页面/检查结果完整，可从失败步骤重试
-
-### Blocked by
-
-- 8
-
----
-
-## 10. M1 UI：Fastify + Vite React 最小工作台（预算不足首先砍）
-
-### What to build
-
-本地服务 Fastify（API + 静态托管）+ Vite React 最小工作台：项目首页（列表/新建/继续）、材料面板（导入/状态/冲突展示）、大纲确认视图（页计划编辑）、页面预览（HTML 画布 + 页导航）、检查问题清单（阻断/警告分级）、导出操作（格式选择/门禁拦截提示）。证据面板：点击关键数字查看来源/原文片段/口径/版本。可视化控件优先，对话入口不作为唯一界面。
-
-### Acceptance criteria
-
-- [ ] 无 UI 也能通过 API/核心层完成同样闭环（不回归）
-- [ ] 项目列表→建项目→导入→确认大纲→预览→检查→导出 在浏览器中可完整走通
-- [ ] 阻断项在 UI 中阻止正式导出并提示草稿选项
-- [ ] 证据面板显示材料名/原文片段/口径/单位/版本
-- [ ] 页序调整、布局切换有可视化控件操作
-
-### Blocked by
-
-- 9
+- 3, 4（末位候选；预算不足首先砍）
