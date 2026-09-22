@@ -112,12 +112,18 @@ export class WorkspaceStore {
   }
 
   async readConflictResolutions(projectId: string): Promise<Record<string, { resolution: string; adopted_value?: number }>> {
+    const path = join(this.projectDir(projectId), 'work', 'conflict-resolutions.json');
+    let raw: string;
     try {
-      return ConflictResolutionRecordSchema.parse(
-        JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'conflict-resolutions.json'), 'utf-8')),
-      );
+      raw = await readFile(path, 'utf-8');
     } catch {
-      return {};
+      return {}; // 文件不存在 = 无历史解决记录
+    }
+    // 文件存在但损坏：显式报错，不得静默丢弃用户已做的解决决定
+    try {
+      return ConflictResolutionRecordSchema.parse(JSON.parse(raw));
+    } catch {
+      throw new Error(`冲突解决记录已损坏：${path}（请检查后删除重建）`);
     }
   }
 
