@@ -47,6 +47,9 @@ export interface SaveExportInput {
   artifact: Buffer;
   checks: unknown;
   is_draft: boolean;
+  export_scope?: 'internal' | 'external';
+  chart_data_mode?: 'keep_editable' | 'aggregate_only';
+  privacy_report?: unknown;
 }
 
 export class WorkspaceStore {
@@ -328,6 +331,9 @@ export class WorkspaceStore {
       checks: input.checks,
       is_draft: input.is_draft,
       created_at: nowIso(),
+      export_scope: input.export_scope,
+      chart_data_mode: input.chart_data_mode,
+      privacy_report: input.privacy_report,
     });
     await writeFile(join(dir, `${exportId}.json`), JSON.stringify(record, null, 2));
     await this.touch(projectId);

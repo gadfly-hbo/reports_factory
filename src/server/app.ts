@@ -154,11 +154,19 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       formats: body.formats,
       conflicts: await workbench.getResolvedConflicts(id),
       exportScope: body.exportScope ?? 'internal',
+      chartDataMode: body.chart_data_mode,
+      ackEditableData: body.ack_editable_data,
+      ackExternalShare: body.ack_external_share,
     });
     return {
       allowed: outcome.gate.allowed,
       reason: outcome.gate.reason,
       checks: outcome.checks,
+      privacy: outcome.privacy && {
+        checked_count: outcome.privacy.checked_count,
+        not_checked_count: outcome.privacy.not_checked_count,
+        items: outcome.privacy.items,
+      },
       exports: outcome.exports.map((e) => ({ export_id: e.export_id, format: e.format, artifact_path: e.artifact_path, is_draft: e.is_draft })),
     };
   });

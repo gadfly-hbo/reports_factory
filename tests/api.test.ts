@@ -190,3 +190,66 @@ describe('多冲突逐次解决（回归：之前的决定不被覆盖）', () =
     expect(ok.allowed).toBe(true);
   });
 });
+
+describe('对外导出隐私链（§12.2 端到端）', () => {
+  let app: import('fastify').FastifyInstance;
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rs-privacy-'));
+    app = buildServer(new WorkspaceStore(dir));
+  });
+  afterEach(async () => {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('外发需显式确认链；聚合降级后图表数据不可提取；敏感来源阻断', async () => {
+    const createRes = await app.inject({ method: 'POST', url: '/api/projects', payload: { title: '外发测试' } });
+    const id = createRes.json().project.project_id;
+    for (const f of [
+      { filename: 'conclusion.md', kind: 'markdown', media_type: 'text/markdown' },
+      { filename: 'sales.csv', kind: 'csv', media_type: 'text/csv' },
+    ] as const) {
+      const content_base64 = readFileSync(join(MAT, f.filename)).toString('base64');
+      await app.inject({ method: 'POST', url: `/api/projects/${id}/sources`, payload: { filename: f.filename, content_base64, kind: f.kind, media_type: f.media_type } });
+    }
+    await app.inject({ method: 'POST', url: `/api/projects/${id}/outline`, payload: { brief: { audience: '负责人', purpose: '复盘', page_budget: 8 } } });
+    await app.inject({ method: 'POST', url: `/api/projects/${id}/assemble`, payload: {} });
+
+    // 1) 外发 + 任何确认都没有 → 阻断（外发策略 + 图表底层数据）
+    const blocked1 = (await app.inject({ method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pptx'], exportScope: 'external' } })).json();
+    expect(blocked1.allowed).toBe(false);
+    const ids1 = blocked1.checks.issues.map((i: any) => i.id);
+    expect(ids1).toContain('external_share_violation');
+    expect(ids1).toContain('privacy_chart_underlying_data');
+    expect(blocked1.privacy.not_checked_count).toBeGreaterThan(0); // 明示未覆盖项
+
+    // 2) 确认外发 + 保留可编辑但不确认 → 仍被图表项阻断
+    const blocked2 = (await app.inject({ method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pptx'], exportScope: 'external', ack_external_share: true } })).json();
+    expect(blocked2.allowed).toBe(false);
+    expect(blocked2.checks.issues.map((i: any) => i.id)).toContain('privacy_chart_underlying_data');
+
+    // 3) 确认外发 + 聚合降级 → 放行，PPTX 无 chart 部件
+    const ok = (await app.inject({ method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pptx'], exportScope: 'external', ack_external_share: true, chart_data_mode: 'aggregate_only' } })).json();
+    expect(ok.allowed).toBe(true);
+    const rec = ok.exports[0];
+    expect(rec.artifact_path).toBeTruthy();
+    const JSZip = (await import('jszip')).default;
+    const zip = await JSZip.loadAsync(readFileSync(join(dir, id, rec.artifact_path)));
+    expect(Object.keys(zip.files).filter((f) => /^ppt\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(0);
+
+    // 4) 敏感来源对外 → 阻断（构造：另存 sensitive 材料并重新导入/组装）
+    const sensitiveCsv = readFileSync(join(MAT, 'sales.csv')).toString('base64');
+    // 直接把已有来源标记为 sensitive（模拟敏感材料进入快照）
+    const detail = (await app.inject({ url: `/api/projects/${id}` })).json();
+    const srcId = detail.sources[0].source_id;
+    const metaPath = join(dir, id, 'sources', `${srcId}.json`);
+    const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    meta.sensitivity = 'sensitive';
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    const blocked3 = (await app.inject({ method: 'POST', url: `/api/projects/${id}/export`, payload: { mode: 'formal', formats: ['pptx'], exportScope: 'external', ack_external_share: true, chart_data_mode: 'aggregate_only' } })).json();
+    expect(blocked3.allowed).toBe(false);
+    expect(blocked3.checks.issues.map((i: any) => i.id)).toContain('privacy_sensitive_sources');
+  });
+});

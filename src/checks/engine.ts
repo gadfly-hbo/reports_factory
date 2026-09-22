@@ -21,6 +21,8 @@ export interface CheckContext {
   conflicts: SourceConflict[];
   /** 导出范围（对外导出时检查外发策略） */
   exportScope?: 'internal' | 'external';
+  /** 用户对"报告默认禁止对外"的显式确认（§12.2 明确选择） */
+  ackExternalShare?: boolean;
 }
 
 export interface CheckReport {
@@ -145,12 +147,17 @@ export function runChecks(spec: ReportSpec, ctx: CheckContext): CheckReport {
     }
   }
 
-  // 5) 外部分享策略（F12 对外导出行）；未声明策略默认禁止对外（proposal §12.3）
-  if (ctx.exportScope === 'external' && spec.export_policy?.external_share_allowed !== true) {
+  // 5) 外部分享策略（F12 对外导出行）；未声明策略默认禁止对外（proposal §12.3）。
+  //    用户显式确认（ack_external_share）= 授权路径；记录于导出与隐私报告。
+  if (
+    ctx.exportScope === 'external' &&
+    spec.export_policy?.external_share_allowed !== true &&
+    !ctx.ackExternalShare
+  ) {
     issues.push({
       id: 'external_share_violation', severity: 'blocker',
       object_ref: 'export_policy',
-      message: '报告导出策略禁止对外分享（external_share_allowed=false）',
+      message: '报告默认禁止对外分享；确需外发请显式确认对外分享（报告内敏感内容请配合"只分享聚合结果"）',
     });
   }
 

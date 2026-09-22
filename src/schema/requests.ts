@@ -52,6 +52,9 @@ export const ExportRequestSchema = z.object({
   mode: z.enum(['formal', 'draft']),
   formats: z.array(z.enum(['pptx', 'pdf', 'html'])).min(1),
   exportScope: z.enum(['internal', 'external']).optional(),
+  chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
+  ack_editable_data: z.boolean().optional(),
+  ack_external_share: z.boolean().optional(),
 });
 
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;

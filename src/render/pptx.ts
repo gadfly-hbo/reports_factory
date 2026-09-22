@@ -133,7 +133,7 @@ function addCover(pptx: PptxGenJS, page: Page) {
   if (page.required_note) addFooter(s, page);
 }
 
-function addContentPage(pptx: PptxGenJS, page: Page) {
+function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null) {
   const s = pptx.addSlide();
   s.addText(pageTypeLabels[page.type] ?? page.type, {
     x: 0.6, y: 0.32, w: 12.1, h: 0.3,
@@ -155,7 +155,11 @@ function addContentPage(pptx: PptxGenJS, page: Page) {
   const chartEmpty = page.chart ? isChartEmpty(page.chart) : false;
 
   if (hasChart && !chartEmpty) {
-    addChart(pptx, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 });
+    if (chartPngCache) {
+      addChartImage(chartPngCache, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 });
+    } else {
+      addChart(pptx, s, page.chart!, { x: 0.6, y: 1.95, w: 7.7, h: 4.6 });
+    }
     if (page.body) {
       s.addText(page.body, {
         x: 8.6, y: 2.15, w: 4.1, h: 4.2, valign: 'middle',
@@ -206,13 +210,58 @@ function addContentPage(pptx: PptxGenJS, page: Page) {
   addFooter(s, page);
 }
 
-export async function renderReportPptx(spec: ReportSpec): Promise<Buffer> {
+export interface PptxRenderOptions {
+  /**
+   * aggregate_only（对外分享、安全优先于可编辑性）：图表降级为图片，
+   * 底层数据不可提取（§12.2 可编辑图表行）。
+   */
+  chartDataMode?: 'keep_editable' | 'aggregate_only';
+}
+
+/** 图表 SSR SVG → Chromium 截图 PNG（降级用） */
+async function chartToPng(chart: ChartSpec): Promise<Buffer> {
+  const { chromium } = await import('playwright');
+  const { renderChartSvg } = await import('./charts.js');
+  const svg = renderChartSvg(chart, 900, 480);
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ deviceScaleFactor: 2 });
+    await page.setContent(`<body style="margin:0">${svg}</body>`);
+    const el = page.locator('svg').first();
+    return await el.screenshot({ type: 'png' });
+  } finally {
+    await browser.close();
+  }
+}
+
+function addChartImage(chartPngCache: Map<string, Buffer>, s: Slide, chart: ChartSpec, area: PptxGenJS.PositionProps) {
+  const png = chartPngCache.get(chart.chart_id)!;
+  s.addImage({ data: `data:image/png;base64,${png.toString('base64')}`, ...area });
+}
+
+export async function renderReportPptx(spec: ReportSpec, opts: PptxRenderOptions = {}): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'W16x9', width: slide.widthIn, height: slide.heightIn });
   pptx.layout = 'W16x9';
+  // 元数据中性化（§12.2 元数据行）：不携带工具名/作者
+  pptx.author = '';
+  pptx.company = '';
+  pptx.subject = '';
+  pptx.title = spec.report_id;
+
+  // 聚合降级：预渲染所有图表为 PNG
+  const chartPngCache = new Map<string, Buffer>();
+  if (opts.chartDataMode === 'aggregate_only') {
+    for (const page of spec.pages) {
+      if (page.chart && !isChartEmpty(page.chart)) {
+        chartPngCache.set(page.chart.chart_id, await chartToPng(page.chart));
+      }
+    }
+  }
+
   for (const page of spec.pages) {
     if (page.type === 'cover') addCover(pptx, page);
-    else addContentPage(pptx, page);
+    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null);
   }
   const out = await pptx.write({ outputType: 'nodebuffer' });
   return out as Buffer;

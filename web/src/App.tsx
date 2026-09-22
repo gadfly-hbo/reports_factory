@@ -44,6 +44,10 @@ export default function App() {
   const [brief, setBrief] = useState({ audience: '商品经营负责人', purpose: '上半年经营复盘与方案讨论', page_budget: 8 });
   const [outline, setOutline] = useState<OutlineDraft | null>(null);
   const [checks, setChecks] = useState<CheckReport | null>(null);
+  const [exportScope, setExportScope] = useState<'internal' | 'external'>('internal');
+  const [chartDataMode, setChartDataMode] = useState<'keep_editable' | 'aggregate_only'>('keep_editable');
+  const [ackEditable, setAckEditable] = useState(false);
+  const [ackExternalShare, setAckExternalShare] = useState(false);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
   const [message, setMessage] = useState<{ kind: 'info' | 'warn' | 'error'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -140,8 +144,19 @@ export default function App() {
     if (!currentId) return;
     setBusy(true);
     try {
-      const res = await api.post<{ allowed: boolean; reason: string; exports: ExportRec[] }>(`/api/projects/${currentId}/export`, { mode, formats: ['pptx', 'pdf'] });
-      setMessage({ kind: res.allowed ? 'info' : 'error', text: res.allowed ? `已导出 ${res.exports.length} 个文件（${mode === 'draft' ? '草稿，带标识' : '正式定稿'}）` : res.reason });
+      const res = await api.post<{ allowed: boolean; reason: string; exports: ExportRec[]; privacy?: { checked_count: number; not_checked_count: number; items: { item: string; status: string; detail?: string }[] } }>(`/api/projects/${currentId}/export`, {
+        mode, formats: ['pptx', 'pdf'], exportScope,
+        chart_data_mode: exportScope === 'external' ? chartDataMode : undefined,
+        ack_editable_data: ackEditable,
+        ack_external_share: ackExternalShare,
+      });
+      const privacyNote = res.privacy ? `（隐私检查：${res.privacy.checked_count} 项已检查 / ${res.privacy.not_checked_count} 项未覆盖）` : '';
+      setMessage({
+        kind: res.allowed ? 'info' : 'error',
+        text: res.allowed
+          ? `已导出 ${res.exports.length} 个文件（${mode === 'draft' ? '草稿，带标识' : '正式定稿'}${exportScope === 'external' ? '，对外' : ''}）${privacyNote}`
+          : `${res.reason}${privacyNote}`,
+      });
       await reloadDetail(currentId);
     } finally { setBusy(false); }
   };
@@ -290,6 +305,34 @@ export default function App() {
           </div>
           <div className="card">
             <h2>导出（正式定稿需阻断项清零）</h2>
+            <div className="row" style={{ marginBottom: 10 }}>
+              <label className="field">分享范围
+                <select value={exportScope} onChange={(e) => setExportScope(e.target.value as 'internal' | 'external')}>
+                  <option value="internal">内部（本机留存）</option>
+                  <option value="external">对外（先过隐私检查）</option>
+                </select>
+              </label>
+              {exportScope === 'external' && (
+                <>
+                  <label className="row" style={{ alignItems: 'center', fontSize: 13 }}>
+                    <input type="checkbox" checked={ackExternalShare} onChange={(e) => setAckExternalShare(e.target.checked)} />
+                    我确认本报告对外分享（报告默认禁止对外）
+                  </label>
+                  <label className="field">图表底层数据
+                    <select value={chartDataMode} onChange={(e) => setChartDataMode(e.target.value as 'keep_editable' | 'aggregate_only')}>
+                      <option value="aggregate_only">只分享聚合结果（图表降级为图片）</option>
+                      <option value="keep_editable">保留可编辑数据</option>
+                    </select>
+                  </label>
+                  {chartDataMode === 'keep_editable' && (
+                    <label className="row" style={{ alignItems: 'center', fontSize: 13 }}>
+                      <input type="checkbox" checked={ackEditable} onChange={(e) => setAckEditable(e.target.checked)} />
+                      我确认对外产物保留可编辑图表底层数据
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
             <div className="row">
               <button className="primary" disabled={busy} onClick={() => doExport('formal')}>正式导出（PPTX + PDF）</button>
               <button disabled={busy} onClick={() => doExport('draft')}>草稿导出（带未解决标识）</button>

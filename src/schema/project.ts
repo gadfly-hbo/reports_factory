@@ -65,6 +65,10 @@ export const ExportRecordSchema = z.object({
   checks: z.unknown(),
   is_draft: z.boolean(),
   created_at: z.string(),
+  /** M2 隐私导出（可选，旧记录不迁移） */
+  export_scope: z.enum(['internal', 'external']).optional(),
+  chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
+  privacy_report: z.unknown().optional(),
 });
 
 export type PrivacyPolicy = z.infer<typeof PrivacyPolicySchema>;
