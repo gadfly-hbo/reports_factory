@@ -1,0 +1,113 @@
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-3: #eef2f6;
+  --text: #17202a;
+  --muted: #5d6b7d;
+  --soft: #8a96a6;
+  --border: #dce3ea;
+  --border-strong: #c2ccd8;
+  --primary: #155e75;
+  --primary-soft: #e2eff3;
+  --primary-ink: #0c3b4a;
+  --green: #156f43;
+  --green-soft: #e5f6ed;
+  --amber: #8f6100;
+  --amber-soft: #fff3cf;
+  --red: #ba3030;
+  --red-soft: #ffe6e6;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.app { max-width: 1080px; margin: 0 auto; padding: 22px 28px 48px; }
+.header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.header h1 { font-size: 21px; font-weight: 600; color: var(--primary-ink); }
+.header .sub { color: var(--muted); font-size: 12.5px; }
+.page-desc { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card h2 { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: var(--primary-ink); }
+
+button {
+  font: inherit; cursor: pointer;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 5px 14px;
+}
+button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.small { padding: 2px 10px; font-size: 12.5px; }
+button.danger { color: var(--red); border-color: var(--red); }
+
+input, select {
+  font: inherit; padding: 5px 10px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface); color: var(--text);
+}
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px; padding: 2px 10px; font-size: 12px;
+}
+.badge.green { background: var(--green-soft); color: var(--green); }
+.badge.amber { background: var(--amber-soft); color: var(--amber); }
+.badge.red { background: var(--red-soft); color: var(--red); }
+.badge.neutral { background: var(--surface-3); color: var(--muted); }
+
+.notice {
+  border-left: 3px solid var(--primary);
+  background: var(--surface-2);
+  padding: 10px 14px; border-radius: 0 6px 6px 0;
+  margin-bottom: 12px; font-size: 13px; color: var(--text);
+}
+.notice.warn { border-color: var(--amber); }
+.notice.error { border-color: var(--red); }
+
+table.list { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.list th {
+  text-align: left; background: var(--surface-3); color: var(--primary-ink);
+  font-weight: 600; padding: 8px 12px; border-bottom: 1.5px solid var(--border-strong);
+}
+table.list td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+table.list td.num { font-variant-numeric: tabular-nums; }
+
+.issue { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.issue:last-child { border-bottom: none; }
+.issue .msg { color: var(--text); }
+.issue .ref { color: var(--soft); font-size: 12px; }
+
+.preview-frame {
+  width: 100%; height: 640px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fff;
+}
+.steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.steps .step {
+  padding: 3px 12px; border-radius: 999px; font-size: 12.5px;
+  background: var(--surface-3); color: var(--muted);
+}
+.steps .step.on { background: var(--primary); color: #fff; }
+.steps .step.done { background: var(--primary-soft); color: var(--primary-ink); }
+
+.outline-page { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.outline-page:last-child { border-bottom: none; }
+.outline-page .idx { color: var(--soft); font-variant-numeric: tabular-nums; width: 44px; flex-shrink: 0; }
+.outline-page .type { color: var(--primary); font-weight: 600; width: 88px; flex-shrink: 0; font-size: 12.5px; }
+.outline-page input { flex: 1; }
+.gapnote { color: var(--amber); font-size: 12.5px; }
