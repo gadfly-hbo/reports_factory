@@ -1,151 +1,98 @@
-# Report Studio M2 PRD｜稳定性工程基座
+# Report Studio M3 PRD｜交付物扩展
 
-- **上游规范：** `.flow/proposal.md`（M2 固化稿）→ `.flow/proposal-v1.0.md`（v1.0 全量方案）
-- **红队：** `.flow/red-team.md`（GO；三条硬约束已吸收进本 PRD）
-- **实证（2026-09-22）：** PPTX/PDF 两次生成字节哈希不等、归一化文本与页数完全相等；PPTX 元数据默认含 `PptxGenJS` 字样（需清理）
+- **上游规范：** `.flow/proposal.md`（M3 固化稿）→ `.flow/proposal-v1.0.md`
+- **红队：** `.flow/red-team.md`（GO；四条硬约束已吸收）
+- **M3 门禁判据（可执行化）：** 回归 golden + 全部测试 + UI 冒烟全绿且零漂移；新格式全部过同一检查引擎与隐私导出链。
 
 ## Problem Statement
 
-M1 闭环能跑通，但四个真实缺口挡在"可用于真实会议"前面：对外导出没有隐私检查（图表底层数据、文档元数据、隐藏内容是否泄露无人把关）；用户看不出两次修订差在哪，只能重读全文；标准轴审查留档的坏味道拖维护；回归验证靠手跑多个命令而非一条命令的样例集。
+用户现在只能产出"会议汇报"一种交付物。但同一批分析材料经常还需要：给阅读者的**详细研究报告**（传阅/复核用）、给决策者的**一页摘要**（会前 30 秒判断用）。材料也常以 Word 文档存在（现在进不来），产出物需要带企业品牌标识。M3 把这三类交付物与两类扩展能力补齐，同时不降低已交付的会议汇报质量。
 
 ## Solution
 
-按 v1.0 §14 对 M2 的定义（返工/冲突/版本/隐私/导出），交付四个工程切片：
+同一资产层（claims/metrics/tables/evidence）+ 多交付物渲染：
 
-1. **导出隐私检查与对外分享控制**：对外导出前的逐项可测隐私检查（图表底层数据/元数据/隐藏内容/备注），图表底层数据脱敏选择（保留可编辑 vs 聚合降级），元数据中性化。
-2. **版本比较**：任意两个修订的结构化差异 API + UI 清单式视图；数字/绑定变更重触发检查（§5.3）。
-3. **标准轴重构窗口**：审查留档坏味道清理，纯重构行为不变，现有 68 测试 + 冒烟为行为锁。
-4. **回归样例集**：`npm run regression` 一条命令；golden 基于归一化文本与对象形状（**禁止字节哈希**，红队约束①已实证）。
-
-候选：XLSX 导入回收（预算不足首先砍，延续 A1）。
-
-**重要边界（红队约束③）：** M2 阶段门"多次实际使用可重复完成"需要真实用户重复使用，本轮 flow 交付工程基座，**不宣称 M2 阶段门通过**。
+1. **长报告（research_report）**：文档式主线（问题→口径→方法→发现→证据→限制→建议），DOCX（原生可编辑）+ 独立分发 HTML + PDF 三产物。
+2. **一页决策摘要（executive_summary）**：单页"问题→选择→建议→风险→需要谁决定"，PPTX 单页 + PDF + HTML；与长报告/汇报共享指标，机器校验不矛盾。
+3. **DOCX 导入**：mammoth → 结构化内容 → 既有主张/证据通道。
+4. **品牌配置**：BrandConfig（色板/Logo/字体名）进 theme token，三种产物统一消费；不做布局编辑。
 
 ## User Stories
 
-### 导出隐私（§12.2 对外导出行、§13.3 质量门槛后半句）
+### 长报告（F13 新增）
 
-1. As a 汇报人, I want 对外导出前看到逐项隐私检查结果（图表底层数据/元数据/隐藏内容/备注各自通过与否）, so that 我知道系统检查了哪些项。
-2. As a 汇报人, I want 检查结果明示哪些项**未覆盖**, so that 我不会得到虚假的"全面安全"承诺。
-3. As a 汇报人, I want 对外分享时在"保留可编辑数据"与"只分享聚合结果"间明确选择, so that 安全与可编辑性的取舍由我掌握（§12.2）。
-4. As a 汇报人, I want 选择"只分享聚合结果"后 PPTX 中的图表变为图片（底层数据不可提取）且导出记录标注可编辑性, so that 图表数据不外泄。
-5. As a 汇报人, I want 外发产物的文档元数据不含工具名与作者信息, so that 制作链路不外泄。
-6. As a 汇报人, I want 内部导出不受这些限制, so that 本地工作不受影响（默认 local_only 行为不变）。
+1. As a 业务分析师, I want 选择"研究报告"交付物类型并生成文档式大纲（问题→口径→方法→发现→证据→限制→建议）, so that 阅读者可以传阅复核而不是听会。
+2. As a 业务分析师, I want 导出 DOCX 且标题/正文/表格原生可编辑、来源脚注保留, so that 同事能在 Word 里继续批注修改。
+3. As a 业务分析师, I want 导出可单文件分发的 HTML（无外部依赖）, so that 邮件发送即读。
+4. As a 业务分析师, I want 研究报告同样过质量检查与隐私导出门禁, so that 可信边界不因格式扩展而降低。
 
-### 版本比较（§5.3、M2 交付"版本比较"）
+### 一页决策摘要（F14 新增）
 
-7. As a 汇报人, I want 看到任意两个修订的结构化差异（页增删/重排、标题/正文/要点/表格单元、指标数值、claim 绑定）, so that 我审查改动而不重读全文。
-8. As a 汇报人, I want 差异按页分组、字段级"旧→新"展示, so that 改动一目了然。
-9. As a 汇报人, I want 差异中若含数字或结论绑定变化，系统自动对该修订重跑质量检查并附上结果, so that 修改绕不过质量门（§5.3 后半句）。
-10. As a 汇报人, I want 在 UI 中从修订列表选两个版本比较, so that 操作有可视化控件（不只靠 API）。
+5. As a 汇报人, I want 从同一资产生成一页决策摘要（问题/选择/建议/风险/需谁决定五段）, so that 负责人会前 30 秒能抓住要点。
+6. As a 汇报人, I want 摘要与长报告/汇报共享同一指标对象, so that 不同文件不会出现互相矛盾的数字（机器校验）。
 
-### 回归样例集（M2 交付"回归样例"）
+### DOCX 导入（F15 新增）
 
-11. As a 维护者, I want 一条 `npm run regression` 跑完：全部测试 + 零售样例再生成 + 三格式一致性 + 可编辑性断言 + golden 文本比对, so that 回归是一条命令。
-12. As a 维护者, I want golden 基线可显式刷新（`--update`）且文本基线进 git, so that 有意变更可接受、无意漂移可发现。
+7. As a 业务分析师, I want 导入 Word 文档（.docx）并解析出标题/段落/表格, so that 已有 Word 分析材料不用重写。
+8. As a 用户, I want docx 中的宏/脚本不被执行, so that 导入安全（§12.2）。
 
-### XLSX 导入（候选回收）
+### 品牌配置（F16 新增）
 
-13. As a 业务分析师, I want 导入 XLSX 时先看到工作表清单并明确选择哪一张, so that 多表工作簿不被猜错（§4.2 表格限制）。
-14. As a 业务分析师, I want XLSX 解析与 CSV 共用列口径登记/待确认/冲突检测, so that 口径规则一致。
-15. As a 用户, I want XLSX 中的宏/脚本不执行, so that 文件导入安全（§12.2 文件导入行）。
-
-### 重构（技术债务，无用户故事，行为锁为验收）
+9. As a 汇报人, I want 配置品牌色板/Logo/字体名并应用到全部产物, so that 交付物带企业标识。
+10. As a 汇报人, I want 品牌配置只影响视觉 token 不改内容, so that 换品牌不触发内容重生成（§5.3）。
 
 ## Implementation Decisions
 
-### 隐私检查器（逐项可测，红队约束②）
+### 交付物类型与长报告
 
-- `checkPrivacy(spec, ctx)`：逐项输出 `{ item, status: pass|flag|not_checked, detail? }`；检查项清单：
-  - `chart_underlying_data`：PPTX 含原生 chart 部件（数据可提取）→ 对外默认 flag，需"保留可编辑"显式确认或聚合降级
-  - `doc_metadata`：PPTX 的 dc:creator/dc:title/dc:subject、PDF Producer —— 导出时中性化（author/company/title/subject 置项目名或空）
-  - `hidden_content`：spec 中页只有单渲染路径（无隐藏页概念）→ not_checked 并明示
-  - `speaker_notes`：当前渲染不写备注 → not_checked 并明示
-  - `sensitive_source_marks`：标记 sensitivity=sensitive 的来源被对外导出 → flag
-- **明示原则**：检查器输出必须含 `not_checked` 项及其含义；UI 展示"已检查 X 项 / 未覆盖 Y 项"。
-- 图表降级实现：ECharts SSR SVG → Chromium 截图为 PNG → PPTX addImage（标注图片资产）；导出记录 `chart_data_mode: 'keep_editable' | 'aggregate_only'`。
-- API：`POST /export` 增加 `exportScope`、`chart_data_mode`；external + keep_editable 需 UI 显式确认参数 `ack_editable_data: true`；external + sensitive 来源 → 阻断。
+- `ReportBrief.deliverable_type: 'meeting_deck' | 'research_report' | 'executive_summary'`（optional，缺省 meeting_deck，向后兼容）。
+- **研究报告大纲**：确定性编排新增 research 模板——封面 / 问题与背景 / 口径与方法 / 主要发现（每发现一节） / 证据附录 / 限制与不确定性 / 建议；每节绑定 claims/tables（复用既有 assemble 通道）。
+- **DOCX 渲染**：`docx` 库（npm docx 9.x）；新适配器 `src/render/docx.ts` 与 pptx/pdf 同层；标题/段落/表格原生对象；来源脚注用文档 Footer（每节来源行）；页眉带报告标题。图表在 DOCX 中以表格呈现数值（不做图片图表——数据可读性优先，且避免伪造可编辑图表的边界问题）。
+- **独立 HTML**：`renderReportHtml` 已自包含（无外链）→ 增加 `standalone: true` 选项：内嵌页面导航 + 报告元信息头，作为导出产物落盘（`export` formats 增 `'docx' | 'html-standalone'`）。
+- **ExportFormat** 扩展：`'docx'`（'html' 语义变为独立分发版）。
 
-### 版本比较
+### 一页摘要
 
-- `src/compose/diff.ts`：`diffSpecs(a, b)` 纯函数 → `{ pages_added[], pages_removed[], pages_reordered[], pages_changed[{page_id, headline?, body?, bullets_added/removed/changed[], table_cells_changed[], metric_refs_changed, claim_refs_changed}], metrics_changed[], claims_changed[] }`；数值单元按字符串逐项对比（同型归一后）。
-- workbench.diff(projectId, a, b) → diff；若 `metrics_changed` 或 `claims_changed` 非空 → 附 `recheck: CheckReport`（对新修订重跑检查，§5.3 后半句）。
-- API：`GET /api/projects/:id/diff?a=rev_001&b=rev_002`。
-- UI：导出记录卡下方加"版本比较"卡：修订下拉 A/B → 差异清单（按页分组）。
+- 确定性派生：从资产直接生成单页 spec（五段 bullets 全部 claim/metric 绑定；缺失段留"待补充"不编造）。
+- 与主报告一致性：`checkCrossDeliverable(mainSpec, summarySpec)` ——共享 metric_id 的显示值必须一致（红队约束③）。
 
-### 标准轴重构（行为不变）
+### DOCX 导入
 
-- 删除死代码：`TEMPLATE`/`void TEMPLATE`、`void spec`、`claimKindVisual`（确认全仓库零使用后删）。
-- WorkspaceStore 布局收口：`sourceAssetsPath/saveDerivedAssets/workStatePath` 等方法；persist.ts/app.ts/workbench.ts 不再拼路径。
-- 去重：渲染页脚规则提取共享函数；storage 读目录循环提取；空 IngestResult 工厂；edit 提取 updatePage。
-- 类型化：API 请求体 zod 校验（复用已有 schema）；open_questions 结构化 `{text, kind: 'conflict'|'confirmation'|'gap', ref?}`；pageTypeLabels → Record<PageType, string>。
-- 每步 `npm run verify` + 冒烟。
+- `mammoth` → HTML → 既有 markdown 通道解析（标题映射章节标记）；表格 → TableAsset（复用 table-core）；宏不执行（mammoth 纯解析器）。
+- `SourceKindSchema` 增 `'docx'`；列口径/冲突检测全复用。
 
-### 回归样例集
+### 品牌配置
 
-- `scripts/regression.mjs` + `npm run regression`：
-  1. `vitest run` 全部测试
-  2. 样例再生成（tmp 目录）
-  3. 三格式一致性校验 + 可编辑性对象断言
-  4. golden：抽取归一化文本与 `samples/retail-review/golden/*.txt` 比对；不一致打印 diff 退出非零；`--update` 刷新基线
-- golden 文本文件进 git（`.gitignore` 放行 `samples/**/golden/`）。
-- 字节哈希一律不用（实证：字节每次不等）。
-
-### XLSX（候选）
-
-- exceljs 只读单元格值（公式取缓存值，宏不执行）；`ingestXlsx` 与 CSV 共用列口径/冲突逻辑。
-- 先 `listSheets` 返回工作表清单；`sheet` 参数**必须显式指定**（§4.2：用户明确选择工作表）；无默认猜测。
-- UI 暂不建工作表选择器：API 先列后选；UI 上传 XLSX 时若未选表则返回待确认问题并列出选项（复用 confirmations 通道）。
+- `BrandConfig { primary, accent, muted?, logoDataUrl?, fontName? }` 进 ReportSpec.theme（optional）；渲染三适配器消费 token 覆盖默认值；Logo 在封面/页眉出现（HTML/PDF/DOCX/PPTX）。
+- UI：项目设置卡（色板选择 + Logo 上传 + 字体名）；存 project.json + 进 spec 快照（冻结快照含品牌）。
 
 ## Testing Decisions
 
-- **隐私**：带毒样例（元数据含作者名、原生图表含数据、sensitive 来源）→ 检查器逐项命中；aggregate_only 导出后断言：无 chart 部件、图片部件存在、元数据中性；keep_editable 无确认 → 阻断。
-- **版本比较**：对 M1 已知编辑用例（只改第 3 页标题）断言 diff 恰好报一处变更；拆页/重排/指标变更各有用例；数字变更触发 recheck。
-- **回归**：spec 不动时回归通过；临时篡改 spec 某单元值 → golden diff 报告该值、退出非零（在测试内用临时目录完成，不污染仓库基线）。
-- **重构**：68 测试 + 冒烟全绿为行为锁，不加新测试（新增行为另有测试时除外）。
-- **XLSX**：多表工作簿 fixture（xlsx 库生成）→ 选表 → 列口径/冲突复用断言；带宏文件（伪造 vbaProject 标记）不执行且正常读值。
-- **seam 复用**（已在 flow #1 确认）：E2E 主链 + 渲染契约 + 核心单元；新增 seam 只有 diff API 与隐私检查器（pubic 接口级）。
+- **DOCX 契约**：解包 docx（OOXML zip）断言 `word/document.xml` 含原生 `<w:p>`/`<w:tbl>`、脚注文本、来源行；关键数字在文本中。
+- **独立 HTML**：单文件（无外链）、含导航、关键内容一致。
+- **一页摘要**：五段结构断言 + 共享指标一致性强测（改主报告指标 → 摘要派生同步或阻断）。
+- **DOCX 导入**：fixture（用 docx 库生成）→ 主张/表格断言 + 宏安全（无执行路径）。
+- **品牌**：token 覆盖断言（三产物颜色/Logo 出现）+ "换品牌不重生成内容"回归。
+- **回归锁**：`npm run regression` 全绿零漂移贯穿每切片；会议汇报 golden 不动。
+- **seam 复用**：E2E 主链 + 渲染契约；新增 seam：docx 契约、跨交付物一致性（公共接口级）。
 
 ## Out of Scope
 
-- M2 阶段门的真实使用采样（交反馈记录模板与指标口径说明；采样留给用户）。
-- 外部模型实际接入；M3（长报告/一页摘要独立形态/品牌模板/DOCX）；M4（JuanerAI 适配器）。
-- PPTX 动画、模板市场、多人协作；UI 精细双栏并排 diff 渲染。
-- PDF 元数据深度清理（Chromium 产物的 Producer 字段不可完全控制——作为 `not_checked` 明示，不假装覆盖）。
-- 字节级 golden（实证不可行）。
+- M4 集成、任意模板导入/布局编辑器、模板市场、多人协作、PDF 作为输入格式、真实使用采样（模板已交 M2）。
+- DOCX 内嵌原生图表（数值以表格呈现——明示此边界）。
+- Windows/Word 真机验收（沿用 C1 延后；本机 Pages/WPS 验证，范围明示）。
 
-## Further Notes
-
-- 反馈记录模板放 `docs/m2-usage-log.md`：§15 指标（到初稿时间/返工量/重复使用/无关变更率）的登记口径与最小表单。
-- 红队三条硬约束已落地为：golden 禁字节、隐私逐项可测+明示未覆盖、DONE 总结不宣称 M2 门通过。
-
----
-
-## M2 GRILL 决议（留白自答，全部按推荐；差异门用户未作答、全部为纯新增项已自我批准）
-
-| # | 留白问题 | 决议 |
-|---|---|---|
-| M2-G1 | diff 对齐策略 | 按 page_id 精确匹配：增/删/重排（同一 id 顺序变化）；同 id 再逐字段比对 |
-| M2-G2 | golden 文本粒度 | 复用 extractHtmlText/extractPptxText/extractPdfText（NFKC+部首映射+去空白）+ 页数 + 可编辑对象形状断言；ECharts SVG 随机 id 不进 golden（只存抽取文本） |
-| M2-G3 | 图表降级 PNG 质量 | Chromium 截图 deviceScaleFactor=2（导出清晰度），base64 嵌入 PPTX addImage |
-| M2-G4 | XLSX 解析器 | exceljs 只读（公式取缓存值）；宏不执行（xlsx 格式 xlsm 同样只读）；`ingestXlsx(listSheets)` 与 `ingestXlsx(buffer, sheet)` 两阶段 |
-| M2-G5 | UI 版本比较入口 | 独立"版本比较"卡，修订下拉 A/B + 差异清单（按页分组），不做并排渲染 |
-| M2-G6 | ExportRecord 兼容 | 新字段（export_scope、chart_data_mode、privacy_report）全部 optional——旧记录不迁移、新读取不报错 |
-| M2-G7 | 重构切片顺序 | 回归集先行（装好行为锁）→ 重构 → 隐私 → 版本比较 → XLSX |
-
-## 附录：PRD 相对 M2 proposal 的差异清单（送用户确认）
+## 附录：PRD 相对 M3 proposal 的差异清单（送用户确认）
 
 **新增（留白具体化）：**
 
 | # | 差异 | 说明 |
 |---|---|---|
-| A1 | 图表降级实现路径：ECharts SVG → Chromium 截图 PNG → PPTX 图片 | proposal 只要求"明确选择"，未规定实现 |
-| A2 | diff API 结构 + UI 清单式视图（不做双栏并排渲染） | proposal 未规定形态 |
-| A3 | golden 文本进 git + `--update` 刷新机制 | proposal 未规定 |
-| A4 | XLSX 用 exceljs 只读 + **必须显式选表**（不做默认第一表猜测，§4.2 对齐） | proposal 未选库 |
-| A5 | `POST /export` 新增 `exportScope`/`chart_data_mode`/`ack_editable_data` 参数；ExportRecord 增字段 | 对外分享控制的接口形态 |
-| A6 | 隐私检查器 `not_checked` 机制（明示未覆盖项） | 红队约束②落地形态 |
+| A1 | 库选型：DOCX 输出=`docx` 9.x、DOCX 导入=`mammoth` | proposal 未选库；M0 纪律 = tracer 先行样例验证，证伪则重选 |
+| A2 | DOCX 中图表以数值表格呈现（不做图片图表） | 避免伪造"可编辑图表"边界；proposal 未规定 |
+| A3 | `deliverable_type` 进 ReportBrief（optional 向后兼容）；ExportFormat 增 docx / html 独立分发语义 | 接口形态 |
+| A4 | `checkCrossDeliverable` 跨交付物指标一致性校验 | 红队约束③落地 |
+| A5 | BrandConfig 结构与冻结（进 project.json + spec 快照） | proposal 只说"品牌配置" |
+| A6 | 研究报告大纲模板固定为 7 节文档主线（确定性编排） | §4.1 主线的操作化 |
 
-**调整（与上游建议偏差）：** 无——XLSX 选表遵循 §4.2 而非简化。
-
-**删除：** 无。
+**调整：** 无。**删除：** 无。
