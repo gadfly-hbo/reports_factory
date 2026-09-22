@@ -11,7 +11,8 @@ build/
 .flow/verify-failures.md
 
 # runtime data (projects workspace, exports generated at runtime)
-data/
+data/*
+!data/.keep
 *.pptx
 *.pdf
 !fixtures/**/*.pptx

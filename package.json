@@ -12,7 +12,9 @@
     "start": "tsc && node dist/server/start.js",
     "dev:web": "vite",
     "verify": "npm run typecheck && npm test && npm run build && npm run build:web",
-    "regression": "npm test && tsc && node scripts/regression.mjs"
+    "regression": "npm test && tsc && node scripts/regression.mjs",
+    "data-sync": "tsc && node dist/cli/sync.js",
+    "serve": "tsc && node dist/server/start.js"
   },
   "keywords": [],
   "author": "",
