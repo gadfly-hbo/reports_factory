@@ -36,7 +36,8 @@ export function ingestMarkdown(text: string, sourceId: string, sourceVersion = '
   const lines = text.split('\n');
   let currentTitle = '';
   let currentRule: SectionRule | undefined;
-  let itemIndex = 0;
+  let sectionIndex = 0;
+  let globalIndex = 0;
   let pendingParagraph: string[] = [];
 
   const flushParagraph = () => {
@@ -49,14 +50,15 @@ export function ingestMarkdown(text: string, sourceId: string, sourceVersion = '
   };
 
   const pushClaim = (content: string) => {
-    itemIndex += 1;
-    const evidenceId = `ev_${sourceId}_${itemIndex}`;
-    const claimId = `claim_${sourceId}_${itemIndex}`;
+    sectionIndex += 1;
+    globalIndex += 1;
+    const evidenceId = `ev_${sourceId}_${globalIndex}`;
+    const claimId = `claim_${sourceId}_${globalIndex}`;
     evidence.push({
       evidence_id: evidenceId,
       source_id: sourceId,
       source_version: sourceVersion,
-      locator: `${currentTitle} #${itemIndex}`,
+      locator: `${currentTitle} #${sectionIndex}`,
       excerpt: content.slice(0, 120),
     });
     claims.push({
@@ -76,7 +78,7 @@ export function ingestMarkdown(text: string, sourceId: string, sourceVersion = '
       flushParagraph();
       currentTitle = heading[1]!.trim();
       currentRule = matchSection(currentTitle);
-      itemIndex = 0;
+      sectionIndex = 0;
       continue;
     }
     const item = line.match(/^\s*[-*+]\s+(.+?)\s*$/);
