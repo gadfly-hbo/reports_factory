@@ -126,6 +126,36 @@ Report Studio：一个独立运行、本地优先的报告与汇报工具。用�
 
 ---
 
+## GRILL 决议（方案留白处的自答补白，按用户预授权"全部按推荐"）
+
+环境探明（2026-09-22）：Node v25.9.0、npm 11.12.1、registry 可达、系统 Chrome 存在、Playwright Chromium 已有本地缓存（chromium-1243）。
+
+| # | 留白问题 | 决议（推荐即采纳） |
+|---|---|---|
+| G1 | 仓库结构 | 单 npm 包 `report-studio`，模块化单体（src/modules/*），不建 monorepo |
+| G2 | 构建与测试运行时 | tsc 构建 + vitest；ESM；Node ≥20 |
+| G3 | PDF 引擎落地 | Playwright + 本机已缓存 Chromium（降级路径：channel:'chrome' 用系统 Chrome） |
+| G4 | 预览与图表渲染 | 预览 = 无依赖 TS 函数出 HTML 字符串 + 单一 design-token CSS；图表 = ECharts SSR（renderToSVGString）出内联 SVG 供 HTML/PDF，PPTX 用 pptxgenjs 原生 chart；同一 ChartSpec 数据喂两端 |
+| G5 | UI 技术栈 | Vite + React 最小工作台；本地服务 Fastify（API + 静态托管） |
+| G6 | 表格导入范围 | CSV（csv-parse）先行；XLSX 延后（A1 已声明可砍） |
+| G7 | schema 校验 | zod |
+| G8 | 数值精度 | decimal.js 做指标计算（避免浮点伪差），Intl 做展示格式化 |
+| G9 | 字体策略 | PPTX 主字体 Microsoft YaHei（国内兼容面最广）；HTML/PDF 字体栈 PingFang SC → Microsoft YaHei → Noto Sans SC → sans-serif；不打包字体文件 |
+| G10 | 首个样例集 | `fixtures/retail-review/`：结论文本 MD（含结论/推断/建议显式标记）+ 销售汇总 CSV（含同比列）+ 冲突源 CSV（同口径不同数）+ 图表 PNG（无底层数据）+ 利润率 20%→25% 百分点用例 + 不确定性话术 |
+| G11 | 确定性大纲编排规则 | 按 §13.1 复盘主线的页型模板 + 资产分类规则（MD 显式标记 + CSV 数值启发式）；无法分类材料进"资料说明"页；语义分类能力属模型层，确定性模式如实记录此限制 |
+| G12 | 存储根目录 | env `REPORT_STUDIO_HOME`，开发默认 `./data` |
+| G13 | 检查集 v1 | 阻断：同一指标跨对象数值矛盾、单位矛盾（元/万元、%/百分点）、未解决材料冲突、违反外部分享策略、关键内容裁切；警告：来源待核实、关键陈述缺绑定、页面密度超阈值 |
+| G14 | 布局系统 | 每页型 1 个受控布局（趋势/对比 2 个）；16:9 |
+| G15 | 验证门命令 | `npm run typecheck && npm test && npm run build`；lint 延后并在总结记录跳过 |
+| G16 | 模型接口形态 | `ModelGateway` 接口 + `DeterministicGateway` 默认实现 + `PrivacyGate` 包装器（未授权阻断 + 出站记录），本地编辑永不被模型层阻塞 |
+| G17 | 代码语言约定 | 标识符英文；注释最少化且仅写约束；测试描述可用中文 |
+| G18 | E2E 断言工具 | jszip 解包 PPTX 断言原生对象（文本 run/表格/chart 部件）；pdfjs-dist 抽取 PDF 文本 |
+| G19 | ID 生成 | crypto.randomUUID 及短前缀（metric_/claim_/page_/rev_/exp_） |
+
+以上决议均不与 proposal.md 冲突；无不可逆或无辩护建议的项，故无需升级提问。
+
+---
+
 ## 附录：PRD 相对 proposal.md 的差异清单（送用户确认）
 
 **新增（proposal 留白处的具体化建议）：**
