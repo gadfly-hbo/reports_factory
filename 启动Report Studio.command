@@ -5,21 +5,31 @@ set -e
 cd "$(dirname "$0")"
 
 echo "== Report Studio 工作台 =="
-if [ ! -d node_modules ]; then
-  echo "[首次运行] 安装依赖…"
+
+need_deps() { [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; }
+
+# 依赖过期判定:node_modules 缺失,或 lockfile 比上次安装更新
+if need_deps; then
+  echo "[依赖] 安装/更新依赖…"
   npm install --no-audit --no-fund
-fi
-if [ ! -f web-dist/index.html ]; then
-  echo "[首次运行] 构建界面…"
-  npm run build:web
-fi
-if [ ! -f dist/server/start.js ]; then
-  echo "[首次运行] 构建后端…"
-  npx tsc
 fi
 
 echo "[同步] 拉取双端项目数据…"
 npm run data-sync --silent || echo "[同步] 跳过（无变更或无网络）"
+
+# 同步可能拉来新代码:依赖/后端/界面按时间戳补齐重建
+if need_deps; then
+  echo "[依赖] 同步后更新依赖…"
+  npm install --no-audit --no-fund
+fi
+if [ ! -f dist/server/start.js ] || [ -n "$(find src -newer dist/server/start.js -print -quit 2>/dev/null)" ]; then
+  echo "[构建] 构建后端…"
+  npx tsc
+fi
+if [ ! -f web-dist/index.html ] || [ -n "$(find web/src -newer web-dist/index.html -print -quit 2>/dev/null)" ]; then
+  echo "[构建] 重建界面…"
+  npm run build:web
+fi
 
 cleanup() {
   kill "$SERVER_PID" 2>/dev/null || true
