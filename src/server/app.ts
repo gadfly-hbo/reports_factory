@@ -66,7 +66,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       workbench.getResolvedConflicts(id),
       workbench.getSpec(id),
     ]);
-    return { project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec };
+    return { project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec, spec: spec ?? null };
   });
 
   app.post('/api/projects/:id/sources', async (req, reply) => {

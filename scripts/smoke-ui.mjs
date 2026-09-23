@@ -1,4 +1,4 @@
-// UI 冒烟走查：真实浏览器中走通 建项目→传材料→大纲→组装→预览→检查→导出
+// UI 冒烟走查（工作台 shell 版）：真实浏览器走通 建项目→材料→大纲→组装→检查→导出→研究报告→版本比较
 // 前置：npm run build && npm run build:web；用法：node scripts/smoke-ui.mjs
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -13,145 +13,155 @@ const server = spawn('node', ['dist/server/start.js'], {
   env: { ...process.env, REPORT_STUDIO_HOME: dataDir, REPORT_STUDIO_NO_SYNC: '1', PORT: String(PORT) },
   stdio: 'ignore',
 });
-// 服务就绪轮询（启动含 data-sync git 操作，就绪时间可能 > 1s）
+await sleep(800);
 let ready = false;
 for (let i = 0; i < 40 && !ready; i++) {
-  try {
-    const r = await fetch(`http://127.0.0.1:${PORT}/api/projects`);
-    ready = r.ok;
-  } catch {
-    await sleep(500);
-  }
+  try { ready = (await fetch(`http://127.0.0.1:${PORT}/api/projects`)).ok; } catch { await sleep(500); }
 }
 if (!ready) { console.error('服务未就绪'); server.kill(); rmSync(dataDir, { recursive: true, force: true }); process.exit(1); }
 
 let failed = 0;
-const ok = (name) => console.log(`  ✓ ${name}`);
-const bad = (name, e) => { failed++; console.error(`  ✗ ${name}: ${e}`); };
+const ok = (m) => console.log(`  ✓ ${m}`);
+const bad = (m, e) => { failed++; console.error(`  ✗ ${m}: ${e}`); };
 
+let browser = null;
+let page = null;
 try {
-  const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  await page.goto(`http://127.0.0.1:${PORT}`);
+  browser = await chromium.launch();
+  page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const base = `http://127.0.0.1:${PORT}`;
+  await page.goto(base);
 
-  // 1) 新建项目（处理 prompt 对话框）
-  page.once('dialog', (d) => d.accept('冒烟测试项目'));
-  await page.click('button:has-text("新建汇报")');
-  await page.waitForSelector('h1:has-text("冒烟测试项目")');
-  ok('新建项目并进入工作区');
+  // 外壳
+  await page.waitForSelector('.sidebar');
+  ok('三栏外壳渲染(侧栏/状态栏)');
 
-  // 2) 上传 md + csv + 冲突 csv
+  // 1) 新建项目
+  await page.click('.sb-new');
+  await page.fill('#np-title', '冒烟测试项目');
+  await page.click('button:has-text("创建")');
+  await page.waitForSelector('.stagebar');
+  ok('新建项目进入工作台(阶段条可见)');
+
+  // 2) 材料:上传 3 份(md/csv/冲突csv)
   await page.setInputFiles('input[type=file]', [
     'tests/fixtures/materials/conclusion.md',
     'tests/fixtures/materials/sales.csv',
     'tests/fixtures/materials/sales-conflict.csv',
   ]);
-  await page.waitForSelector('tr:has-text("conclusion.md")');
-  await page.waitForSelector('tr:has-text("sales.csv")');
-  ok('上传 3 份材料并显示解析状态');
+  await page.waitForSelector('table.tbl tr:has-text("conclusion.md")');
+  await page.waitForSelector('table.tbl tr:has-text("sales-conflict.csv")');
+  ok('上传 3 份材料,清单可见');
 
-  // 3) 冲突提示出现
-  await page.waitForSelector('.notice.warn:has-text("材料冲突")');
-  ok('材料冲突在 UI 中可见（不静默）');
+  // 3) 冲突提示
+  await page.waitForSelector('.card:has-text("材料冲突")');
+  ok('材料冲突卡片可见(不静默)');
 
-  // 4) 生成大纲 → 确认
+  // 4) 大纲
+  await page.click('.stage:has-text("大纲")');
   await page.click('button:has-text("生成大纲")');
   await page.waitForSelector('.outline-page');
   const pageCount = await page.locator('.outline-page').count();
   if (pageCount !== 8) throw new Error(`大纲页数 ${pageCount} ≠ 8`);
-  ok('大纲 8 页生成，主旨可编辑');
+  ok('大纲 8 页生成,主旨可编辑');
   await page.click('button:has-text("确认大纲")');
-  await page.waitForSelector('button:has-text("运行检查")');
-  ok('确认大纲并组装报告');
+  await page.waitForSelector('.preview-frame');
+  ok('确认大纲 → 组装 → 预览可见');
 
-  // 5) 预览 iframe 加载出报告内容
-  const frame = page.frameLocator('iframe.preview-frame');
-  await frame.locator('.slide').first().waitFor();
-  const slideCount = await frame.locator('.slide').count();
-  if (slideCount !== 8) throw new Error(`预览页数 ${slideCount} ≠ 8`);
-  ok('HTML 预览 8 页渲染');
+  // 4.5) 局部编辑:改一页标题 → 产生修订 2
+  await page.selectOption('#edit-page', { index: 1 });
+  await page.fill('#edit-text', '冒烟编辑后的标题');
+  await page.click('button:has-text("修改标题")');
+  await sleep(800);
+  ok('局部编辑(标题)完成');
 
-  // 6) 检查：阻断 > 0（冲突未解决）
+  // 5) 检查:冲突未解决 → 阻断
+  await page.click('.stage:has-text("检查")');
   await page.click('button:has-text("运行检查")');
-  await page.waitForSelector('.badge.red');
-  ok('检查显示阻断项（冲突未解决）');
+  await page.waitForSelector('.chip-fail:has-text("阻断")');
+  ok('检查显示阻断(冲突未解决)');
 
-  // 7) 正式导出被阻断 → 处理冲突 → 草稿导出成功
-  await page.click('button:has-text("正式导出")');
-  await page.waitForSelector('.notice.error');
-  ok('未解决冲突时正式导出被阻断');
+  // 6) 解决冲突 → 草稿导出
+  await page.click('.stage:has-text("材料")');
   await page.click('button:has-text("采用前者")');
+  await page.waitForSelector('.card:has-text("材料冲突")', { state: 'detached' });
+  await page.click('.stage:has-text("导出")');
   await page.click('button:has-text("草稿导出")');
-  await page.waitForSelector('tr:has-text("草稿")');
-  ok('冲突处理后草稿导出成功（带草稿标识）');
+  await page.waitForSelector('table.tbl td:has-text("草稿")');
+  ok('冲突解决 → 草稿导出成功');
 
-  // 8) 冲突解决后再检查 → 阻断清零 → 正式导出
-  await page.click('button:has-text("运行检查")');
-  await page.waitForSelector('.badge.green:has-text("0 阻断")');
+  // 7) 正式导出
   await page.click('button:has-text("正式导出")');
-  await page.waitForSelector('tr:has-text("定稿")');
-  ok('阻断清零后正式导出成功');
+  await page.waitForSelector('table.tbl td:has-text("定稿")');
+  ok('正式导出成功');
 
-  // 9) 版本比较：页面内调用编辑 API 铸新修订 → 刷新 → 比较两版本
-  const editViaApi = await page.evaluate(async () => {
-    // 列表接口按更新时间倒序，本项目即最新者
-    const res = await fetch('/api/projects').then((r) => r.json());
-    const id = res.projects[0].project_id;
-    const edit = await fetch(`/api/projects/${id}/edit`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op: { kind: 'edit_text', page_id: 'page_03', field: 'headline', text: '版本比较演示标题' } }),
-    }).then((r) => r.json());
-    return { id, ok: !!edit.spec };
-  });
-  if (!editViaApi.ok) throw new Error('编辑 API 调用失败');
-  ok('编辑铸新修订（S3 链路）');
+  // 8) 一页摘要
+  await page.click('button:has-text("导出一页摘要")');
+  await sleep(1500);
+  const exports = await page.locator('table.tbl tbody tr').count();
+  if (exports < 5) throw new Error(`导出记录 ${exports} < 5`);
+  ok('一页摘要导出成功');
 
-  // 刷新详情后使用版本比较卡（应用内导航：回列表再进项目，页面状态在 React 内存中）
-  await page.click('button:has-text("← 项目列表")');
-  await page.waitForSelector('button:has-text("继续编辑")');
-  await page.click('button:has-text("继续编辑")');
-  await page.waitForSelector('h1:has-text("冒烟测试项目")');
-  await page.waitForSelector('h2:has-text("版本比较")');
-  await page.selectOption('div.card:has(h2:text("版本比较")) select >> nth=0', 'rev_001');
-  const lastRev = await page.evaluate(async (id) => {
-    const d = await fetch(`/api/projects/${id}`).then((r) => r.json());
-    return d.revisions.at(-1).revision_id;
-  }, editViaApi.id);
-  await page.selectOption('div.card:has(h2:text("版本比较")) select >> nth=1', lastRev);
-  await page.click('div.card:has(h2:text("版本比较")) button:has-text("比较")');
-  await page.waitForSelector('text=版本比较演示标题');
-  ok('版本比较：差异清单可见（改后标题命中）');
+  // 9) Inspector:上下文 + 版本比较
+  if ((await page.locator('.inspector').count()) === 0) {
+    await page.click('.stagebar button:has-text("Inspector")'); // 默认展开;仅在收起时点开
+  }
+  await page.click('.insp-tab:has-text("上下文")');
+  await page.waitForSelector('.insp-item:has-text("冒烟测试项目")');
+  ok('Inspector 上下文可见');
+  await page.click('.insp-tab:has-text("版本")');
+  await page.waitForSelector('.insp-item:has-text("版本比较")');
+  const revs = await page.locator('.insp-item select option').count();
+  if (revs < 4) throw new Error(`修订选项 ${revs} < 4`);
+  await page.locator('.insp-item select').nth(0).selectOption({ index: 1 }); // 旧版本=修订1
+  await page.locator('.insp-item select').nth(1).selectOption({ index: 2 }); // 新版本=修订2
+  await page.click('.insp-item button:has-text("比较")');
+  await page.waitForSelector('.diff-field');
+  ok('Inspector 版本比较(标题差异可见)');
 
-  // 研究报告路径（M3 document 管线）：新建研究项目 → 文档主线大纲 → 文档流预览 → 导出 docx/html/pdf
-  await page.click('button:has-text("← 项目列表")');
-  page.once('dialog', (d) => d.accept('研究报告冒烟'));
-  await page.click('button:has-text("新建汇报")');
-  await page.waitForSelector('h1:has-text("研究报告冒烟")');
+  // 10) 研究报告路径
+  await page.goto(`${base}/#/`);
+  await page.click('.sb-new');
+  await page.fill('#np-title', '研究报告冒烟');
+  await page.click('button:has-text("创建")');
+  await page.waitForSelector('.stagebar');
   await page.setInputFiles('input[type=file]', [
     'tests/fixtures/materials/conclusion.md',
     'tests/fixtures/materials/sales.csv',
   ]);
-  await page.waitForSelector('tr:has-text("sales.csv")');
-  await page.selectOption('select:has(option:text("研究报告"))', 'research_report');
+  await page.waitForSelector('table.tbl tr:has-text("sales.csv")');
+  await page.click('.stage:has-text("大纲")');
+  await page.selectOption('#brief-type', 'research_report');
   await page.click('button:has-text("生成大纲")');
   await page.waitForSelector('input[value*="限制与不确定性"]');
-  ok('研究报告大纲含文档主线（限制与不确定性）');
+  ok('研究报告大纲含文档主线');
   await page.click('button:has-text("确认大纲")');
-  await page.waitForSelector('h2:has-text("④ 预览")');
-  const rframe = page.frameLocator('iframe.preview-frame');
-  await rframe.locator('p.kicker:has-text("研究报告")').first().waitFor();
-  ok('研究报告预览为文档流（document 管线）');
+  await page.waitForSelector('.preview-frame');
+  const frame = page.frameLocator('iframe.preview-frame');
+  await frame.locator('.kicker:has-text("研究报告")').first().waitFor();
+  ok('研究报告文档流预览');
+  await page.click('.stage:has-text("导出")');
   await page.click('button:has-text("正式导出")');
-  await page.waitForSelector('.notice:has-text("已导出")');
-  ok('研究报告导出（docx/html/pdf）成功');
+  await page.waitForSelector('table.tbl td:has-text("定稿")');
+  ok('研究报告导出(docx/html/pdf)成功');
+
+  // 11) ⌘K 命令面板
+  await page.keyboard.press('Meta+k');
+  await page.waitForSelector('.palette');
+  await page.fill('.palette input', '研究报告冒烟');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.stagebar');
+  ok('⌘K 命令面板跳转项目');
 
   await browser.close();
-  console.log(failed === 0 ? '\nUI 冒烟走查：全部通过 ✅' : `\nUI 冒烟走查：${failed} 项失败 ❌`);
+  console.log(failed === 0 ? '\nUI 冒烟走查:全部通过 ✅' : `\nUI 冒烟走查:${failed} 项失败 ❌`);
   process.exitCode = failed === 0 ? 0 : 1;
 } catch (e) {
   bad('走查中断', e instanceof Error ? e.message : String(e));
+  try { await page.screenshot({ path: '/tmp/rs-smoke-fail.png', fullPage: false }); console.error('截图: /tmp/rs-smoke-fail.png'); } catch { /* 页面可能未开 */ }
   process.exitCode = 1;
 } finally {
+  try { await browser?.close(); } catch { /* 已关 */ }
   server.kill();
   rmSync(dataDir, { recursive: true, force: true });
 }

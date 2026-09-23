@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "build": "tsc",
     "sample": "tsc && node dist/cli/samples.js",
     "build:web": "vite build",
@@ -30,6 +30,7 @@
     "mammoth": "^1.12.3",
     "playwright": "^1.63.0",
     "pptxgenjs": "^4.0.1",
+    "react-router-dom": "^7.18.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {

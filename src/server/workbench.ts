@@ -235,10 +235,15 @@ export class WorkbenchService {
     const spec = await this.getSpec(projectId);
     if (!spec) throw new Error('尚未组装报告');
     // document 管线（研究报告）走 A4 文档流预览
+    let html: string;
     if (spec.brief.deliverable_type === 'research_report') {
       const { renderDocumentHtml } = await import('../render/document-html.js');
-      return renderDocumentHtml(spec);
+      html = renderDocumentHtml(spec);
+    } else {
+      html = renderReportHtml(spec);
     }
-    return renderReportHtml(spec);
+    // 预览 iframe 比页面基准宽(deck 1280 / A4 文档流)窄:按视口宽整体缩放,只在预览端注入,不影响导出产物
+    const fit = `<script>(function(){var d=document,b=d.body;function fit(){var z=b.style.zoom?parseFloat(b.style.zoom):1;var base=Math.max(b.scrollWidth/z,210);b.style.zoom=Math.min(1,d.documentElement.clientWidth/base);}fit();addEventListener('resize',fit);})();</script>`;
+    return html.replace('</body>', `${fit}</body>`);
   }
 }
