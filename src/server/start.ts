@@ -23,6 +23,8 @@ async function main() {
   const pull = dataSync(process.cwd());
   if (!pull.ok && pull.action === 'conflict') {
     console.warn(`[data-sync] 启动拉取冲突，保留本机数据继续：${pull.detail}`);
+  } else if (!pull.ok && pull.action === 'network') {
+    console.warn('[data-sync] 远端不可达（网络/代理），已用本机数据启动——联网后重启自动同步。');
   }
 
   const app = buildServer(store, existsSync(webDist) ? webDist : undefined);
@@ -34,6 +36,8 @@ async function main() {
     const r = dataSync(process.cwd());
     if (!r.ok && r.action === 'conflict') {
       console.warn(`[data-sync] 退出回推冲突，已保留本机数据：${r.detail}`);
+    } else if (!r.ok && r.action === 'network') {
+      console.warn('[data-sync] 远端不可达，本次数据保留在本机，联网后启动时会自动同步。');
     }
     process.exit(0);
   };

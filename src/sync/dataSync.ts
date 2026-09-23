@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 export interface DataSyncResult {
   ok: boolean;
-  action: 'pushed' | 'up-to-date' | 'conflict' | 'not-a-repo' | 'error';
+  action: 'pushed' | 'up-to-date' | 'conflict' | 'network' | 'not-a-repo' | 'error';
   detail: string;
 }
 
@@ -18,10 +18,14 @@ const git = (root: string, args: string[]): string =>
 /** 项目数据目录（寄居仓库内，随 git 双机同步） */
 const DATA_DIR = 'data';
 
+/** 网络类失败特征(非真冲突):直连超时 / DNS / 拒绝连接 / 代理未走通 */
+const NETWORK_ERROR = /Failed to connect|Couldn't connect|Could not resolve|Operation timed out|timed out|Connection refused|Connection reset|Network is unreachable|Temporary failure|无法访问/i;
+
 /**
  * 双机数据同步（对齐 deep-research 机制）：
  * 提交本机 data/ 变更 → rebase 拉取远端 → 推送。只动 data/，不碰代码工作区。
- * 冲突时中止 rebase、保留本机数据并返回 conflict，由上层提示人工处理。
+ * 冲突时中止 rebase、保留本机数据并返回 conflict，由上层提示人工处理；
+ * 网络不可达返回 network(无需人工处理，联网后重试即可)。
  */
 export function dataSync(repoRoot = process.cwd()): DataSyncResult {
   // 测试/临时服务器环境可禁用（不触发远端往返）
@@ -54,6 +58,10 @@ export function dataSync(repoRoot = process.cwd()): DataSyncResult {
     } catch {
       // 没有 rebase 进行中则忽略
     }
-    return { ok: false, action: 'conflict', detail: String(error instanceof Error ? error.message : error).slice(0, 240) };
+    const detail = String(error instanceof Error ? error.message : error).slice(0, 240);
+    if (NETWORK_ERROR.test(detail)) {
+      return { ok: false, action: 'network', detail };
+    }
+    return { ok: false, action: 'conflict', detail };
   }
 }
