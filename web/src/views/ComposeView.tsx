@@ -9,13 +9,14 @@ export function ComposeView() {
   const d = p.detail;
   const [editPage, setEditPage] = useState('');
   const [editText, setEditText] = useState('');
+  const [lastDiff, setLastDiff] = useState<string | null>(null);
   const [brand, setBrand] = useState<{ primary: string; accent: string; logo?: string; font?: string } | null>(null);
 
   if (!d) return <div className="view"><p className="fine">加载中…</p></div>;
   if (!d.hasSpec || !d.spec) {
     return (
       <div className="view">
-        <Empty>尚未组装报告——先在「大纲」阶段生成并确认大纲。</Empty>
+        <Empty>尚未组装报告——先在「编审」阶段生成并确认蓝图。</Empty>
       </div>
     );
   }
@@ -67,8 +68,8 @@ export function ComposeView() {
             type="button"
             disabled={!editPage || !editText.trim()}
             onClick={async () => {
-              const ok = await p.edit({ kind: 'edit_text', page_id: editPage, field: 'headline', text: editText.trim() });
-              if (ok) { setEditText(''); }
+              const r = await p.edit({ kind: 'edit_text', page_id: editPage, field: 'headline', text: editText.trim() });
+              if (r?.ok) { setEditText(''); setLastDiff(r.diff ?? null); }
             }}
           >
             修改标题
@@ -77,7 +78,10 @@ export function ComposeView() {
             className="btn"
             type="button"
             disabled={!editPage}
-            onClick={() => void p.edit({ kind: 'split_page', page_id: editPage })}
+            onClick={async () => {
+              const r = await p.edit({ kind: 'split_page', page_id: editPage });
+              if (r?.ok) setLastDiff(r.diff ?? null);
+            }}
           >
             拆分此页
           </button>
@@ -85,12 +89,20 @@ export function ComposeView() {
             className="btn"
             type="button"
             disabled={!editPage}
-            onClick={() => void p.edit({ kind: 'regenerate_page', page_id: editPage })}
+            onClick={async () => {
+              const r = await p.edit({ kind: 'regenerate_page', page_id: editPage });
+              if (r?.ok) setLastDiff(r.diff ?? null);
+            }}
           >
             重新生成此页
           </button>
-          <span className="fine">锁定 / 页序 / 布局切换经 API 提供;版本差异见 Inspector「版本」。</span>
+          <span className="fine">所有修改经变更控制器(锁定/版本冲突受控);版本差异见 Inspector「版本」。</span>
         </div>
+        {lastDiff && (
+          <div className="notice" style={{ marginTop: 8 }} data-testid="proposal-diff">
+            <b>已应用的变更提案:</b> {lastDiff}
+          </div>
+        )}
       </div>
 
       <div className="card">

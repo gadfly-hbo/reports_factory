@@ -15,6 +15,7 @@ export function MaterialsView() {
   const p = useProject();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const bundleRef = useRef<HTMLInputElement>(null);
   const [pendingSheet, setPendingSheet] = useState<PendingSheet | null>(null);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
 
@@ -57,6 +58,21 @@ export function MaterialsView() {
     await p.reload();
   };
 
+  const uploadBundleFile = async (f: File | undefined) => {
+    if (!f) return;
+    const r = await p.uploadBundle(f);
+    if (!r) return;
+    if (!r.ok) { toast.show(`成果包被拒绝：${r.error ?? '结构非法'}`, 'fail'); return; }
+    if (r.deduped) { toast.show('相同成果快照已导入过——幂等去重，未创建新资产', 'ok'); return; }
+    const u = r.update;
+    toast.show(
+      u
+        ? `新版本成果已入库：${u.changed.length} 项发现变化、${u.added.length} 项新增——只产生待复核提示，报告未自动改写`
+        : `成果包已导入（发现/指标/证据入库）`,
+      u ? 'fail' : 'ok',
+    );
+  };
+
   const unresolved = (d?.conflicts ?? []).filter((c) => c.resolution === 'unresolved');
 
   return (
@@ -86,6 +102,20 @@ export function MaterialsView() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <div className="card-h">分析成果包（AnalysisBundle）<span className="card-h-note">上游分析工具授权导出的 .json 成果包</span></div>
+        <input
+          ref={bundleRef}
+          id="bundle-file"
+          type="file"
+          accept=".json,application/json"
+          hidden
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void uploadBundleFile(f); }}
+        />
+        <button className="btn" type="button" onClick={() => bundleRef.current?.click()}>导入成果包</button>
+        <span className="fine" style={{ marginLeft: 8 }}>发现/指标/证据按逻辑身份入库；同包重复导入自动去重，新版本只产生待复核提示，不自动改写报告。</span>
       </div>
 
       <div className="card">

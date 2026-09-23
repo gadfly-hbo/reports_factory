@@ -40,6 +40,10 @@ export interface SaveSourceInput {
   sensitivity?: SourceAsset['sensitivity'];
   replaces?: string;
   has_data?: boolean;
+  /** M4：来源版本（bundle=result_revision）与逻辑身份；缺省沿用 v1 */
+  version?: string;
+  logical_key?: string;
+  snapshot_id?: string;
 }
 
 export interface SaveExportInput {
@@ -51,6 +55,8 @@ export interface SaveExportInput {
   export_scope?: 'internal' | 'external';
   chart_data_mode?: 'keep_editable' | 'aggregate_only';
   privacy_report?: unknown;
+  delivery_status?: 'draft' | 'formal' | 'superseded';
+  editorial_refs?: unknown;
 }
 
 export class WorkspaceStore {
@@ -109,6 +115,68 @@ export class WorkspaceStore {
     const dir = join(this.projectDir(projectId), 'work');
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'state.json'), JSON.stringify(state, null, 2));
+  }
+
+  /** M4 待复核更新（bundle 版本升级的影响数据）：持久化，重启不丢（§5.2） */
+  async readPendingUpdates(projectId: string): Promise<unknown[]> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'pending-updates.json'), 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+
+  async writePendingUpdates(projectId: string, updates: unknown[]): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'pending-updates.json'), JSON.stringify(updates, null, 2));
+  }
+
+  /** M4 变更提案审计（§12.1）：append-only，聊天记录不承载变更历史 */
+  async readProposals(projectId: string): Promise<unknown[]> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'proposals.json'), 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+
+  async appendProposal(projectId: string, proposal: unknown): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    const existing = await this.readProposals(projectId);
+    existing.push(proposal);
+    await writeFile(join(dir, 'proposals.json'), JSON.stringify(existing, null, 2));
+  }
+
+  /** M4 补证请求（§11.2）：持久化生命周期，request_id 幂等去重 */
+  async readEvidenceRequests(projectId: string): Promise<unknown[]> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'evidence-requests.json'), 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+
+  async writeEvidenceRequests(projectId: string, requests: unknown[]): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'evidence-requests.json'), JSON.stringify(requests, null, 2));
+  }
+
+  /** M4 编审状态（决定/任务书）：结构化持久化，聊天记录不承载编审状态（§5.2/附录B） */
+  async readEditorial(projectId: string): Promise<Record<string, unknown> | null> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'editorial.json'), 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  async writeEditorial(projectId: string, state: unknown): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'editorial.json'), JSON.stringify(state, null, 2));
   }
 
   async readConflictResolutions(projectId: string): Promise<Record<string, { resolution: string; adopted_value?: number }>> {
@@ -229,7 +297,9 @@ export class WorkspaceStore {
     await writeFile(join(dir, stored), input.content);
     const asset = SourceAssetSchema.parse({
       source_id: sourceId,
-      version: 'v1',
+      version: input.version ?? 'v1',
+      logical_key: input.logical_key,
+      snapshot_id: input.snapshot_id,
       filename: input.filename,
       media_type: input.media_type,
       kind: input.kind,
@@ -248,7 +318,18 @@ export class WorkspaceStore {
 
   async listSourceAssets(projectId: string): Promise<SourceAsset[]> {
     const dir = join(this.projectDir(projectId), 'sources');
-    const assets = await this.listJsonDir(dir, SourceAssetSchema, '.assets.json');
+    // 只读元数据（src_*.json）：排除派生（.assets.json）与内容原件（src_*__name 可能以 .json 结尾）
+    let files: string[];
+    try {
+      files = await readdir(dir);
+    } catch {
+      return [];
+    }
+    const wanted = files.filter((f) => f.endsWith('.json') && !f.endsWith('.assets.json') && !f.includes('__'));
+    const assets: SourceAsset[] = [];
+    for (const f of wanted) {
+      assets.push(SourceAssetSchema.parse(JSON.parse(await readFile(join(dir, f), 'utf-8'))));
+    }
     return assets.sort((a, b) => a.imported_at.localeCompare(b.imported_at));
   }
 
@@ -343,6 +424,8 @@ export class WorkspaceStore {
       export_scope: input.export_scope,
       chart_data_mode: input.chart_data_mode,
       privacy_report: input.privacy_report,
+      delivery_status: input.delivery_status,
+      editorial_refs: input.editorial_refs,
     });
     await writeFile(join(dir, `${exportId}.json`), JSON.stringify(record, null, 2));
     await this.touch(projectId);
@@ -362,6 +445,26 @@ export class WorkspaceStore {
       );
     } catch {
       return null;
+    }
+  }
+
+  /** T24：新修订正式发布后，旧正式记录标 superseded（只改元数据，工件与哈希不动；同批导出除外） */
+  async markFormalExportsSuperseded(projectId: string, exceptExportIds: string[]): Promise<void> {
+    const except = new Set(exceptExportIds);
+    const dir = join(this.projectDir(projectId), 'exports');
+    let files: string[];
+    try {
+      files = await readdir(dir);
+    } catch {
+      return;
+    }
+    for (const f of files.filter((x) => x.endsWith('.json'))) {
+      const path = join(dir, f);
+      const record = ExportRecordSchema.parse(JSON.parse(await readFile(path, 'utf-8')));
+      if (record.delivery_status === 'formal' && !except.has(record.export_id)) {
+        record.delivery_status = 'superseded';
+        await writeFile(path, JSON.stringify(record, null, 2));
+      }
     }
   }
 }

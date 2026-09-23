@@ -25,13 +25,19 @@ interface ProjectCtx {
   setBusy(s: string): void;
   reload(): Promise<void>;
   upload(file: File, sheet?: string): Promise<UploadResult | null>;
+  uploadBundle(file: File): Promise<{ ok: boolean; deduped?: boolean; error?: string; update?: { changed: string[]; added: string[] } } | null>;
   resolveConflict(c: Conflict, resolution: 'source_a' | 'source_b'): Promise<void>;
   composeOutline(brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string }): Promise<OutlineDraft | null>;
   assemble(): Promise<boolean>;
-  edit(op: Record<string, unknown>): Promise<boolean>;
+  edit(op: Record<string, unknown>): Promise<{ ok: boolean; diff?: string; reason?: string } | null>;
   runChecks(exportScope?: 'internal' | 'external'): Promise<CheckReport | null>;
   doExport(opts: { mode: 'formal' | 'draft'; deliverable?: 'executive_summary'; exportScope?: 'internal' | 'external'; chart_data_mode?: string; ack_editable_data?: boolean; ack_external_share?: boolean }): Promise<ExportResult | null>;
   applyBrand(brand: BrandConfig): Promise<boolean>;
+  saveBrief(brief: Record<string, unknown>): Promise<boolean>;
+  recommend(): Promise<{ logical_key: string; placement: string; reason: string; sticky?: boolean }[] | null>;
+  decide(decisions: { logical_key: string; placement: string; reason?: string }[]): Promise<boolean>;
+  approveG1(approver: string): Promise<{ ok: boolean; warnings?: string[]; error?: string }>;
+  resolvePending(keys: string[], pages?: string[]): Promise<boolean>;
 }
 
 const Ctx = createContext<ProjectCtx | null>(null);
@@ -85,6 +91,18 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     }
   }, [id, toast]);
 
+  const uploadBundle = useCallback(async (file: File) => {
+    try {
+      const bundle = JSON.parse(await file.text());
+      const r = await post<{ ok: boolean; deduped?: boolean; error?: string; update?: { changed: string[]; added: string[] } }>(`/api/projects/${id}/bundle`, bundle);
+      await reload();
+      return r;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return null;
+    }
+  }, [id, reload, toast]);
+
   const resolveConflict = useCallback(async (c: Conflict, resolution: 'source_a' | 'source_b') => {
     try {
       await post(`/api/projects/${id}/resolve-conflict`, { resolution: { [c.conflict_id]: resolution } });
@@ -119,16 +137,29 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     } finally { setBusy(''); }
   }, [id, reload, toast]);
 
-  const edit = useCallback(async (op: Record<string, unknown>): Promise<boolean> => {
+  /** 编辑走变更控制器（/propose）：差异显式可见；被拒（锁定/版本冲突/超范围）时给出原因 */
+  const edit = useCallback(async (op: Record<string, unknown>): Promise<{ ok: boolean; diff?: string; reason?: string } | null> => {
+    const revision = detail?.spec?.revision_id;
+    if (!revision) { toast.show('尚未组装报告', 'fail'); return null; }
     try {
-      await post(`/api/projects/${id}/edit`, { op });
+      const r = await post<{
+        ok: boolean;
+        state: string;
+        reason?: string;
+        proposal?: { changes?: { object_id: string; field: string; before?: unknown; after?: unknown }[] };
+      }>(`/api/projects/${id}/propose`, { op, expected_revision: revision });
       await reload();
-      return true;
+      if (!r.ok) {
+        toast.show(r.reason ?? '变更被拒', 'fail');
+        return { ok: false, reason: r.reason };
+      }
+      const c = r.proposal?.changes?.[0];
+      return { ok: true, diff: c ? `${c.object_id}.${c.field}: ${String(c.before ?? '（空）')} → ${String(c.after ?? '（空）')}` : undefined };
     } catch (e) {
       toast.show(errMsg(e), 'fail');
-      return false;
+      return null;
     }
-  }, [id, reload, toast]);
+  }, [id, detail, reload, toast]);
 
   const runChecks = useCallback(async (exportScope?: 'internal' | 'external'): Promise<CheckReport | null> => {
     try {
@@ -178,8 +209,73 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     }
   }, [id, reload, toast]);
 
+  // ---- M4 编审动作（发现/任务书/取舍/蓝图/G1/待复核） ----
+
+  const saveBrief = useCallback(async (brief: Record<string, unknown>): Promise<boolean> => {
+    try {
+      await post(`/api/projects/${id}/brief`, { brief });
+      toast.show('任务书已保存（编审状态可恢复）', 'ok');
+      await reload();
+      return true;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return false;
+    }
+  }, [id, reload, toast]);
+
+  const recommend = useCallback(async () => {
+    try {
+      const r = await post<{ recommendations: { logical_key: string; placement: string; reason: string; sticky?: boolean }[] }>(`/api/projects/${id}/recommend`, {});
+      return r.recommendations;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  const decide = useCallback(async (decisions: { logical_key: string; placement: string; reason?: string }[]): Promise<boolean> => {
+    try {
+      await post(`/api/projects/${id}/decisions`, { decisions });
+      await reload();
+      return true;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return false;
+    }
+  }, [id, reload, toast]);
+
+  const approveG1 = useCallback(async (approver: string): Promise<{ ok: boolean; warnings?: string[]; error?: string }> => {
+    try {
+      const r = await post<{ ok: boolean; warnings?: string[]; error?: string }>(`/api/projects/${id}/approve-g1`, { approver });
+      if (r.ok) {
+        toast.show(`G1 已批准（${approver}）：主线与逐页蓝图已冻结`, 'ok');
+        await reload();
+      }
+      return r;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return { ok: false, error: errMsg(e) };
+    }
+  }, [id, reload, toast]);
+
+  const resolvePending = useCallback(async (keys: string[], pages: string[] = []): Promise<boolean> => {
+    if (keys.length === 0 && pages.length === 0) { toast.show('没有可解除的待复核项', 'fail'); return false; }
+    try {
+      await post(`/api/projects/${id}/pending-updates/resolve`, {
+        ...(keys.length > 0 ? { logical_keys: keys } : {}),
+        ...(pages.length > 0 ? { affected_pages: pages } : {}),
+      });
+      toast.show('待复核已解除（复核记录保留）', 'ok');
+      await reload();
+      return true;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return false;
+    }
+  }, [id, reload, toast]);
+
   return (
-    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, resolveConflict, composeOutline, assemble, edit, runChecks, doExport, applyBrand }}>
+    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, uploadBundle, resolveConflict, composeOutline, assemble, edit, runChecks, doExport, applyBrand, saveBrief, recommend, decide, approveG1, resolvePending }}>
       {children}
     </Ctx.Provider>
   );

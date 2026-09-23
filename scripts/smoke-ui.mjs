@@ -58,15 +58,15 @@ try {
   ok('材料冲突卡片可见(不静默)');
 
   // 4) 大纲
-  await page.click('.stage:has-text("大纲")');
-  await page.click('button:has-text("生成大纲")');
+  await page.click('.stage:has-text("编审")');
+  await page.click('button:has-text("生成蓝图")');
   await page.waitForSelector('.outline-page');
   const pageCount = await page.locator('.outline-page').count();
   if (pageCount !== 8) throw new Error(`大纲页数 ${pageCount} ≠ 8`);
-  ok('大纲 8 页生成,主旨可编辑');
-  await page.click('button:has-text("确认大纲")');
+  ok('蓝图 8 页生成,主旨可编辑');
+  await page.click('button:has-text("确认蓝图")');
   await page.waitForSelector('.preview-frame');
-  ok('确认大纲 → 组装 → 预览可见');
+  ok('确认蓝图 → 组装 → 预览可见');
 
   // 4.5) 局部编辑:改一页标题 → 产生修订 2
   await page.selectOption('#edit-page', { index: 1 });
@@ -130,12 +130,12 @@ try {
     'tests/fixtures/materials/sales.csv',
   ]);
   await page.waitForSelector('table.tbl tr:has-text("sales.csv")');
-  await page.click('.stage:has-text("大纲")');
+  await page.click('.stage:has-text("编审")');
   await page.selectOption('#brief-type', 'research_report');
-  await page.click('button:has-text("生成大纲")');
+  await page.click('button:has-text("生成蓝图")');
   await page.waitForSelector('input[value*="限制与不确定性"]');
-  ok('研究报告大纲含文档主线');
-  await page.click('button:has-text("确认大纲")');
+  ok('研究报告蓝图含文档主线');
+  await page.click('button:has-text("确认蓝图")');
   await page.waitForSelector('.preview-frame');
   const frame = page.frameLocator('iframe.preview-frame');
   await frame.locator('.kicker:has-text("研究报告")').first().waitFor();
@@ -144,6 +144,45 @@ try {
   await page.click('button:has-text("正式导出")');
   await page.waitForSelector('table.tbl td:has-text("定稿")');
   ok('研究报告导出(docx/html/pdf)成功');
+
+  // 10.6) M4 编审闭环:成果包 → 任务书 → 推荐取舍 → 蓝图 → G1 → 组装 → 正式导出
+  await page.goto(`${base}/#/`);
+  await page.click('.sb-new');
+  await page.fill('#np-title', '编审冒烟');
+  await page.click('button:has-text("创建")');
+  await page.waitForSelector('.stagebar');
+  await page.setInputFiles('#bundle-file', ['tests/fixtures/materials/retail-bundle.json']);
+  await page.waitForSelector('table.tbl tr:has-text("bundle_sales_h1.json")');
+  ok('分析成果包导入(来源清单可见)');
+  await page.click('.stage:has-text("编审")');
+  await page.fill('#brief-core', '问题集中在哪里、是否值得试点、怎样控制风险');
+  await page.fill('#brief-boundaries', '缺货尚未被证明为销售下降主因');
+  await page.click('button:has-text("保存任务书")');
+  await page.waitForSelector('[data-testid="finding-card"]');
+  const cards = await page.locator('[data-testid="finding-card"]').count();
+  if (cards < 5) throw new Error(`发现卡片 ${cards} < 5`);
+  ok('发现卡片可见(claim+指标+证据组合视图)');
+  await page.click('button:has-text("推荐取舍")');
+  await sleep(400);
+  const f05place = await page.locator('[data-testid="finding-card"]:has-text("会员复购") select').inputValue();
+  if (f05place !== 'excluded') throw new Error(`无关维度推荐 ${f05place} ≠ excluded`);
+  ok('取舍推荐(无关维度→不采用,带理由)');
+  await page.click('button:has-text("采纳编排")');
+  await sleep(500);
+  await page.click('button:has-text("生成蓝图")');
+  await page.waitForSelector('.outline-page');
+  ok('逐页蓝图生成(含页面目的)');
+  await page.fill('#g1-approver', '冒烟编制');
+  await page.click('button:has-text("批准 G1")');
+  await sleep(500);
+  await page.click('button:has-text("确认蓝图")');
+  await page.waitForSelector('.preview-frame');
+  ok('G1 批准 → 组装 → 预览');
+  await page.click('.stage:has-text("导出")');
+  await page.click('button:has-text("正式导出")');
+  await page.waitForSelector('table.tbl td:has-text("定稿")');
+  await page.waitForSelector('.statusbar:has-text("G1 ✓")');
+  ok('编审项目正式导出(G1/G2 状态栏可见)');
 
   // 11) ⌘K 命令面板
   await page.keyboard.press('Meta+k');

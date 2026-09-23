@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { emptyIngestResult, type IngestResult } from '../schema/assets.js';
 import type { SourceAsset } from '../schema/project.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -25,6 +26,34 @@ export async function ingestAndSave(
   projectId: string,
   input: IngestInput,
 ): Promise<SourceAsset & IngestResult> {
+  // M4 普通材料逻辑身份（G4）：source:local:<stem>，资产按解析顺序派生；
+  // 同文件重导产生同逻辑键的新实例，编审决定按逻辑键保持有效
+  const stem = input.filename.replace(/\.[^.]+$/, '');
+  const sourceLogical = `source:local:${stem}`;
+
+  // D1 同文件重导幂等：同逻辑身份 + 同内容哈希 → 复用既有来源（编审决定不丢）；
+  // XLSX 例外（选表重导是显式流程，不做去重）
+  const contentHash = createHash('sha256').update(input.content).digest('hex');
+  if (input.kind !== 'xlsx') {
+    const existing = (await store.listSourceAssets(projectId)).find(
+      (s) => s.logical_key === sourceLogical && s.file_hash === contentHash && s.parse_status === 'parsed',
+    );
+    if (existing) {
+      const derived = (await store.readDerivedAssets(projectId, existing.source_id)) as Record<string, any> | null;
+      return {
+        ...existing,
+        ok: true,
+        deduped: true,
+        claims: derived?.claims ?? [],
+        evidence: derived?.evidence ?? [],
+        tables: derived?.tables ?? [],
+        notes: derived?.notes ?? [],
+        conflicts: [],
+        confirmations: derived?.confirmations ?? [],
+      };
+    }
+  }
+
   const asset = await store.saveSourceAsset(projectId, {
     filename: input.filename,
     content: input.content,
@@ -32,6 +61,7 @@ export async function ingestAndSave(
     kind: input.kind,
     sensitivity: input.sensitivity,
     has_data: input.kind !== 'image',
+    logical_key: sourceLogical,
   });
 
   let result: IngestResult;
@@ -61,13 +91,18 @@ export async function ingestAndSave(
 
   await store.markSourceParse(projectId, asset.source_id, result.ok ? 'parsed' : 'failed', result.failure_reason);
   if (result.ok) {
+    const claims = (result.claims as Array<Record<string, unknown>>).map((c, i) => ({
+      ...c,
+      logical_key: `${sourceLogical}::c${i + 1}`,
+    }));
     await store.saveDerivedAssets(projectId, asset.source_id, {
-      claims: result.claims,
+      claims,
       evidence: result.evidence,
       tables: result.tables,
       notes: result.notes,
       confirmations: result.confirmations,
     });
+    result.claims = claims as typeof result.claims;
   }
   return {
     ...asset,

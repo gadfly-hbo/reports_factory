@@ -28,13 +28,17 @@ export const ProjectSchema = z.object({
   brand: BrandConfigSchema.optional(),
 });
 
-export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx']);
+export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'bundle']);
 
 export const ParseStatusSchema = z.enum(['pending', 'parsed', 'failed']);
 
 export const SourceAssetSchema = z.object({
   source_id: z.string().min(1),
   version: z.string().min(1),
+  /** 来源逻辑身份（M4 §10.2）：同 logical_key 的新导入=版本升级（replaces 链），旧数据无此字段 */
+  logical_key: z.string().optional(),
+  /** M4 成果包快照身份（§11.4 幂等判据：同快照重复导入去重；不同快照=新版本） */
+  snapshot_id: z.string().optional(),
   filename: z.string().min(1),
   media_type: z.string().min(1),
   kind: SourceKindSchema,
@@ -71,6 +75,9 @@ export const ExportRecordSchema = z.object({
   export_scope: z.enum(['internal', 'external']).optional(),
   chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
   privacy_report: z.unknown().optional(),
+  /** M4 回执语义（§11.3）：draft | formal | superseded（新修订发布后旧记录标过时，文件不动） */
+  delivery_status: z.enum(['draft', 'formal', 'superseded']).optional(),
+  editorial_refs: z.unknown().optional(),
 });
 
 export type PrivacyPolicy = z.infer<typeof PrivacyPolicySchema>;

@@ -4,7 +4,7 @@
 
 - 产品方案：`.flow/proposal.md`（v1.0，规范事实源）｜PRD：`.flow/prd.md`｜红队评审：`.flow/red-team.md`
 - M0 导出限制清单与门禁判定：`docs/m0-export-limits.md`
-- 当前状态：**M0 + M1 + M2 + M3 已交付**，119 项自动化测试 + 回归 golden（双管线）+ 浏览器走查 15/15 通过
+- 当前状态：**M0–M4 已交付**，自动化测试全绿 + 回归 golden（双管线）零漂移 + 浏览器走查（含编审闭环）通过
 - 双机同步：双击 `启动Report Studio.command`（对齐 deep-research：启动拉取、退出回推、冲突保本机），或 `npm run data-sync`
 
 ## 快速开始
@@ -20,7 +20,21 @@ npm start             # 启动本地服务：http://127.0.0.1:8787（数据默�
 
 UI 走查（真实浏览器全链冒烟）：`node scripts/smoke-ui.mjs`（需先 `npm run build && npm run build:web`）
 
-## 功能（M0–M3）
+## 功能（M0–M4）
+
+### M4 分析成果编审模块（新增）
+| 能力 | 说明 |
+|---|---|
+| 成果包导入 | AnalysisBundle 单 JSON 合同（发现/指标/证据/口径/权限）；同包幂等去重，新版本只产生待复核提示，不自动改写已确认报告 |
+| 资产逻辑身份 | source/claim/metric 带 `logical_key`（`bundle:producer:task::F07` 式），修订链 replaces；页面与编审决定绑逻辑身份而非实例 |
+| 发现卡片 | Claim+Metric+Evidence 组合视图：陈述性质/证据验证/本次编排三组属性，限制与反证可见 |
+| 任务书扩展 | 核心问题/非重点/必要边界/交付隐私；边界缺失或只藏附录 → 正式导出阻断 |
+| 取舍推荐 | 确定性规则（类型+核心问题相关性）给正文/附录/不采用建议及理由；「不采用」粘性，重要性变化重新提出复核 |
+| 逐页蓝图 | 每页 page_purpose/core_message；组装按编排决定投影（excluded 不进报告） |
+| G1/G2 双关口 | G1 冻结蓝图/任务书/来源快照（未批准只能导带标识草稿）；G2=正式导出绑定检查指纹；内容批准与发布确认分开 |
+| 变更控制器 | 所有写路径走 ChangeProposal：expected_revision（旧提案 409 拒绝）+ 字段级锁（页序/标题/正文/指标/图表/来源）+ 原子应用 + 审计留痕 |
+| 补证闭环 | EvidenceRequest 草拟→批准→导出→结果成果包回流关联（request_id 幂等） |
+| 导出回执 | 修订/文件哈希/检查/来源映射/交付状态（formal/superseded）；新修订发布后旧交付标过时、文件不改 |
 
 ### M3 交付物扩展（新增）
 | 能力 | 说明 |

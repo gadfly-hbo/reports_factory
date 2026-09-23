@@ -19,6 +19,13 @@ export interface PagePlanItem {
   /** 材料不足处的待补充提示（不编造） */
   gap_notes: string[];
   locked: boolean;
+  /** M4 逐页蓝图（F04 §7.4）：页面目的/核心信息/入选理由/必要限制 */
+  blueprint?: {
+    page_purpose: string;
+    core_message?: string;
+    inclusion_reason?: string;
+    required_limits?: string[];
+  };
 }
 
 /** 待用户回答的问题（结构化：UI 按 kind 过滤而非子串猜测） */
@@ -96,6 +103,29 @@ function researchOutline(ctx: OutlineContext, page: typeof buildPage): OutlineDr
   };
 }
 
+/** F04 逐页蓝图的确定性页目的（§7.4：每页有目的与一句核心信息；允许资料页/待决页） */
+const PAGE_PURPOSE: Record<PageType, string> = {
+  cover: '开场：明确本次待决事项与边界',
+  summary: '结论：呈现主线关键发现',
+  metrics_overview: '证据：关键指标总览',
+  trend: '证据：趋势与变化方向',
+  issue_breakdown: '限制：可能原因与不确定性',
+  option_comparison: '决策：方案与适用条件比较',
+  action_items: '决策：待决行动与停止条件',
+  evidence_appendix: '附录：口径、来源与补充说明',
+};
+
+function withBlueprints(pages: PagePlanItem[], brief: ReportBrief): PagePlanItem[] {
+  return pages.map((p) => ({
+    ...p,
+    blueprint: {
+      page_purpose: PAGE_PURPOSE[p.type],
+      // 封面核心信息=本次要回答的问题（§7.1 核心问题，不写成预设结论）
+      core_message: p.type === 'cover' ? brief.core_question ?? brief.purpose : undefined,
+    },
+  }));
+}
+
 function buildPage(
   n: number,
   type: PageType,
@@ -124,7 +154,8 @@ export function createDeterministicGateway(): ModelGateway {
     async composeOutline(ctx: OutlineContext): Promise<OutlineDraft> {
       const page = buildPage;
       if (ctx.brief.deliverable_type === 'research_report') {
-        return researchOutline(ctx, page);
+        const draft = researchOutline(ctx, page);
+        return { ...draft, pages: withBlueprints(draft.pages, ctx.brief) };
       }
       const facts = ctx.claims.filter((c) => c.kind === 'fact_statement');
       const inferences = ctx.claims.filter((c) => c.kind === 'inference');
@@ -225,7 +256,7 @@ export function createDeterministicGateway(): ModelGateway {
         })),
       ];
 
-      return { pages, open_questions };
+      return { pages: withBlueprints(pages, ctx.brief), open_questions };
     },
   };
 }

@@ -1,0 +1,91 @@
+import { join } from 'node:path';
+
+/** 方案 §15 样板：零售复盘→补货试点评审 的授权成果包（S1/S2/S3 共用 fixture） */
+
+export function retailBundle(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '1.0',
+    bundle_id: 'bundle_sales_h1',
+    producer: 'xanthil',
+    created_at: '2026-09-20T10:00:00Z',
+    upstream: { project_id: 'proj_x', task_id: 'task_sales', run_id: 'run_1', result_revision: 'r1' },
+    snapshot_id: 'snap_1',
+    findings: [
+      {
+        finding_id: 'F01',
+        kind: 'computed_statement',
+        text: '重点门店销售额同比下降 12%',
+        metric_refs: ['M01'],
+        evidence_refs: ['E01'],
+        verification: 'arithmetic_checked',
+        limitations: ['同口径对比，未剔除营业天数差异'],
+      },
+      {
+        finding_id: 'F02',
+        kind: 'inference',
+        text: '缺货可能是部分门店销售下降的因素之一，尚未证实为因果',
+        verification: 'unverified',
+        counter_evidence: ['营业天数变化也可能解释部分下降'],
+      },
+    ],
+    metrics: [
+      {
+        metric_id: 'M01',
+        value: -0.12,
+        unit: 'ratio',
+        period: '2026-H1',
+        scope: '重点门店销售额同比（同口径）',
+        formula: '(cur - prev) / prev',
+        inputs: { cur: 880, prev: 1000 },
+      },
+    ],
+    evidence: [
+      { evidence_id: 'E01', locator: 'sales_by_store.csv#合计行', excerpt: '重点门店合计 880（上期 1000）' },
+    ],
+    limitations: ['缺货尚未被证明为销售下降主因'],
+    permissions: { sensitivity: 'normal', external_share: 'none' },
+    ...overrides,
+  };
+}
+
+export const MAT = join(import.meta.dirname, '..', 'fixtures', 'materials');
+
+/** S3 推荐器用：§15 五页蓝图素材（在最小包上补 待决建议/无关维度/口径说明 三类发现） */
+export function retailBundleRich(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const base = retailBundle() as { findings: unknown[] };
+  return retailBundle({
+    findings: [
+      ...base.findings,
+      {
+        finding_id: 'F04',
+        kind: 'recommendation',
+        text: '建议批准有限范围的补货试点，观察指标与停止条件另页说明',
+        verification: 'unverified',
+      },
+      {
+        finding_id: 'F05',
+        kind: 'fact_statement',
+        text: '会员复购率与上期基本持平（与本次核心问题无直接关联的维度）',
+        verification: 'bound_to_source',
+      },
+      {
+        finding_id: 'F06',
+        kind: 'data_note',
+        text: '口径说明：门店销售额为含税口径，按同期对齐营业日折算',
+        verification: 'bound_to_source',
+      },
+    ],
+    ...overrides,
+  });
+}
+
+/** §15.2 任务书：讨论是否批准有限范围的补货试点 */
+export const retailBrief = {
+  audience: '商品与运营负责人',
+  purpose: '讨论是否批准有限范围的补货试点',
+  page_budget: 5,
+  core_question: '问题集中在哪里、证据支持到什么程度、是否值得试点、怎样控制风险',
+  non_goals: ['全面复盘全部经营指标'],
+  required_boundaries: ['缺货尚未被证明为销售下降主因'],
+  delivery_privacy: 'internal',
+};

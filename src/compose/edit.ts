@@ -16,6 +16,18 @@ export class EditRejectedError extends Error {
   }
 }
 
+/** M4 生效锁（§7.6）：旧 locked=true 读作内容锁全开（页序/布局不受旧锁约束，保持既有语义） */
+function effectiveLock(page: ReportSpec['pages'][number], field: 'page_order' | 'headline' | 'body' | 'metrics' | 'chart' | 'required_note' | 'sources' | 'layout'): boolean {
+  if (field === 'page_order' || field === 'layout') return !!page.locks?.[field];
+  return !!page.locks?.[field] || !!page.locked;
+}
+
+/** 整页内容锁：任一内容字段被锁即视为整页内容不可重生成/拆分 */
+function anyContentLock(page: ReportSpec['pages'][number]): boolean {
+  const contentFields = ['headline', 'body', 'metrics', 'chart', 'required_note', 'sources'] as const;
+  return contentFields.some((f) => effectiveLock(page, f));
+}
+
 // EditOp 单一来源：zod schema（API 边界校验与内部类型同一份定义）
 export type EditOp = z.infer<typeof EditOpSchema>;
 
@@ -34,21 +46,28 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
   switch (op.kind) {
     case 'edit_text': {
       const page = findPage(spec, op.page_id);
-      if (page.locked) throw new EditRejectedError(`页面 ${op.page_id} 已锁定`);
+      if (effectiveLock(page, op.field)) throw new EditRejectedError(`页面 ${op.page_id} 的 ${op.field} 已锁定`);
       return updatePage(spec, op.page_id, (p) => ({ ...p, [op.field]: op.text }));
     }
     case 'reorder': {
+      if (spec.locks?.page_order) throw new EditRejectedError('报告页序已锁定（report locks.page_order）');
       const current = new Set(spec.pages.map((p) => p.page_id));
       const next = new Set(op.order);
       if (current.size !== op.order.length || [...current].some((id) => !next.has(id))) {
         throw new EditRejectedError('order 必须恰好包含当前全部页面');
+      }
+      // 页序锁（§7.6）：位置发生变化且自带 page_order 锁的页不可移动
+      const moved = op.order.filter((id, idx) => spec.pages[idx]?.page_id !== id);
+      for (const id of moved) {
+        const page = spec.pages.find((p) => p.page_id === id);
+        if (page && effectiveLock(page, 'page_order')) throw new EditRejectedError(`页面 ${id} 的页序已锁定，不可移动`);
       }
       const byId = new Map(spec.pages.map((p) => [p.page_id, p]));
       return { ...spec, pages: op.order.map((id) => byId.get(id)!) };
     }
     case 'regenerate_page': {
       const page = findPage(spec, op.page_id);
-      if (page.locked) throw new EditRejectedError(`页面 ${op.page_id} 已锁定，拒绝重生成`);
+      if (page.locked || anyContentLock(page)) throw new EditRejectedError(`页面 ${op.page_id} 已锁定，拒绝重生成`);
       const plan = ctx.pagePlans?.find((p) => p.page_id === op.page_id || p.type === page.type);
       if (!plan || !ctx.claims || !ctx.tables) {
         throw new EditRejectedError('缺少组装上下文（pagePlans/claims/tables），无法重生成');
@@ -65,7 +84,7 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
     case 'split_page': {
       // §5.3 "第三页拆成两页"：后半内容成为（续）页；新页 id 加后缀，不重排其余页 id（编辑稳定性）
       const page = findPage(spec, op.page_id);
-      if (page.locked) throw new EditRejectedError(`页面 ${op.page_id} 已锁定`);
+      if (page.locked || anyContentLock(page)) throw new EditRejectedError(`页面 ${op.page_id} 已锁定`);
       const secondId = `${op.page_id}b`;
       if (spec.pages.some((p) => p.page_id === secondId)) {
         throw new EditRejectedError(`拆分目标 id 已存在：${secondId}`);
@@ -91,12 +110,20 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
       return { ...spec, pages };
     }
     case 'switch_layout': {
-      findPage(spec, op.page_id);
+      const page = findPage(spec, op.page_id);
+      if (effectiveLock(page, 'layout')) throw new EditRejectedError(`页面 ${op.page_id} 的版式已锁定`);
       return updatePage(spec, op.page_id, (p) => ({ ...p, layout_id: op.layout_id }));
     }
     case 'toggle_lock': {
       findPage(spec, op.page_id);
       return updatePage(spec, op.page_id, (p) => ({ ...p, locked: op.locked }));
+    }
+    case 'set_locks': {
+      findPage(spec, op.page_id);
+      return updatePage(spec, op.page_id, (p) => ({ ...p, locks: { ...(p.locks ?? {}), ...(op.locks ?? {}) } }));
+    }
+    case 'set_report_locks': {
+      return { ...spec, locks: { ...(spec.locks ?? {}), ...(op.locks ?? {}) } };
     }
   }
 }

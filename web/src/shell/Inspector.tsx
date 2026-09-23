@@ -1,5 +1,5 @@
-/* 右侧 Inspector:上下文 / 主张与证据 / 指标 / 版本与比较。 */
-import { useState } from 'react';
+/* 右侧 Inspector:上下文 / 主张与证据 / 指标 / 版本与比较(含 M4 变更提案审计)。 */
+import { useEffect, useState } from 'react';
 import Chip from '../components/Chip';
 import { useProject } from '../state/projectDetail';
 import { useUI } from '../state/ui';
@@ -145,6 +145,40 @@ function MetricsPane() {
 
 interface DiffState { diff: SpecDiff | null; recheck?: { blockers: number; warnings: number } }
 
+interface ProposalAudit {
+  proposal_id: string;
+  expected_revision: string;
+  state: string;
+  reason?: string;
+  changes: { object_id: string; field: string; before?: unknown; after?: unknown }[];
+}
+
+/** M4 变更提案审计(§12):应用/拒绝/过期全部留痕,含 before/after */
+function ProposalsAudit() {
+  const p = useProject();
+  const [proposals, setProposals] = useState<ProposalAudit[] | null>(null);
+  useEffect(() => {
+    void api<{ proposals: ProposalAudit[] }>(`/api/projects/${p.id}/proposals`)
+      .then((r) => setProposals(r.proposals.slice().reverse()))
+      .catch(() => setProposals([]));
+  }, [p.id]);
+  if (!proposals) return null;
+  if (proposals.length === 0) return <div className="d">尚无变更提案。</div>;
+  const CHIP: Record<string, string> = { applied: 'chip-ok', rejected: 'chip-fail', stale: 'chip-warn' };
+  const LABEL: Record<string, string> = { applied: '已应用', rejected: '被拒', stale: '版本过期' };
+  return (
+    <>
+      {proposals.slice(0, 8).map((pr) => (
+        <div className="d" key={pr.proposal_id}>
+          <Chip kind={CHIP[pr.state] ?? ''}>{LABEL[pr.state] ?? pr.state}</Chip>{' '}
+          {pr.changes[0] ? `${pr.changes[0].object_id}.${pr.changes[0].field}` : ''} @ {pr.expected_revision}
+          {pr.reason ? <div className="fine" style={{ marginLeft: 2 }}>{pr.reason}</div> : null}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function VersionsPane() {
   const p = useProject();
   const [a, setA] = useState('');
@@ -228,6 +262,10 @@ function VersionsPane() {
             <div className="d" key={e.export_id}>{e.export_id} · {e.format.toUpperCase()} · {e.is_draft ? '草稿' : '定稿'}</div>
           ))
         )}
+      </div>
+      <div className="insp-item">
+        <div className="t">变更提案（审计）</div>
+        <ProposalsAudit />
       </div>
     </div>
   );

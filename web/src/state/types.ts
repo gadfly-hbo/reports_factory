@@ -6,7 +6,7 @@ export type DeliverableType = 'meeting_deck' | 'research_report' | 'executive_su
 
 export const STAGES: { key: StageKey; title: string; n: number }[] = [
   { key: 'materials', title: '材料', n: 1 },
-  { key: 'outline', title: '大纲', n: 2 },
+  { key: 'outline', title: '编审', n: 2 },
   { key: 'compose', title: '组装', n: 3 },
   { key: 'check', title: '检查', n: 4 },
   { key: 'export', title: '导出', n: 5 },
@@ -14,7 +14,7 @@ export const STAGES: { key: StageKey; title: string; n: number }[] = [
 
 export const STAGE_TITLE: Record<StageKey, string> = {
   materials: '材料',
-  outline: '大纲',
+  outline: '编审',
   compose: '组装',
   check: '检查',
   export: '导出',
@@ -100,6 +100,7 @@ export interface EvidenceRef { evidence_id: string; source_id: string; locator: 
 
 export interface Spec {
   report_id: string;
+  revision_id: string;
   brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string };
   claims: Claim[];
   metrics: Metric[];
@@ -116,6 +117,56 @@ export interface ProjectDetail {
   hasSpec: boolean;
   deliverable_type: string;
   spec: Spec | null;
+  /** M4 编审摘要（未进入编审模式时为 null；legacy 项目不受影响） */
+  editorial?: {
+    status: string;
+    pending_pages: number;
+    pending_updates: number;
+    g1: boolean;
+    g2: boolean;
+  } | null;
+}
+
+export const EDITORIAL_STATUS_LABEL: Record<string, string> = {
+  organizing: '整理材料',
+  brief_draft: '任务书草拟',
+  blueprint_review: '蓝图待审',
+  g1_approved: 'G1 已批准',
+  draft_editing: '初稿编辑',
+  published: '已发布',
+};
+
+export type Placement = 'candidate' | 'body' | 'speaker_notes' | 'appendix' | 'excluded' | 'deferred';
+
+export const PLACEMENT_LABEL: Record<Placement, string> = {
+  candidate: '候选',
+  body: '正文',
+  speaker_notes: '讲稿',
+  appendix: '附录',
+  excluded: '不采用',
+  deferred: '暂缓',
+};
+
+export interface FindingCardT {
+  logical_key: string;
+  kind: string;
+  text: string;
+  verification_state: string;
+  uncertainty?: string;
+  metrics: { metric_id: string; value: number; unit: string; scope?: string }[];
+  evidence: { locator: string; excerpt: string }[];
+  limitations: string[];
+  counter_evidence: string[];
+  placement: Placement;
+  decision?: { reason?: string };
+}
+
+export interface EditorialStateT {
+  status: string;
+  brief?: Record<string, unknown>;
+  decisions: { logical_key: string; placement: Placement; reason?: string }[];
+  approval?: { approver: string; approved_at: string };
+  pending_review: { affected_pages: string[]; repropose: string[]; updates: unknown[] };
 }
 
 export interface CheckIssue {
@@ -137,6 +188,8 @@ export interface PagePlan {
   table_ids: string[];
   gap_notes: string[];
   locked: boolean;
+  /** M4 逐页蓝图 */
+  blueprint?: { page_purpose: string; core_message?: string; inclusion_reason?: string; required_limits?: string[] };
 }
 export interface OutlineDraft { pages: PagePlan[]; open_questions: OpenQuestion[] }
 

@@ -101,6 +101,7 @@ export function assemblePage(plan: PagePlanItem, ctx: AssembleContext, pageNum: 
     metric_refs: [],
     evidence_refs: [],
     locked: false,
+    blueprint: plan.blueprint,
   };
 
   switch (plan.type) {
@@ -199,6 +200,15 @@ export function assembleReportSpec(input: { report_id: string; ctx: AssembleCont
   const pages = ctx.pagePlans.map((plan, i) => assemblePage(plan, ctx, i + 1));
   // 组装时按页计划顺序重排页号 ID，保持稳定
   const renumbered = pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` }));
+  // §7.3：编制者声明的必要边界必须正文可见——缺失时注入概要页（不伪造，是用户自己的边界声明）
+  for (const boundary of ctx.brief.required_boundaries ?? []) {
+    const text = (p: (typeof renumbered)[number]) => [p.headline, p.body, ...(p.bullets?.map((b) => b.text) ?? []), p.required_note].filter(Boolean).join('');
+    const inBody = renumbered.some((p) => p.type !== 'evidence_appendix' && text(p).includes(boundary));
+    if (!inBody) {
+      const target = renumbered.find((p) => p.type === 'summary') ?? renumbered[0]!;
+      target.bullets = [...(target.bullets ?? []), { label: '边界', text: `必须保留的限制：${boundary}`, status: 'needs_review' as const }];
+    }
+  }
   const metrics = deriveMetrics(ctx.tables);
   // 趋势/指标页绑定其来源派生的指标（图表数值与指标同源可追溯；精确按 source_id 匹配）
   const metricIdBySource = new Map(

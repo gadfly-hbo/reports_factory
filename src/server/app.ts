@@ -4,16 +4,23 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceStore } from '../storage/workspace.js';
 import { ingestAndSave } from '../ingest/persist.js';
+import { importAnalysisBundle } from '../ingest/bundle.js';
 import { exportReport } from '../pipeline/export.js';
 import { WorkbenchService } from './workbench.js';
 import {
+  ApproveG1RequestSchema,
   AssembleRequestSchema,
   BrandRequestSchema,
   CreateProjectRequestSchema,
+  DecidePlacementRequestSchema,
   EditRequestSchema,
+  EvidenceApproveRequestSchema,
+  EvidenceRequestCreateSchema,
   ExportRequestSchema,
   OutlineRequestSchema,
+  ProposeRequestSchema,
   ResolveConflictRequestSchema,
+  ResolvePendingRequestSchema,
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
 import { ZodError } from 'zod';
@@ -59,14 +66,28 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     const project = await store.getProject(id);
     if (!project) throw httpError(404, '项目不存在');
-    const [sources, revisions, exports, conflicts, spec] = await Promise.all([
+    const [sources, revisions, exports, conflicts, spec, editorial] = await Promise.all([
       store.listSourceAssets(id),
       store.listRevisions(id),
       store.listExports(id),
       workbench.getResolvedConflicts(id),
       workbench.getSpec(id),
+      workbench.editorial(id),
     ]);
-    return { project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec, spec: spec ?? null };
+    const editorialActive = editorial.decisions.length > 0 || !!editorial.approval;
+    return {
+      project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec, spec: spec ?? null,
+      // M4 编审摘要（状态栏显示；编审模式=存在编排决定或已推进状态）
+      editorial: editorialActive
+        ? {
+            status: editorial.status,
+            pending_pages: editorial.pending_review.affected_pages.length,
+            pending_updates: editorial.pending_review.updates.length,
+            g1: !!editorial.approval,
+            g2: !!editorial.g2,
+          }
+        : null,
+    };
   });
 
   app.post('/api/projects/:id/sources', async (req, reply) => {
@@ -81,6 +102,120 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     });
     const { ok, failure_reason, claims, evidence, tables, notes, confirmations, available_sheets } = result;
     return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined, available_sheets: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations, available_sheets };
+  });
+
+  // M4：授权分析成果包导入（AnalysisBundle 合同 §11.1；未知版本/结构非法即 400 拒绝）
+  app.post('/api/projects/:id/bundle', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const result = await importAnalysisBundle(store, id, req.body);
+      const { ok, counts, deduped, update, ...source } = result;
+      return { ok, counts, deduped, update, source };
+    } catch (e) {
+      if (e instanceof ZodError) {
+        const version = (req.body as Record<string, unknown>)?.['schema_version'];
+        const hint =
+          version !== undefined && version !== '1.0'
+            ? `不支持的成果包 schema_version：${String(version)}（当前支持 1.0）`
+            : '成果包结构不符合 AnalysisBundle 合同';
+        reply.code(400);
+        return { ok: false, error: hint };
+      }
+      throw e;
+    }
+  });
+
+  // M4 编审层：发现卡片（组合视图）与编排决定（§7.2/§7.3）
+  app.get('/api/projects/:id/findings', async (req) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { report_id?: string };
+    return { findings: await workbench.findings(id, q.report_id) };
+  });
+
+  app.post('/api/projects/:id/decisions', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(DecidePlacementRequestSchema, req.body);
+    const decisions = await workbench.saveDecisions(id, body);
+    return { ok: true, decisions };
+  });
+
+  // M4 G1 人工编审（§8.1）：冻结蓝图/任务书/来源快照并绑定批准人
+  app.post('/api/projects/:id/approve-g1', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(ApproveG1RequestSchema, req.body);
+    try {
+      const result = await workbench.approveG1(id, { approver: body.approver, scope: body.scope });
+      return { ok: true, ...result };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // M4 补证管理（F07/§11.2）：草拟→批准→导出→结果回流
+  app.post('/api/projects/:id/evidence-requests', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(EvidenceRequestCreateSchema, req.body);
+    const request = await workbench.createEvidenceRequest(id, body);
+    return { request };
+  });
+
+  app.get('/api/projects/:id/evidence-requests', async (req) => {
+    const { id } = req.params as { id: string };
+    return { requests: await workbench.listEvidenceRequests(id) };
+  });
+
+  app.post('/api/projects/:id/evidence-requests/:rid/approve', async (req, reply) => {
+    const { id, rid } = req.params as { id: string; rid: string };
+    const body = parseBody(EvidenceApproveRequestSchema, req.body);
+    try {
+      return { request: await workbench.approveEvidenceRequest(id, rid, body.approver) };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  app.get('/api/projects/:id/evidence-requests/:rid/export', async (req, reply) => {
+    const { id, rid } = req.params as { id: string; rid: string };
+    try {
+      return await workbench.exportEvidenceRequest(id, rid);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // M4 待复核解除（§7.7）：用户复核新版本影响后放行正式发布
+  app.post('/api/projects/:id/pending-updates/resolve', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(ResolvePendingRequestSchema, req.body);
+    await workbench.resolvePendingUpdates(id, { logical_keys: body.logical_keys, affected_pages: body.affected_pages });
+    return { ok: true };
+  });
+
+  // M4 取舍推荐（F03）：确定性规则给正文/附录/不采用建议与理由，人工只调整例外
+  app.post('/api/projects/:id/recommend', async (req) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { report_id?: string };
+    return { recommendations: await workbench.recommend(id, q.report_id) };
+  });
+
+  // M4 任务书（F01）：核心问题/非重点/必要边界/交付隐私，草稿持久化
+  app.post('/api/projects/:id/brief', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(OutlineRequestSchema, req.body);
+    await workbench.saveBrief(id, body.brief);
+    return { ok: true };
+  });
+
+  app.get('/api/projects/:id/editorial', async (req) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { report_id?: string };
+    return workbench.editorial(id, q.report_id);
   });
 
   app.post('/api/projects/:id/outline', async (req, reply) => {
@@ -102,6 +237,40 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const body = parseBody(EditRequestSchema, req.body);
     const spec = await workbench.edit(id, body.op);
     return { spec };
+  });
+
+  // M4 变更提案（§12）：expected_revision + 原子应用；stale=409，锁定/范围拒绝=422（附原因）
+  app.post('/api/projects/:id/propose', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(ProposeRequestSchema, req.body);
+    const outcome = await workbench.propose(id, { op: body.op, expected_revision: body.expected_revision });
+    if (outcome.state === 'stale') reply.code(409);
+    else if (outcome.state === 'rejected') reply.code(422);
+    return {
+      ok: outcome.ok,
+      state: outcome.state,
+      reason: outcome.reason,
+      proposal: outcome.proposal,
+      current_revision: outcome.state === 'stale' ? (await workbench.getSpec(id))?.revision_id : undefined,
+      spec: outcome.spec ?? null,
+    };
+  });
+
+  app.get('/api/projects/:id/proposals', async (req) => {
+    const { id } = req.params as { id: string };
+    return { proposals: await workbench.proposals(id) };
+  });
+
+  // M4 导出回执（§11.3）：修订/文件/哈希/检查/来源映射/交付状态（幂等重取，T23）
+  app.get('/api/projects/:id/exports/:eid/receipt', async (req, reply) => {
+    const { id, eid } = req.params as { id: string; eid: string };
+    try {
+      return await workbench.exportReceipt(id, eid);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
   });
 
   app.post('/api/projects/:id/checks', async (req) => {

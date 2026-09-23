@@ -3,7 +3,7 @@ import { Navigate, useParams } from 'react-router-dom';
 import { ProjectShell } from '../shell/ProjectShell';
 import { isStageKey } from '../state/types';
 import { MaterialsView } from './MaterialsView';
-import { OutlineView } from './OutlineView';
+import { EditorialView } from './EditorialView';
 import { ComposeView } from './ComposeView';
 import { CheckView } from './CheckView';
 import { ExportView } from './ExportView';
@@ -19,7 +19,7 @@ export function StageRoute() {
   return (
     <ProjectShell stage={stage}>
       {stage === 'materials' && <MaterialsView />}
-      {stage === 'outline' && <OutlineView />}
+      {stage === 'outline' && <EditorialView />}
       {stage === 'compose' && <ComposeView />}
       {stage === 'check' && <CheckView />}
       {stage === 'export' && <ExportView />}

@@ -61,6 +61,8 @@ export const IngestResultSchema = z.object({
     .default([]),
   /** XLSX 未选表时返回工作表清单（§4.2 显式选表） */
   available_sheets: z.array(z.string()).optional(),
+  /** M4（D1）：true=同文件已导入过，本次幂等去重未创建新来源 */
+  deduped: z.boolean().optional(),
 });
 
 export type EvidenceRef = z.infer<typeof EvidenceRefSchema>;

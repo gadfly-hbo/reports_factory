@@ -15,6 +15,8 @@ export const SourceRefSchema = z.object({
 
 export const MetricSchema = z.object({
   metric_id: z.string().min(1),
+  /** 逻辑身份（模块方案 §10.2：claim:F07@r2 式稳定引用的 id 部分），普通派生指标无此字段 */
+  logical_key: z.string().optional(),
   value: z.number(),
   unit: z.string().min(1),
   display_format: z.string().optional(),
@@ -46,6 +48,8 @@ export const VerificationStateSchema = z.enum([
 
 export const ClaimSchema = z.object({
   claim_id: z.string().min(1),
+  /** 逻辑身份（模块方案 §10.2）：同一发现的 r1/r2 实例共享 logical_key，页面与编审决定绑逻辑身份 */
+  logical_key: z.string().optional(),
   kind: ClaimKindSchema,
   text: z.string().min(1),
   metric_refs: z.array(z.string()).optional().default([]),
@@ -120,6 +124,28 @@ export const PageSchema = z.object({
   chart: ChartSpecSchema.optional(),
   layout_id: z.string().optional(),
   locked: z.boolean().optional().default(false),
+  /** M4 字段级锁（§7.6）：旧 locked=true 读作内容锁全开（页序/布局不含） */
+  locks: z
+    .object({
+      page_order: z.boolean().optional(),
+      headline: z.boolean().optional(),
+      body: z.boolean().optional(),
+      metrics: z.boolean().optional(),
+      chart: z.boolean().optional(),
+      required_note: z.boolean().optional(),
+      sources: z.boolean().optional(),
+      layout: z.boolean().optional(),
+    })
+    .optional(),
+  /** M4 逐页蓝图（F04 §7.4）：编审数据，随页冻结；渲染不消费（不改变版式） */
+  blueprint: z
+    .object({
+      page_purpose: z.string().min(1),
+      core_message: z.string().optional(),
+      inclusion_reason: z.string().optional(),
+      required_limits: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export const DeliverableTypeSchema = z.enum(['meeting_deck', 'research_report', 'executive_summary']);
@@ -133,6 +159,14 @@ export const ReportBriefSchema = z.object({
   style: z.string().optional(),
   /** M3：交付物类型决定渲染管线（缺省 meeting_deck，向后兼容） */
   deliverable_type: DeliverableTypeSchema.optional(),
+  /** M4 编审（F01 §7.1）：核心问题——需要回答的问题，不写成预设结论 */
+  core_question: z.string().optional(),
+  /** 本次不进入正文的分析过程、无关维度与细节 */
+  non_goals: z.array(z.string()).optional(),
+  /** 必须保留的风险、反证、限制与待核实事项（正文层可见，T13） */
+  required_boundaries: z.array(z.string()).optional(),
+  /** 交付隐私边界：缺省 internal */
+  delivery_privacy: z.enum(['internal', 'external']).optional(),
 });
 
 export const ExportPolicySchema = z.object({
@@ -152,6 +186,8 @@ export const ReportSpecSchema = z.object({
   claims: z.array(ClaimSchema).optional().default([]),
   pages: z.array(PageSchema).min(1),
   export_policy: ExportPolicySchema.optional(),
+  /** M4 报告级锁（§7.6）：主线与页序 */
+  locks: z.object({ storyline: z.boolean().optional(), page_order: z.boolean().optional() }).optional(),
 });
 
 export type SourceRef = z.infer<typeof SourceRefSchema>;
