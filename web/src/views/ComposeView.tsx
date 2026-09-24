@@ -1,7 +1,8 @@
-/* 组装阶段:预览(deck/document 自动按交付物类型)+ 品牌设置 + 编辑操作入口。 */
+/* 组装阶段:预览(deck/document 自动按交付物类型)+ 自然语言修改(AI 起草) + 品牌设置 + 编辑操作入口。 */
 import { useState } from 'react';
 import { useProject } from '../state/projectDetail';
 import { DELIVERABLE_LABEL } from '../state/types';
+import type { OutboundPreview } from '../state/types';
 import Empty from '../components/Empty';
 
 export function ComposeView() {
@@ -10,7 +11,36 @@ export function ComposeView() {
   const [editPage, setEditPage] = useState('');
   const [editText, setEditText] = useState('');
   const [lastDiff, setLastDiff] = useState<string | null>(null);
+  const [nlIntent, setNlIntent] = useState('');
+  const [nlDraft, setNlDraft] = useState<{ op: Record<string, unknown>; note: string; expected_revision?: string } | null>(null);
+  const [nlBusy, setNlBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiPreview, setAiPreview] = useState<{ data: OutboundPreview; mode: 'structure-only' | 'authorized-summary' } | null>(null);
   const [brand, setBrand] = useState<{ primary: string; accent: string; logo?: string; font?: string } | null>(null);
+
+  const draftNow = async () => {
+    setAiBusy(true);
+    try {
+      const r = await p.draftProposal(nlIntent.trim());
+      if (!r) return;
+      if (r.needsApproval || !r.op) {
+        const pv = await p.outboundPreview('authorized-summary');
+        if (pv) setAiPreview({ data: pv, mode: 'authorized-summary' });
+        return;
+      }
+      setNlDraft({ op: r.op, note: r.note ?? '', expected_revision: r.expected_revision });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const approveAndDraft = async () => {
+    if (!aiPreview) return;
+    if (await p.approveOutbound(aiPreview.mode)) {
+      setAiPreview(null);
+      await draftNow();
+    }
+  };
 
   if (!d) return <div className="view"><p className="fine">加载中…</p></div>;
   if (!d.hasSpec || !d.spec) {
@@ -104,6 +134,63 @@ export function ComposeView() {
           </div>
         )}
       </div>
+
+      {d.capabilities?.ai.enabled && (
+        <div className="card">
+          <div className="card-h">自然语言修改（AI 起草）<span className="card-h-note">模型只起草单一、最小范围的标题修改;应用前须你确认差异</span></div>
+          <div className="inline-row">
+            <input
+              id="nl-intent"
+              style={{ flex: 1 }}
+              value={nlIntent}
+              placeholder="例:把第 2 页标题改得更精简"
+              onChange={(e) => setNlIntent(e.target.value)}
+            />
+            <button
+              className="btn" type="button" data-testid="nl-draft"
+              disabled={aiBusy || !nlIntent.trim()}
+              onClick={draftNow}
+            >
+              {aiBusy ? '起草中…' : '生成修改提案'}
+            </button>
+          </div>
+          {aiPreview && (
+            <div className="notice warn" style={{ marginTop: 8 }} data-testid="outbound-preview">
+              <b>AI 调用前确认——起草提案将发送页面清单与你的意图（授权摘要）:</b>
+              <ul style={{ margin: '6px 0 0 18px' }}>
+                {aiPreview.data.descriptor.sections.map((s, i) => (
+                  <li key={i}>{s.label}:{s.bytes} 字节</li>
+                ))}
+                <li>目标模型:{aiPreview.data.target}</li>
+                <li>本会话累计:{aiPreview.data.session.calls} 次调用 · 成本 {aiPreview.data.session.totalCost.toFixed(4)}</li>
+              </ul>
+              <div className="fine">批准对本会话生效;本会话后续 AI 调用将按同一范围发送新增发现;出站日志只记录条数与成本。</div>
+              <div className="inline-row" style={{ marginTop: 6 }}>
+                <button className="btn btn-sm btn-primary" type="button" onClick={approveAndDraft}>批准并继续</button>
+                <button className="btn btn-sm" type="button" onClick={() => setAiPreview(null)}>取消</button>
+              </div>
+            </div>
+          )}
+          {nlDraft && (
+            <div className="notice" style={{ marginTop: 8 }} data-testid="nl-draft">
+              <b>模型起草的提案（未应用）:</b> {nlDraft.op['page_id'] as string}.{nlDraft.op['field'] as string} → 「{nlDraft.op['text'] as string}」
+              <div className="fine">理由:{nlDraft.note}</div>
+              <div className="inline-row" style={{ marginTop: 6 }}>
+                <button
+                  className="btn btn-sm btn-primary" type="button"
+                  onClick={async () => {
+                    const r = await p.edit(nlDraft.op, { source: 'model-draft', expectedRevision: nlDraft.expected_revision });
+                    if (r?.ok) { setLastDiff(r.diff ?? null); setNlDraft(null); setNlIntent(''); }
+                  }}
+                >
+                  确认应用（走变更控制器）
+                </button>
+                <button className="btn btn-sm" type="button" onClick={() => setNlDraft(null)}>丢弃</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <div className="card-h">品牌设置<span className="card-h-note">token 级:色板 / Logo / 字体名——只改视觉,不重生成内容</span></div>

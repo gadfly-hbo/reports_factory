@@ -7,6 +7,17 @@ import { EditorialStateSchema, type EditorialDecision, type EditorialState, type
 import type { PagePlanItem, OutlineDraft } from '../model/gateway.js';
 import { createDeterministicGateway } from '../model/gateway.js';
 import { recommendPlacements } from '../model/editorial-recommend.js';
+import { buildPayload, resolveOutboundPolicy, approvalKey, OUTBOUND_MODES, type OutboundMode, type OutboundCtx } from '../model/outbound.js';
+import { modelChainAvailable, piTransport } from '../model/pi-transport.js';
+import { LlmStageClient, chainFromEnv, DEFAULT_TIMEOUT_MS } from '../model/client.js';
+import { replayTransport, loadRecordings } from '../model/recording.js';
+import { aiComposeOutline } from '../model/ai-outline.js';
+import { aiRecommendPlacements } from '../model/ai-recommend.js';
+import { aiDraftProposal } from '../model/ai-proposal.js';
+import { aiSemanticChecks, aiSuggestEvidenceGaps, type SemanticIssue } from '../model/ai-review.js';
+import { ModelUnavailableError } from '../model/client.js';
+import type { OutboundFindingCtx } from '../model/outbound.js';
+import type { Project } from '../schema/project.js';
 import type { PlacementRecommendation } from '../schema/editorial.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
@@ -46,6 +57,233 @@ interface WorkState {
 
 export class WorkbenchService {
   constructor(private readonly store: WorkspaceStore) {}
+
+  // ---- M5 模型调用（运输层懒加载；replay env 供测试/冒烟离线驱动）----
+
+  private _modelClient: Promise<LlmStageClient> | undefined;
+
+  private modelClient(): Promise<LlmStageClient> {
+    if (!this._modelClient) {
+      this._modelClient = (async () => {
+        const replayPath = process.env['REPORT_STUDIO_MODEL_REPLAY'];
+        const timeoutMs = Number(process.env['REPORT_STUDIO_MODEL_TIMEOUT_MS'] ?? DEFAULT_TIMEOUT_MS);
+        const transport = replayPath ? replayTransport(await loadRecordings(replayPath)) : piTransport({ timeoutMs });
+        return new LlmStageClient({ transport, chain: chainFromEnv(), timeoutMs });
+      })();
+      // 初始化失败（如模型链配置非法）不缓存拒绝——下次调用重试（R2-5）
+      this._modelClient.catch(() => {
+        this._modelClient = undefined;
+      });
+    }
+    return this._modelClient;
+  }
+
+  /** 出站门统一入口：拒绝时记录零内容阻断审计（L1"并记录"）并抛 403（R2-4） */
+  private async gateOrThrow(projectId: string, mode: OutboundMode, stage: string): Promise<void> {
+    const gate = await this.checkOutbound(projectId, mode);
+    if (!gate.allowed) {
+      await this.store.appendOutboundLog(projectId, {
+        at: new Date().toISOString(), stage, provider: 'none', modelId: '', mode, itemCount: 0, bytes: 0, cost: 0, blocked: true,
+      });
+      const policy = await this.policyFor(projectId);
+      throw Object.assign(new Error(gate.reason ?? 'AI 出站被拒绝'), {
+        statusCode: 403,
+        needsApproval: policy.disabled ? undefined : policy.needsApproval,
+      });
+    }
+  }
+
+  /**
+   * AI 蓝图编排（S3，仅结构模式）：出站门 → 模型结构 → 确定性 claim 绑定；
+   * 任何失败自动回退确定性编排（L4），成功写零内容出站审计。
+   */
+  async aiComposeOutline(projectId: string, brief: ReportBrief): Promise<{
+    draft: OutlineDraft;
+    ai: { used: boolean; usedFallback: boolean; provider?: string; reason?: string };
+  }> {
+    await this.gateOrThrow(projectId, 'structure-only', 'outline');
+    try {
+      const [client, ctx, { all }] = await Promise.all([
+        this.modelClient(),
+        this.outboundCtx(projectId),
+        this.loadDerived(projectId),
+      ]);
+      const result = await aiComposeOutline(client, ctx, brief, all.claims);
+      await this.persistOutline(projectId, result.draft, brief);
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(),
+        stage: 'outline',
+        provider: result.provider,
+        modelId: result.modelId,
+        mode: 'structure-only',
+        itemCount: 0,
+        bytes: result.bytes,
+        cost: result.cost,
+      });
+      return { draft: result.draft, ai: { used: true, usedFallback: false, provider: result.provider } };
+    } catch (error) {
+      const reason = String(error instanceof Error ? error.message : error).slice(0, 160);
+      const draft = await this.composeOutline(projectId, brief); // 确定性兜底（L4）
+      return { draft, ai: { used: true, usedFallback: true, reason } };
+    }
+  }
+
+  /** 大纲落盘（确定性与 AI 编排共用）：work 状态 + 阶段推进 */
+  private async persistOutline(projectId: string, draft: OutlineDraft, brief: ReportBrief): Promise<void> {
+    const work = await this.readWork(projectId);
+    await this.writeWork(projectId, { ...work, outline: draft, brief });
+    await this.store.updateProject(projectId, { stage: 'outline' });
+    await this.advanceStatus(projectId, 'blueprint_review');
+  }
+
+  /**
+   * AI 取舍推荐（S4，授权摘要模式）：模型建议 + 用户既有决定粘性合并（T06：不翻案）；
+   * 失败自动回退确定性规则版（L4），成功写零内容出站审计。
+   */
+  async aiRecommend(
+    projectId: string,
+    deps: { client?: LlmStageClient } = {},
+  ): Promise<{
+    recommendations: PlacementRecommendation[];
+    source: 'ai' | 'rules';
+    ai: { used: boolean; usedFallback: boolean; provider?: string; reason?: string };
+  }> {
+    await this.gateOrThrow(projectId, 'authorized-summary', 'recommend');
+    try {
+      const client = deps.client ?? (await this.modelClient());
+      const ctx = await this.outboundCtx(projectId);
+      if (ctx.findings.length === 0) throw new Error('无发现可推荐');
+      const { recs, provider, modelId, cost, itemCount, bytes } = await aiRecommendPlacements(client, ctx);
+      const state = await this.readEditorialState(projectId);
+      const decided = new Map((state.decisions?.[`report_${projectId}`] ?? []).map((d) => [d.logical_key, d] as const));
+      // 粘性合并（T06）：已有编审决定的发现沿用决定，模型不翻案
+      const merged: PlacementRecommendation[] = recs.map((r) => {
+        const d = decided.get(r.logicalKey);
+        return d
+          ? { logical_key: r.logicalKey, placement: d.placement, reason: d.reason ?? '沿用既有编审决定', sticky: true }
+          : { logical_key: r.logicalKey, placement: r.placement, reason: r.reason };
+      });
+      const covered = new Set(merged.map((r) => r.logical_key));
+      for (const [logicalKey, d] of decided) {
+        if (!covered.has(logicalKey)) {
+          merged.push({ logical_key: logicalKey, placement: d.placement, reason: d.reason ?? '沿用既有编审决定', sticky: true });
+        }
+      }
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(),
+        stage: 'recommend',
+        provider,
+        modelId,
+        mode: 'authorized-summary',
+        itemCount,
+        bytes,
+        cost,
+      });
+      return { recommendations: merged, source: 'ai', ai: { used: true, usedFallback: false, provider } };
+    } catch (error) {
+      const reason = String(error instanceof Error ? error.message : error).slice(0, 160);
+      const recommendations = await this.recommend(projectId); // 规则版兜底（L4）
+      return { recommendations, source: 'rules', ai: { used: true, usedFallback: true, reason } };
+    }
+  }
+
+  // ---- M5 出站治理：会话批准（进程内，重启失效=安全默认）+ 预览 + 出站门 ----
+
+  /** 会话批准集：`projectId|mode`（G2：不同发送类别分开批准） */
+  private readonly outboundApproved = new Set<string>();
+
+  /** 出站上下文：brief（工作区草稿）+ 资产清单 + 编审工作区已可见的发现（带 sensitive 标记，红队 K3） */
+  private async outboundCtx(projectId: string): Promise<OutboundCtx> {
+    const work = await this.readWork(projectId);
+    const state = await this.readEditorialState(projectId);
+    const brief = (state.brief as ReportBrief | undefined) ?? work.brief;
+    const { all } = await this.loadDerived(projectId);
+    const sources = await this.store.listSourceAssets(projectId);
+    const sensitivityBySource = new Map(sources.map((s) => [s.source_id, s.sensitivity === 'sensitive'] as const));
+    const claimKinds: Record<string, number> = {};
+    for (const c of all.claims) claimKinds[c.kind] = (claimKinds[c.kind] ?? 0) + 1;
+    const tables = all.tables.map((t) => ({ label: t.title ?? t.table_id, columns: t.columns.map((c) => c.label), rowCount: t.rows.length }));
+    const cards = await this.findings(projectId);
+    return {
+      brief: {
+        audience: brief?.audience ?? '',
+        purpose: brief?.purpose ?? '',
+        pageBudget: brief?.page_budget ?? 0,
+        coreQuestion: brief?.core_question,
+        nonGoals: brief?.non_goals,
+        requiredBoundaries: brief?.required_boundaries,
+      },
+      assets: { claimKinds, tables },
+      findings: cards.map((c) => ({
+        logicalKey: c.logical_key,
+        kind: c.kind,
+        text: c.text,
+        verificationState: c.verification_state,
+        limitations: c.limitations,
+        counterEvidence: c.counter_evidence,
+        sensitive: sensitivityBySource.get(c.source_id) ?? false,
+      })),
+    };
+  }
+
+  policyFor(projectId: string) {
+    return this.store.getProject(projectId).then((p) => resolveOutboundPolicy(p?.privacy_policy ?? 'local_only'));
+  }
+
+  /** 出站门：disabled / 未批准 → 拒绝（S3+ 的所有模型调用必须先过这道） */
+  async checkOutbound(projectId: string, mode: OutboundMode): Promise<{ allowed: boolean; reason?: string }> {
+    const policy = await this.policyFor(projectId);
+    if (policy.disabled) return { allowed: false, reason: '项目隐私策略为仅本地，AI 出站已关闭' };
+    if (policy.needsApproval && !this.outboundApproved.has(approvalKey(projectId, mode))) {
+      return { allowed: false, reason: '本次会话尚未批准该类出站内容' };
+    }
+    return { allowed: true };
+  }
+
+  async outboundPreview(projectId: string, mode: OutboundMode) {
+    const policy = await this.policyFor(projectId);
+    if (policy.disabled) throw Object.assign(new Error('项目隐私策略为仅本地，AI 出站已关闭'), { statusCode: 403 });
+    const built = buildPayload(mode, await this.outboundCtx(projectId));
+    const log = await this.store.readOutboundLog(projectId);
+    return {
+      descriptor: built.descriptor,
+      itemCount: built.itemCount,
+      policy: { needsApproval: policy.needsApproval, approved: this.outboundApproved.has(approvalKey(projectId, mode)) },
+      session: { calls: log.length, totalCost: log.reduce((s, e) => s + e.cost, 0) },
+      /** 目标模型链（预览展示，R2-6） */
+      target: chainFromEnv().map((c) => `${c.provider}/${c.modelId}`).join(' → '),
+    };
+  }
+
+  async approveOutbound(projectId: string, mode: OutboundMode): Promise<void> {
+    const policy = await this.policyFor(projectId);
+    if (policy.disabled) throw Object.assign(new Error('项目隐私策略为仅本地，AI 出站已关闭'), { statusCode: 403 });
+    this.outboundApproved.add(approvalKey(projectId, mode));
+  }
+
+  /** capabilities（项目详情携带，驱动前端 AI 入口渲染） */
+  async aiCapabilities(projectId: string) {
+    const project = await this.store.getProject(projectId);
+    const policy = resolveOutboundPolicy(project?.privacy_policy ?? 'local_only');
+    return {
+      ai: {
+        enabled: !policy.disabled,
+        needsApproval: policy.disabled ? false : policy.needsApproval,
+        modelAvailable: modelChainAvailable(),
+        approvedModes: policy.disabled
+          ? []
+          : OUTBOUND_MODES.filter((m) => this.outboundApproved.has(approvalKey(projectId, m))),
+      },
+    };
+  }
+
+  /** 记录一次真实出站调用（零内容审计 + 成本聚合；阻断尝试由 gateOrThrow 记录） */
+  async recordOutboundCall(
+    projectId: string,
+    entry: { at: string; stage: string; provider: string; modelId: string; mode: string; itemCount: number; bytes: number; cost: number; blocked?: boolean },
+  ): Promise<void> {
+    await this.store.appendOutboundLog(projectId, entry);
+  }
 
   private async loadDerived(projectId: string): Promise<{ all: DerivedAssets; perSource: Record<string, DerivedAssets> }> {
     const sources = await this.store.listSourceAssets(projectId);
@@ -427,7 +665,7 @@ export class WorkbenchService {
   }
 
   /** 变更控制器入口（§12.2）：版本→范围→锁定→原子应用→审计；失败不产生半状态 */
-  async propose(projectId: string, input: { op: EditOp; expected_revision: string }): Promise<ProposalOutcome> {
+  async propose(projectId: string, input: { op: EditOp; expected_revision: string; source?: string }): Promise<ProposalOutcome> {
     const work = await this.readWork(projectId);
     if (!work.spec) throw new Error('尚未组装报告');
     const { all } = await this.loadDerived(projectId);
@@ -523,6 +761,117 @@ export class WorkbenchService {
       required_evidence: request.required_evidence,
       user_approval: request.user_approval,
     };
+  }
+
+  /** AI 提案起草（S5）：只起草不应用；应用仍由人经 /propose 确认（锁/版本由控制器把关） */
+  async draftProposal(projectId: string, intent: string): Promise<{
+    op: { kind: 'edit_text'; page_id: string; field: 'headline' | 'body'; text: string };
+    note: string;
+    expected_revision: string;
+    source: 'model-draft';
+    provider: string;
+  }> {
+    await this.gateOrThrow(projectId, 'authorized-summary', 'proposal-draft');
+    const spec = await this.getSpec(projectId);
+    if (!spec) throw Object.assign(new Error('尚未组装报告，无法起草提案'), { statusCode: 400 });
+    try {
+      const client = await this.modelClient();
+      const drafted = await aiDraftProposal(client, spec, intent);
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(),
+        stage: 'proposal-draft',
+        provider: drafted.provider,
+        modelId: drafted.modelId,
+        mode: 'authorized-summary',
+        itemCount: 1,
+        bytes: drafted.bytes,
+        cost: drafted.cost,
+      });
+      return { op: drafted.op, note: drafted.note, expected_revision: spec.revision_id, source: 'model-draft', provider: drafted.provider };
+    } catch (error) {
+      if (error instanceof ModelUnavailableError) {
+        throw Object.assign(new Error(`模型服务不可用，提案未能起草：${error.attempts.join(' | ')}`), { statusCode: 503 });
+      }
+      throw error;
+    }
+  }
+
+  // ---- M5 S6：语义检查 + 补证建议（授权摘要；warning-only，永不阻断导出）----
+
+  private async semanticRequestArgs(projectId: string): Promise<{ spec: ReportSpec; brief?: ReportBrief; findings: OutboundFindingCtx[] }> {
+    const spec = await this.getSpec(projectId);
+    if (!spec) throw Object.assign(new Error('尚未组装报告，无法运行模型辅助检查'), { statusCode: 400 });
+    const state = await this.readEditorialState(projectId);
+    const ctx = await this.outboundCtx(projectId);
+    return { spec, brief: (state.brief as ReportBrief | undefined) ?? (await this.readWork(projectId)).brief, findings: ctx.findings };
+  }
+
+  async aiSemanticChecks(
+    projectId: string,
+    deps: { client?: LlmStageClient } = {},
+  ): Promise<{ issues: SemanticIssue[]; source: 'ai'; ai: { used: true; usedFallback: false; provider: string } }> {
+    await this.gateOrThrow(projectId, 'authorized-summary', 'semantic-checks');
+    const { spec, brief, findings } = await this.semanticRequestArgs(projectId);
+    try {
+      const client = deps.client ?? (await this.modelClient());
+      const result = await aiSemanticChecks(client, spec, brief, findings);
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(),
+        stage: 'semantic-checks',
+        provider: result.provider,
+        modelId: result.modelId,
+        mode: 'authorized-summary',
+        itemCount: result.issues.length,
+        bytes: result.bytes,
+        cost: result.cost,
+      });
+      return { issues: result.issues, source: 'ai', ai: { used: true, usedFallback: false, provider: result.provider } };
+    } catch (error) {
+      if (error instanceof ModelUnavailableError) {
+        throw Object.assign(new Error(`模型服务不可用，语义检查未能运行：${error.attempts.join(' | ')}`), { statusCode: 503 });
+      }
+      throw error;
+    }
+  }
+
+  /** 补证建议 → EvidenceRequest 草稿（不自动批准；采纳走既有幂等通道） */
+  async aiDraftEvidenceGaps(
+    projectId: string,
+    deps: { client?: LlmStageClient } = {},
+  ): Promise<{ created: EvidenceRequest[]; source: 'ai'; ai: { used: true; usedFallback: false; provider: string } }> {
+    await this.gateOrThrow(projectId, 'authorized-summary', 'evidence-gaps');
+    const { spec, brief, findings } = await this.semanticRequestArgs(projectId);
+    try {
+      const client = deps.client ?? (await this.modelClient());
+      const result = await aiSuggestEvidenceGaps(client, spec, brief, findings);
+      const created: EvidenceRequest[] = [];
+      for (const g of result.gaps) {
+        created.push(
+          await this.createEvidenceRequest(projectId, {
+            question: g.question,
+            gap: g.gap,
+            affected_objects: g.affected_objects,
+            required_evidence: g.required_evidence,
+          }),
+        );
+      }
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(),
+        stage: 'evidence-gaps',
+        provider: result.provider,
+        modelId: result.modelId,
+        mode: 'authorized-summary',
+        itemCount: created.length,
+        bytes: result.bytes,
+        cost: result.cost,
+      });
+      return { created, source: 'ai', ai: { used: true, usedFallback: false, provider: result.provider } };
+    } catch (error) {
+      if (error instanceof ModelUnavailableError) {
+        throw Object.assign(new Error(`模型服务不可用，补证建议未能生成：${error.attempts.join(' | ')}`), { statusCode: 503 });
+      }
+      throw error;
+    }
   }
 
   /** 旧编辑通道 = 控制器薄壳（expected=当前修订，G1 前自动应用留审计，G2 决议） */

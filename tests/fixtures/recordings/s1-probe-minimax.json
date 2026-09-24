@@ -1,0 +1,43 @@
+{
+  "calls": [
+    {
+      "key": "314b56b0b9177588",
+      "request": {
+        "provider": "minimax-cn",
+        "modelId": "MiniMax-M2.7",
+        "system": "你是探针。只输出一个 JSON 对象：{\"pick\": string}，pick 必须是候选列表中的原文，不要输出其他文字。",
+        "user": "目标：库存。候选列表：[\"门店销售额同比\", \"库存周转天数\", \"会员复购率\"]"
+      },
+      "response": {
+        "text": "{\"pick\":\"库存周转天数\"}",
+        "cost": 0.000330525
+      }
+    },
+    {
+      "key": "314b56b0b9177588",
+      "request": {
+        "provider": "minimax-cn",
+        "modelId": "MiniMax-M2.7",
+        "system": "你是探针。只输出一个 JSON 对象：{\"pick\": string}，pick 必须是候选列表中的原文，不要输出其他文字。",
+        "user": "目标：库存。候选列表：[\"门店销售额同比\", \"库存周转天数\", \"会员复购率\"]"
+      },
+      "response": {
+        "text": "{\"pick\": \"库存周转天数\"}",
+        "cost": 0.00022145999999999998
+      }
+    },
+    {
+      "key": "314b56b0b9177588",
+      "request": {
+        "provider": "minimax-cn",
+        "modelId": "MiniMax-M2.7",
+        "system": "你是探针。只输出一个 JSON 对象：{\"pick\": string}，pick 必须是候选列表中的原文，不要输出其他文字。",
+        "user": "目标：库存。候选列表：[\"门店销售额同比\", \"库存周转天数\", \"会员复购率\"]"
+      },
+      "response": {
+        "text": "{\"pick\":\"库存周转天数\"}",
+        "cost": 0.00024066
+      }
+    }
+  ]
+}

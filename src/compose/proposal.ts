@@ -42,7 +42,7 @@ export interface ProposalOutcome {
 
 export function evaluateProposal(
   spec: ReportSpec,
-  input: { op: EditOp; expected_revision: string; report_id: string },
+  input: { op: EditOp; expected_revision: string; report_id: string; source?: string },
   ctx: Partial<AssembleContext>,
   editorialStatus: string | undefined,
 ): ProposalOutcome {
@@ -52,6 +52,7 @@ export function evaluateProposal(
     expected_revision: input.expected_revision,
     op: input.op,
     approved_scope: scopeOf(input.op),
+    ...(input.source ? { source: input.source } : {}),
     required_checks: input.op.kind === 'edit_text' || input.op.kind === 'reorder'
       || input.op.kind === 'regenerate_page' || input.op.kind === 'split_page' ? CONTENT_RECHECKS : [],
     changes: [],

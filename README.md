@@ -4,7 +4,7 @@
 
 - 产品方案：`.flow/proposal.md`（v1.0，规范事实源）｜PRD：`.flow/prd.md`｜红队评审：`.flow/red-team.md`
 - M0 导出限制清单与门禁判定：`docs/m0-export-limits.md`
-- 当前状态：**M0–M4 已交付**，自动化测试全绿 + 回归 golden（双管线）零漂移 + 浏览器走查（含编审闭环）通过
+- 当前状态：**M0–M5 已交付**，自动化测试全绿 + 回归 golden（双管线）零漂移 + 浏览器走查（含编审与 AI 入口可见性）通过；AI 功能在无密钥/断网时自动关闭，确定性路径不受影响
 - 双机同步：双击 `启动Report Studio.command`（对齐 deep-research：启动拉取、退出回推、冲突保本机），或 `npm run data-sync`。项目数据（材料/修订/**编审状态**/导出记录）随仓库入库跨机同步；导出工件（pptx/pdf/docx/html）可再生不入库
 
 ## 快速开始
@@ -20,9 +20,19 @@ npm start             # 启动本地服务：http://127.0.0.1:8787（数据默�
 
 UI 走查（真实浏览器全链冒烟）：`node scripts/smoke-ui.mjs`（需先 `npm run build && npm run build:web`）
 
-## 功能（M0–M4）
+## 功能（M0–M5）
 
-### M4 分析成果编审模块（新增）
+### M5 LLM 接入（新增）
+| 能力 | 说明 |
+|---|---|
+| 模型运输层 | pi-ai 流式直调（minimax 主 + 小米备，`REPORT_STUDIO_MODEL_CHAIN`）；瞬时错误切备用 + 熔断冷却；schema 强校验 |
+| 出站治理 | 两级脱敏 payload（仅结构/授权摘要）白名单构造；调用前预览 + 会话级批准（`projectId|mode`）；outboundLog 零内容审计与成本聚合 |
+| AI 用点 ×5 | 蓝图编排（仅结构）、取舍推荐、自然语言→变更提案、语义检查（warning-only）、补证建议——全部自动回退确定性/规则版，模型不可用不阻塞 |
+| 程序约束不变 | 提案起草仍走 ChangeProposal 控制器（锁/版本/原子应用/审计，标记 model-draft）；语义结果永不计入阻断；excluded 粘性对模型推荐生效 |
+| 离线测试 | 录制/重放（仅合成 fixture 可录制）；全部测试离线绿；探针 `npm run probe:model`（手动） |
+| 密钥注入 | `scripts/with-model-env.sh`（来源同 deep-research：`~/.pi/agent/auth.json` / `~/.zcode/v2/config.json`；密钥不进仓库）。默认链已按探针实测 pin：`minimax-cn/MiniMax-M2.7`（主）+ `xiaomi-token-plan-cn/mimo-v2.5-pro`（备） |
+
+### M4 分析成果编审模块
 | 能力 | 说明 |
 |---|---|
 | 成果包导入 | AnalysisBundle 单 JSON 合同（发现/指标/证据/口径/权限）；同包幂等去重，新版本只产生待复核提示，不自动改写已确认报告 |

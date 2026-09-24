@@ -6,7 +6,7 @@ import { api, post, put, del, errMsg } from './api';
 import { useToast } from './toast';
 import { useProjects } from './projects';
 import type {
-  BrandConfig, CheckReport, Conflict, ExportResult, OutlineDraft, ProjectDetail,
+  BrandConfig, CheckIssueLite, CheckReport, Conflict, ExportResult, OutlineDraft, OutboundPreview, ProjectDetail,
 } from './types';
 
 interface UploadResult {
@@ -29,12 +29,19 @@ interface ProjectCtx {
   resolveConflict(c: Conflict, resolution: 'source_a' | 'source_b'): Promise<void>;
   composeOutline(brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string }): Promise<OutlineDraft | null>;
   assemble(): Promise<boolean>;
-  edit(op: Record<string, unknown>): Promise<{ ok: boolean; diff?: string; reason?: string } | null>;
+  edit(op: Record<string, unknown>, opts?: { source?: string; expectedRevision?: string }): Promise<{ ok: boolean; diff?: string; reason?: string } | null>;
+  draftProposal(intent: string): Promise<{ op?: Record<string, unknown>; note?: string; expected_revision?: string; source?: string; needsApproval?: boolean } | null>;
   runChecks(exportScope?: 'internal' | 'external'): Promise<CheckReport | null>;
+  runSemanticChecks(): Promise<{ issues?: CheckIssueLite[]; source?: 'ai'; ai?: { provider: string }; needsApproval?: boolean } | null>;
+  draftEvidenceGaps(): Promise<{ created?: { request_id: string; question: string }[]; needsApproval?: boolean } | null>;
   doExport(opts: { mode: 'formal' | 'draft'; deliverable?: 'executive_summary'; exportScope?: 'internal' | 'external'; chart_data_mode?: string; ack_editable_data?: boolean; ack_external_share?: boolean }): Promise<ExportResult | null>;
   applyBrand(brand: BrandConfig): Promise<boolean>;
   saveBrief(brief: Record<string, unknown>): Promise<boolean>;
+  composeOutlineAI(brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string }): Promise<{ draft?: OutlineDraft; ai?: { used: boolean; usedFallback: boolean; provider?: string; reason?: string }; needsApproval?: boolean } | null>;
+  outboundPreview(mode: 'structure-only' | 'authorized-summary'): Promise<OutboundPreview | null>;
+  approveOutbound(mode: 'structure-only' | 'authorized-summary'): Promise<boolean>;
   recommend(): Promise<{ logical_key: string; placement: string; reason: string; sticky?: boolean }[] | null>;
+  recommendAI(): Promise<{ recommendations?: { logical_key: string; placement: string; reason: string; sticky?: boolean }[]; source?: 'ai' | 'rules'; ai?: { used: boolean; usedFallback: boolean; provider?: string; reason?: string }; needsApproval?: boolean } | null>;
   decide(decisions: { logical_key: string; placement: string; reason?: string }[]): Promise<boolean>;
   approveG1(approver: string): Promise<{ ok: boolean; warnings?: string[]; error?: string }>;
   resolvePending(keys: string[], pages?: string[]): Promise<boolean>;
@@ -137,9 +144,10 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     } finally { setBusy(''); }
   }, [id, reload, toast]);
 
-  /** 编辑走变更控制器（/propose）：差异显式可见；被拒（锁定/版本冲突/超范围）时给出原因 */
-  const edit = useCallback(async (op: Record<string, unknown>): Promise<{ ok: boolean; diff?: string; reason?: string } | null> => {
-    const revision = detail?.spec?.revision_id;
+  /** 编辑走变更控制器（/propose）：差异显式可见；被拒（锁定/版本冲突/超范围）时给出原因。
+   *  expectedRevision 可显式传入（S5/G7：模型草案按起草时刻修订提交，不豁免 409）。 */
+  const edit = useCallback(async (op: Record<string, unknown>, opts?: { source?: string; expectedRevision?: string }): Promise<{ ok: boolean; diff?: string; reason?: string } | null> => {
+    const revision = opts?.expectedRevision ?? detail?.spec?.revision_id;
     if (!revision) { toast.show('尚未组装报告', 'fail'); return null; }
     try {
       const r = await post<{
@@ -147,7 +155,7 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
         state: string;
         reason?: string;
         proposal?: { changes?: { object_id: string; field: string; before?: unknown; after?: unknown }[] };
-      }>(`/api/projects/${id}/propose`, { op, expected_revision: revision });
+      }>(`/api/projects/${id}/propose`, { op, expected_revision: revision, ...(opts?.source ? { source: opts.source } : {}) });
       await reload();
       if (!r.ok) {
         toast.show(r.reason ?? '变更被拒', 'fail');
@@ -166,6 +174,30 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
       return await post<CheckReport>(`/api/projects/${id}/checks`, exportScope ? { exportScope } : {});
     } catch (e) {
       toast.show(errMsg(e), 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  /** M5 语义检查（授权摘要，warning-only）：403 需批准时返回哨兵 */
+  const runSemanticChecks = useCallback(async () => {
+    try {
+      return await post<{ issues: CheckIssueLite[]; source: 'ai'; ai: { provider: string } }>(`/api/projects/${id}/checks/ai`, {});
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('尚未批准')) return { needsApproval: true };
+      toast.show(msg, 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  /** M5 补证建议：生成 EvidenceRequest 草稿 */
+  const draftEvidenceGaps = useCallback(async () => {
+    try {
+      return await post<{ created: { request_id: string; question: string }[] }>(`/api/projects/${id}/evidence-requests/ai-draft`, {});
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('尚未批准')) return { needsApproval: true };
+      toast.show(msg, 'fail');
       return null;
     }
   }, [id, toast]);
@@ -223,12 +255,75 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     }
   }, [id, reload, toast]);
 
+  /** M5 提案起草（S5）：只起草不应用，应用由视图确认后走 edit */
+  const draftProposal = useCallback(async (intent: string) => {
+    try {
+      return await post<{ op: Record<string, unknown>; note: string; expected_revision: string; source: string }>(
+        `/api/projects/${id}/proposal/draft`,
+        { intent },
+      );
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('尚未批准')) return { needsApproval: true };
+      toast.show(msg, 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  /** M5 AI 蓝图编排：403 需批准时返回哨兵，由视图弹预览层 */
+  const composeOutlineAI = useCallback(async (brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string }) => {
+    try {
+      return await post<{ draft?: OutlineDraft; ai?: { used: boolean; usedFallback: boolean; provider?: string; reason?: string }; needsApproval?: boolean }>(
+        `/api/projects/${id}/outline/ai`,
+        { brief },
+      );
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('尚未批准')) return { needsApproval: true };
+      toast.show(msg, 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  const outboundPreview = useCallback(async (mode: 'structure-only' | 'authorized-summary') => {
+    try {
+      return await post<OutboundPreview>(`/api/projects/${id}/outbound/preview`, { mode });
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  const approveOutbound = useCallback(async (mode: 'structure-only' | 'authorized-summary') => {
+    try {
+      await post(`/api/projects/${id}/outbound/approve`, { mode });
+      toast.show('已批准本会话出站（同类调用不再询问，出站日志可审计）', 'ok');
+      await reload();
+      return true;
+    } catch (e) {
+      toast.show(errMsg(e), 'fail');
+      return false;
+    }
+  }, [id, reload, toast]);
+
   const recommend = useCallback(async () => {
     try {
       const r = await post<{ recommendations: { logical_key: string; placement: string; reason: string; sticky?: boolean }[] }>(`/api/projects/${id}/recommend`, {});
       return r.recommendations;
     } catch (e) {
       toast.show(errMsg(e), 'fail');
+      return null;
+    }
+  }, [id, toast]);
+
+  /** M5 AI 取舍推荐（授权摘要）：403 需批准时返回哨兵，由视图弹预览层 */
+  const recommendAI = useCallback(async (): Promise<{ recommendations?: { logical_key: string; placement: string; reason: string; sticky?: boolean }[]; source?: 'ai' | 'rules'; ai?: { used: boolean; usedFallback: boolean; provider?: string; reason?: string }; needsApproval?: boolean } | null> => {
+    try {
+      return await post(`/api/projects/${id}/recommend/ai`, {});
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('尚未批准')) return { needsApproval: true };
+      toast.show(msg, 'fail');
       return null;
     }
   }, [id, toast]);
@@ -275,7 +370,7 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
   }, [id, reload, toast]);
 
   return (
-    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, uploadBundle, resolveConflict, composeOutline, assemble, edit, runChecks, doExport, applyBrand, saveBrief, recommend, decide, approveG1, resolvePending }}>
+    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, uploadBundle, resolveConflict, composeOutline, assemble, edit, draftProposal, runChecks, runSemanticChecks, draftEvidenceGaps, doExport, applyBrand, saveBrief, composeOutlineAI, outboundPreview, approveOutbound, recommend, recommendAI, decide, approveG1, resolvePending }}>
       {children}
     </Ctx.Provider>
   );

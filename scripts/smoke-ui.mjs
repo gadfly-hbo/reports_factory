@@ -184,6 +184,18 @@ try {
   await page.waitForSelector('.statusbar:has-text("G1 ✓")');
   ok('编审项目正式导出(G1/G2 状态栏可见)');
 
+  // 10.7) M5 AI 入口可见性：local_only 隐藏；allow_external 项目显示（L1 浏览器级）
+  const localAiCount = await page.locator('[data-testid="ai-outline"]').count();
+  if (localAiCount !== 0) throw new Error('local_only 项目不应出现 AI 入口');
+  ok('local_only 项目 AI 入口隐藏(L1)');
+  const aiResp = await page.request.post(`${base}/api/projects`, { data: { title: 'AI 可见性', privacy_policy: 'allow_external' } });
+  if (!aiResp.ok()) throw new Error(`创建 AI 可见性项目失败: ${aiResp.status()} ${await aiResp.text()}`);
+  const aiPid = (await aiResp.json()).project.project_id;
+  await page.goto(`${base}/#/project/${aiPid}/outline`);
+  await page.waitForSelector('.stagebar');
+  await page.waitForSelector('[data-testid="ai-outline"]');
+  ok('allow_external 项目 AI 入口可见');
+
   // 11) ⌘K 命令面板
   await page.keyboard.press('Meta+k');
   await page.waitForSelector('.palette');

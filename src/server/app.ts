@@ -18,12 +18,16 @@ import {
   EvidenceRequestCreateSchema,
   ExportRequestSchema,
   OutlineRequestSchema,
+  OutboundModeRequestSchema,
+  ProposalDraftRequestSchema,
   ProposeRequestSchema,
   ResolveConflictRequestSchema,
   ResolvePendingRequestSchema,
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
 import { ZodError } from 'zod';
+import { chainFromEnv } from '../model/client.js';
+import { hasApiKey, modelChainAvailable } from '../model/pi-transport.js';
 
 /** 请求体校验：zod 失败即抛 400（替代裸 cast 边界） */
 function parseBody<T>(schema: { parse: (x: unknown) => T }, body: unknown): T {
@@ -66,13 +70,14 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     const project = await store.getProject(id);
     if (!project) throw httpError(404, '项目不存在');
-    const [sources, revisions, exports, conflicts, spec, editorial] = await Promise.all([
+    const [sources, revisions, exports, conflicts, spec, editorial, capabilities] = await Promise.all([
       store.listSourceAssets(id),
       store.listRevisions(id),
       store.listExports(id),
       workbench.getResolvedConflicts(id),
       workbench.getSpec(id),
       workbench.editorial(id),
+      workbench.aiCapabilities(id),
     ]);
     const editorialActive = editorial.decisions.length > 0 || !!editorial.approval;
     return {
@@ -87,7 +92,41 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
             g2: !!editorial.g2,
           }
         : null,
+      // M5 AI 能力（驱动前端入口渲染）
+      capabilities,
     };
+  });
+
+  // M5 出站治理：预览（调用前可查看）→ 批准（会话级，projectId|mode）→ 门检查
+  app.post('/api/projects/:id/outbound/preview', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(OutboundModeRequestSchema, req.body);
+    try {
+      return await workbench.outboundPreview(id, body.mode);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(OutboundModeRequestSchema, req.body);
+    try {
+      await workbench.approveOutbound(id, body.mode);
+      return { ok: true };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      reply.code(err.statusCode ?? 500);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  app.post('/api/projects/:id/outbound/check', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(OutboundModeRequestSchema, req.body);
+    return workbench.checkOutbound(id, body.mode);
   });
 
   app.post('/api/projects/:id/sources', async (req, reply) => {
@@ -204,6 +243,18 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { recommendations: await workbench.recommend(id, q.report_id) };
   });
 
+  // M5 AI 取舍推荐（授权摘要模式）：批准门 403(needsApproval) → 模型建议 + 粘性合并；失败回退规则版
+  app.post('/api/projects/:id/recommend/ai', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      return await workbench.aiRecommend(id);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
+  });
+
   // M4 任务书（F01）：核心问题/非重点/必要边界/交付隐私，草稿持久化
   app.post('/api/projects/:id/brief', async (req) => {
     const { id } = req.params as { id: string };
@@ -225,11 +276,37 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { draft };
   });
 
+  // M5 AI 蓝图编排（仅结构模式）：批准门 403(needsApproval) → 模型结构 + 确定性绑定；失败自动兜底
+  app.post('/api/projects/:id/outline/ai', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(OutlineRequestSchema, req.body);
+    try {
+      return await workbench.aiComposeOutline(id, body.brief);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
+  });
+
   app.post('/api/projects/:id/assemble', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = parseBody(AssembleRequestSchema, req.body ?? {});
     const spec = await workbench.assemble(id, body.pages);
     return { spec };
+  });
+
+  // M5 提案起草（§12.1）：自然语言 → EditOp 草案（仅起草，应用走 /propose 由人确认）
+  app.post('/api/projects/:id/proposal/draft', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(ProposalDraftRequestSchema, req.body);
+    try {
+      return await workbench.draftProposal(id, body.intent);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
   });
 
   app.post('/api/projects/:id/edit', async (req, reply) => {
@@ -243,7 +320,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
   app.post('/api/projects/:id/propose', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = parseBody(ProposeRequestSchema, req.body);
-    const outcome = await workbench.propose(id, { op: body.op, expected_revision: body.expected_revision });
+    const outcome = await workbench.propose(id, { op: body.op, expected_revision: body.expected_revision, source: body.source });
     if (outcome.state === 'stale') reply.code(409);
     else if (outcome.state === 'rejected') reply.code(422);
     return {
@@ -277,6 +354,30 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { exportScope?: 'internal' | 'external' };
     return workbench.checks(id, body.exportScope);
+  });
+
+  // M5 语义检查（授权摘要；warning-only，永不计入 blockers）
+  app.post('/api/projects/:id/checks/ai', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      return await workbench.aiSemanticChecks(id);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
+  });
+
+  // M5 补证建议（授权摘要）：生成 EvidenceRequest 草稿（不自动批准）
+  app.post('/api/projects/:id/evidence-requests/ai-draft', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      return await workbench.aiDraftEvidenceGaps(id);
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
   });
 
   app.post('/api/projects/:id/resolve-conflict', async (req, reply) => {
@@ -364,6 +465,16 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     reply.type('text/html; charset=utf-8');
     return workbench.previewHtml(id);
+  });
+
+  // M5 AI 状态（设置页展示）：模型链 + 密钥存在性（零密钥内容）
+  app.get('/api/ai/status', async () => {
+    const chain = chainFromEnv();
+    return {
+      chain: chain.map((c) => `${c.provider}/${c.modelId}`),
+      providers: chain.map((c) => ({ provider: c.provider, modelId: c.modelId, key: hasApiKey(c.provider) })),
+      modelAvailable: modelChainAvailable(),
+    };
   });
 
   // 静态 UI（构建产物）

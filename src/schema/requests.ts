@@ -4,6 +4,7 @@ import { ReportBriefSchema } from './report-spec.js';
 import { BrandConfigSchema } from './brand.js';
 import { PlacementSchema } from './editorial.js';
 import { PageLocksSchema, ReportLocksSchema } from './proposal.js';
+import { OUTBOUND_MODES } from '../model/outbound.js';
 
 /** API 请求体 schema（边界类型化：全部请求体经 zod 校验，替代裸 cast） */
 
@@ -64,6 +65,13 @@ export const EditOpSchema = z.discriminatedUnion('kind', [
 export const ProposeRequestSchema = z.object({
   op: EditOpSchema,
   expected_revision: z.string().min(1),
+  /** S5：起草来源标记（仅接受 model-draft，R2 收紧审计枚举） */
+  source: z.enum(['model-draft']).optional(),
+});
+
+/** M5 提案起草请求（§12.1）：自然语言意图，模型只产草案不应用 */
+export const ProposalDraftRequestSchema = z.object({
+  intent: z.string().min(1).max(500),
 });
 export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
 
@@ -86,6 +94,12 @@ export type EvidenceRequestCreate = z.infer<typeof EvidenceRequestCreateSchema>;
 
 /** 补证请求批准（T16：批准 ≠ 授权执行） */
 export const EvidenceApproveRequestSchema = z.object({ approver: z.string().min(1) });
+
+/** M5 出站治理请求（§14.2）：mode 单一来源取自 OUTBOUND_MODES；include_sensitive 延后（当前一律默认排除） */
+export const OutboundModeRequestSchema = z.object({
+  mode: z.enum(OUTBOUND_MODES),
+});
+export type OutboundModeRequest = z.infer<typeof OutboundModeRequestSchema>;
 
 /** 待复核解除（§7.7）：按逻辑键或受影响页解除——补证回流可能无键只有页（N1） */
 export const ResolvePendingRequestSchema = z

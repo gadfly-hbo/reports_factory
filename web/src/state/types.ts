@@ -125,6 +125,24 @@ export interface ProjectDetail {
     g1: boolean;
     g2: boolean;
   } | null;
+  /** M5 AI 能力（驱动前端入口渲染；local_only 或无密钥时 enabled=false） */
+  capabilities?: {
+    ai: { enabled: boolean; needsApproval: boolean; modelAvailable: boolean; approvedModes: string[] };
+  };
+}
+
+export interface OutboundPreview {
+  descriptor: { mode: string; sections: { label: string; count: number; bytes: number }[]; totalBytes: number };
+  itemCount: number;
+  policy: { needsApproval: boolean; approved: boolean };
+  session: { calls: number; totalCost: number };
+  /** 目标模型链（R2-6：预览可见发送目标） */
+  target: string;
+}
+
+export interface AiOutlineResult {
+  draft: OutlineDraft;
+  ai: { used: boolean; usedFallback: boolean; provider?: string; reason?: string };
 }
 
 export const EDITORIAL_STATUS_LABEL: Record<string, string> = {
@@ -172,6 +190,17 @@ export interface EditorialStateT {
 export interface CheckIssue {
   id: string;
   severity: 'blocker' | 'warning';
+  page_id?: string;
+  object_ref: string;
+  message: string;
+  /** semantic = 模型辅助检查（M5，warning-only） */
+  category?: 'content' | 'policy' | 'semantic';
+}
+
+export interface CheckIssueLite {
+  id: string;
+  severity: 'warning';
+  category: 'semantic';
   page_id?: string;
   object_ref: string;
   message: string;

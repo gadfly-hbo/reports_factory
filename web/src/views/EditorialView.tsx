@@ -7,7 +7,7 @@ import { useToast } from '../state/toast';
 import { api } from '../state/api';
 import Chip from '../components/Chip';
 import Empty from '../components/Empty';
-import type { EditorialStateT, FindingCardT, OutlineDraft, Placement } from '../state/types';
+import type { EditorialStateT, FindingCardT, OutlineDraft, OutboundPreview, Placement } from '../state/types';
 import { EDITORIAL_STATUS_LABEL, KIND_LABEL, PLACEMENT_LABEL, VERIF_CHIP, VERIF_LABEL } from '../state/types';
 
 const PLACEMENTS: Placement[] = ['candidate', 'body', 'appendix', 'excluded', 'deferred', 'speaker_notes'];
@@ -38,6 +38,9 @@ export function EditorialView() {
   const [approver, setApprover] = useState('');
   const [g1Warnings, setG1Warnings] = useState<string[]>([]);
   const [ed, setEd] = useState<EditorialStateT | null>(null);
+  const [aiPreview, setAiPreview] = useState<{ data: OutboundPreview; mode: 'structure-only' | 'authorized-summary' } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [recSource, setRecSource] = useState<'ai' | 'rules' | null>(null);
 
   // 恢复编审状态(T21:任务书草稿/状态机/待复核)与发现卡片
   useEffect(() => {
@@ -95,6 +98,61 @@ export function EditorialView() {
     }
   };
 
+  /** M5 AI 蓝图（仅结构模式）：先取预览给用户看将发送什么；批准后调用；失败自动回退规则版 */
+  const generateAI = async () => {
+    setAiBusy(true);
+    try {
+      const r = await p.composeOutlineAI(normalizedBrief);
+      if (!r) return;
+      if (r.needsApproval || !r.draft || !r.ai) {
+        const pv = await p.outboundPreview('structure-only');
+        if (pv) setAiPreview({ data: pv, mode: 'structure-only' });
+        return;
+      }
+      setDraft(r.draft);
+      if (r.ai.usedFallback) {
+        toast.show(`模型不可用,已自动回退规则版蓝图(${r.draft.pages.length} 页)——原因:${r.ai.reason?.slice(0, 60) ?? '未知'}`, 'fail');
+      } else {
+        toast.show(`AI 蓝图已生成(${r.draft.pages.length} 页,${r.ai.provider})——claim 绑定为本地确定性规则`, 'ok');
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  /** M5 AI 取舍推荐（授权摘要）：403 → 预览授权摘要；失败回退规则版并明示 */
+  const doRecommendAI = async () => {
+    setAiBusy(true);
+    try {
+      const r = await p.recommendAI();
+      if (!r) return;
+      if (r.needsApproval || !r.recommendations || !r.source || !r.ai) {
+        const pv = await p.outboundPreview('authorized-summary');
+        if (pv) setAiPreview({ data: pv, mode: 'authorized-summary' });
+        return;
+      }
+      setRecs(Object.fromEntries(r.recommendations.map((x) => [x.logical_key, { placement: x.placement, reason: x.reason, sticky: x.sticky }])));
+      setRecSource(r.source);
+      if (r.ai.usedFallback) {
+        toast.show(`模型不可用,已自动回退规则版推荐——原因:${r.ai.reason?.slice(0, 60) ?? '未知'}`, 'fail');
+      } else {
+        toast.show(`AI 推荐已给出(${r.ai.provider})——模型建议不翻案你的既有决定`, 'ok');
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const approveAndRun = async () => {
+    if (!aiPreview) return;
+    const { mode } = aiPreview;
+    if (await p.approveOutbound(mode)) {
+      setAiPreview(null);
+      if (mode === 'structure-only') await generateAI();
+      else await doRecommendAI();
+    }
+  };
+
   const approve = async () => {
     if (!approver.trim()) { toast.show('请填写批准人(谁确认主线与取舍)', 'fail'); return; }
     const r = await p.approveG1(approver.trim());
@@ -111,6 +169,27 @@ export function EditorialView() {
     <div className="view">
       <h1 className="view-h">编审</h1>
       <p className="view-sub">分析充分展开,汇报有所取舍——先定任务书与取舍,再确认逐页蓝图;已确认内容不因新结果自动改写。</p>
+
+      {aiPreview && (
+        <div className="notice warn" data-testid="outbound-preview">
+          <b>
+            AI 调用前确认——本任务将发送以下内容到外部模型
+            {aiPreview.mode === 'structure-only' ? '（仅结构模式,不含发现原文与表格数值）' : '（授权摘要,含非敏感发现文本;sensitive 来源默认不发送）'}:
+          </b>
+          <ul style={{ margin: '6px 0 0 18px' }}>
+            {aiPreview.data.descriptor.sections.map((s, i) => (
+              <li key={i}>{s.label}:{s.label === '发现文本' ? `${s.count} 条 · ` : ''}{s.bytes} 字节</li>
+            ))}
+            <li>目标模型:{aiPreview.data.target}</li>
+            <li>本会话累计:{aiPreview.data.session.calls} 次调用 · 成本 {aiPreview.data.session.totalCost.toFixed(4)}</li>
+          </ul>
+          <div className="fine">批准对本会话生效(同类调用不再询问);本会话后续 AI 调用将按同一范围发送新增发现;出站日志只记录条数与成本,不记录内容。</div>
+          <div className="inline-row" style={{ marginTop: 6 }}>
+            <button className="btn btn-sm btn-primary" type="button" onClick={approveAndRun}>批准并继续</button>
+            <button className="btn btn-sm" type="button" onClick={() => setAiPreview(null)}>取消</button>
+          </div>
+        </div>
+      )}
 
       {pending && pending.updates.length > 0 && (
         <div className="notice warn" data-testid="pending-review">
@@ -187,8 +266,14 @@ export function EditorialView() {
         ) : (
           <>
             <div className="actions">
-              <button className="btn" type="button" onClick={doRecommend}>推荐取舍(确定性规则)</button>
+              <button className="btn" type="button" onClick={doRecommend}>推荐取舍(规则)</button>
+              {d?.capabilities?.ai.enabled && (
+                <button className="btn" type="button" disabled={aiBusy} data-testid="ai-recommend" onClick={doRecommendAI}>
+                  {aiBusy ? 'AI 分析中…' : 'AI 推荐取舍(授权摘要)'}
+                </button>
+              )}
               <button className="btn btn-primary" type="button" onClick={doAdopt}>采纳编排</button>
+              {recSource && <span className="fine">当前建议来源:{recSource === 'ai' ? 'AI 推荐' : '规则推荐'}</span>}
               <span className="fine">先推荐再调整例外;「不采用」有粘性,不会在下次生成时自动回正文。</span>
             </div>
             {findings.map((f) => (
@@ -229,6 +314,11 @@ export function EditorialView() {
           <button className="btn btn-primary" type="button" disabled={p.busy === 'outline' || (d?.sources.length ?? 0) === 0} onClick={generate}>
             {p.busy === 'outline' ? '生成中…' : '生成蓝图(确定性模式)'}
           </button>
+          {d?.capabilities?.ai.enabled && (
+            <button className="btn" type="button" disabled={aiBusy || (d?.sources.length ?? 0) === 0} data-testid="ai-outline" onClick={generateAI}>
+              {aiBusy ? 'AI 生成中…' : 'AI 生成蓝图(仅结构模式)'}
+            </button>
+          )}
           {(d?.sources.length ?? 0) === 0 && <span className="fine">先在「材料」阶段导入材料。</span>}
         </div>
         {draft && (

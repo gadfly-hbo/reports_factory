@@ -15,8 +15,9 @@ export interface CheckIssue {
   page_id?: string;
   object_ref: string;
   message: string;
-  /** policy=隐私/外发策略类：草稿导出同样被阻断；content=内容质量类：草稿可带标识导出 */
-  category?: 'content' | 'policy';
+  /** policy=隐私/外发策略类：草稿导出同样被阻断；content=内容质量类：草稿可带标识导出；
+   *  semantic=模型辅助检查（M5 §7.8，warning-only，永不计入阻断，与确定性/人工判断分列） */
+  category?: 'content' | 'policy' | 'semantic';
 }
 
 export interface CheckContext {

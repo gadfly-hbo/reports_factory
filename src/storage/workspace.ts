@@ -149,6 +149,34 @@ export class WorkspaceStore {
     await writeFile(join(dir, 'proposals.json'), JSON.stringify(existing, null, 2));
   }
 
+  /** M5 出站日志（§13.3/§14：可审计、零内容）：provider/条数/字节/成本/阻断标记，随 data 同步入库 */
+  async appendOutboundLog(
+    projectId: string,
+    entry: { at: string; stage: string; provider: string; modelId: string; mode: string; itemCount: number; bytes: number; cost: number; blocked?: boolean },
+  ): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, 'outbound-log.json');
+    let log: unknown[] = [];
+    try {
+      log = JSON.parse(await readFile(path, 'utf-8'));
+    } catch {
+      log = [];
+    }
+    log.push(entry);
+    await writeFile(path, JSON.stringify(log, null, 2));
+  }
+
+  async readOutboundLog(
+    projectId: string,
+  ): Promise<Array<{ at: string; stage: string; provider: string; modelId: string; mode: string; itemCount: number; bytes: number; cost: number; blocked?: boolean }>> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'outbound-log.json'), 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+
   /** M4 补证请求（§11.2）：持久化生命周期，request_id 幂等去重 */
   async readEvidenceRequests(projectId: string): Promise<unknown[]> {
     try {

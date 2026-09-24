@@ -43,6 +43,8 @@ export const ChangeProposalSchema = z.object({
   affected: z.array(z.string()).optional().default([]),
   state: z.enum(['applied', 'rejected', 'stale']).optional().default('applied'),
   reason: z.string().optional(),
+  /** 起草来源标记（S5：'model-draft' = 模型起草，应用仍由人确认） */
+  source: z.string().optional(),
   created_at: z.string().min(1),
   applied_at: z.string().optional(),
 });
