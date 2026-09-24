@@ -5,7 +5,7 @@
 - 产品方案：`.flow/proposal.md`（v1.0，规范事实源）｜PRD：`.flow/prd.md`｜红队评审：`.flow/red-team.md`
 - M0 导出限制清单与门禁判定：`docs/m0-export-limits.md`
 - 当前状态：**M0–M4 已交付**，自动化测试全绿 + 回归 golden（双管线）零漂移 + 浏览器走查（含编审闭环）通过
-- 双机同步：双击 `启动Report Studio.command`（对齐 deep-research：启动拉取、退出回推、冲突保本机），或 `npm run data-sync`
+- 双机同步：双击 `启动Report Studio.command`（对齐 deep-research：启动拉取、退出回推、冲突保本机），或 `npm run data-sync`。项目数据（材料/修订/**编审状态**/导出记录）随仓库入库跨机同步；导出工件（pptx/pdf/docx/html）可再生不入库
 
 ## 快速开始
 

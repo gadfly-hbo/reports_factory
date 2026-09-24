@@ -1,6 +1,6 @@
 #!/bin/bash
 # 一键启动 Report Studio（双端通用：macmini / MacBook）
-# 流程：同步项目数据 → 起本机服务 → 打开浏览器；退出时回推数据。
+# 流程：同步项目数据（含编审状态/修订/材料，随仓库入库）→ 起本机服务 → 就绪后打开浏览器；退出时回推数据。
 set -e
 cd "$(dirname "$0")"
 
@@ -44,10 +44,16 @@ echo "[启动] 本机服务 http://127.0.0.1:$PORT (Ctrl+C 退出)"
 node dist/server/start.js &
 SERVER_PID=$!
 
-for i in $(seq 1 20); do
-  if curl -s -o /dev/null http://127.0.0.1:$PORT/api/projects; then break; fi
+# 就绪门控（对齐 deep-research：40s 窗口；就绪才开浏览器，失败不误开）
+READY=0
+for i in $(seq 1 40); do
+  if curl -s -o /dev/null http://127.0.0.1:$PORT/api/projects; then READY=1; break; fi
   sleep 1
 done
-open http://127.0.0.1:$PORT
+if [ "$READY" = "1" ]; then
+  open http://127.0.0.1:$PORT
+else
+  echo "[启动] 服务未在 40 秒内就绪——请查看上方日志排查；浏览器不自动打开" >&2
+fi
 
 wait "$SERVER_PID"

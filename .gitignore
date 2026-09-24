@@ -10,9 +10,14 @@ build/
 .flow/state.json
 .flow/verify-failures.md
 
-# runtime data (projects workspace, exports generated at runtime)
+# 项目数据随仓库双机同步（对齐 deep-research research-data 全量入库）：
+# 工作区/材料/修订/编审状态/导出记录都入库，换机可续作。
+# 可再生工件不入库：pptx/pdf 已全局忽略，此处补齐 docx/html。
 data/*
 !data/.keep
+!data/*/
+data/*/exports/*.docx
+data/*/exports/*.html
 *.pptx
 *.pdf
 !fixtures/**/*.pptx
