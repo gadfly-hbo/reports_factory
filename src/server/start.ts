@@ -2,10 +2,9 @@ import { WorkspaceStore } from '../storage/workspace.js';
 import { buildServer } from './app.js';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dataSync } from '../sync/dataSync.js';
 
 /** 本地启动：node dist/server/start.js（默认 http://127.0.0.1:8787）
- *  双机同步：启动时拉取、退出时回推（对齐 deep-research 生命周期钩子）
+ *  双机同步：数据随仓库走 git——变动端 git-commit-push 到 GitHub，另一端手动触发 git-pull-sync 拉取
  */
 async function main() {
   const port = Number(process.env['PORT'] ?? 8787);
@@ -19,30 +18,9 @@ async function main() {
     if (!existsSync(keep)) writeFileSync(keep, '');
   }
 
-  // 启动时：拉取双端项目数据
-  const pull = dataSync(process.cwd());
-  if (!pull.ok && pull.action === 'conflict') {
-    console.warn(`[data-sync] 启动拉取冲突，保留本机数据继续：${pull.detail}`);
-  } else if (!pull.ok && pull.action === 'network') {
-    console.warn('[data-sync] 远端不可达（网络/代理），已用本机数据启动——联网后重启自动同步。');
-  }
-
   const app = buildServer(store, existsSync(webDist) ? webDist : undefined);
   await app.listen({ port, host: '127.0.0.1' });
   console.log(`Report Studio 已启动：http://127.0.0.1:${port}（数据目录：${store.root}）`);
-
-  // 退出时：回推本机项目数据
-  const shutdown = () => {
-    const r = dataSync(process.cwd());
-    if (!r.ok && r.action === 'conflict') {
-      console.warn(`[data-sync] 退出回推冲突，已保留本机数据：${r.detail}`);
-    } else if (!r.ok && r.action === 'network') {
-      console.warn('[data-sync] 远端不可达，本次数据保留在本机，联网后启动时会自动同步。');
-    }
-    process.exit(0);
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
 }
 
 main().catch((e) => {

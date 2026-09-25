@@ -1,6 +1,7 @@
 #!/bin/bash
 # 一键启动 Report Studio（双端通用：macmini / MacBook）
-# 流程：同步项目数据（含编审状态/修订/材料，随仓库入库）→ 起本机服务 → 就绪后打开浏览器；退出时回推数据。
+# 流程：装依赖 → 起本机服务 → 就绪后打开浏览器。
+# 双机同步：数据随仓库走 git——变动端 git-commit-push 到 GitHub，另一端手动触发 git-pull-sync 拉取（拉取前先停本服务）。
 set -e
 cd "$(dirname "$0")"
 
@@ -14,14 +15,6 @@ if need_deps; then
   npm install --no-audit --no-fund
 fi
 
-echo "[同步] 拉取双端项目数据…"
-npm run data-sync --silent || echo "[同步] 跳过（无变更或无网络）"
-
-# 同步可能拉来新代码:依赖/后端/界面按时间戳补齐重建
-if need_deps; then
-  echo "[依赖] 同步后更新依赖…"
-  npm install --no-audit --no-fund
-fi
 if [ ! -f dist/server/start.js ] || [ -n "$(find src -newer dist/server/start.js -print -quit 2>/dev/null)" ]; then
   echo "[构建] 构建后端…"
   npx tsc
@@ -33,9 +26,6 @@ fi
 
 cleanup() {
   kill "$SERVER_PID" 2>/dev/null || true
-  echo ""
-  echo "[同步] 回推本机项目数据…"
-  npm run data-sync --silent || echo "[同步] 回推跳过"
 }
 trap cleanup EXIT
 
