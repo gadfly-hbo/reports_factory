@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { TopBar } from './TopBar';
 import { StatusBar } from './StatusBar';
 import { Palette } from './Palette';
 import { ProjectDetailProvider } from '../state/projectDetail';
@@ -41,6 +42,7 @@ export function AppShell() {
       >
         跳到主工作区
       </a>
+      <TopBar />
       <div className={appCls}>
         <Sidebar />
         <button

@@ -14,7 +14,7 @@ export function StageBar({ stage }: { stage: StageKey }) {
   const d = p.detail;
   const hasMaterials = (d?.sources.length ?? 0) > 0;
   const hasSpec = d?.hasSpec ?? false;
-  // 阶段解锁:大纲需材料;组装/检查/导出需已组装 spec
+  // 阶段解锁:编审需材料;组装/检查/导出需已组装 spec
   const unlocked: Record<StageKey, boolean> = {
     materials: true,
     outline: hasMaterials,
@@ -29,15 +29,17 @@ export function StageBar({ stage }: { stage: StageKey }) {
     if (k === 'check') return hasSpec;
     return (d?.exports.length ?? 0) > 0;
   };
+  const currentIdx = STAGES.findIndex((s) => s.key === stage);
 
   return (
     <div className="stagebar" role="navigation" aria-label="制作阶段">
       <ol className="stages">
-        {STAGES.map((s) => {
+        {STAGES.map((s, i) => {
+          // done 只标记当前阶段之前已到达的阶段;之后已解锁未完成的保持默认灰字(契约三态)
           const cls = [
             'stage',
             stage === s.key ? 'active' : '',
-            !unlocked[s.key] ? 'locked' : reached(s.key) && stage !== s.key ? 'done' : '',
+            !unlocked[s.key] ? 'locked' : reached(s.key) && i < currentIdx ? 'done' : '',
           ].filter(Boolean).join(' ');
           return (
             <li key={s.key}>

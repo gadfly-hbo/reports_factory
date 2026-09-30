@@ -43,8 +43,8 @@ export function StatusBar() {
               <span className="seg">编审:{EDITORIAL_STATUS_LABEL[ed.status] ?? ed.status}</span>
               <span className="sep">·</span>
               {/* 内容批准(G1)与发布确认(G2)分开展示(§13.3) */}
-              <span className="seg" style={{ color: ed.g1 ? 'var(--ok)' : 'var(--muted)' }}>G1 {ed.g1 ? '✓' : '…'}</span>
-              <span className="seg" style={{ color: ed.g2 ? 'var(--ok)' : 'var(--muted)' }}>G2 {ed.g2 ? '✓' : '…'}</span>
+              <span className="seg" style={{ color: ed.g1 ? 'var(--ok)' : 'var(--text-3)' }}>G1 {ed.g1 ? '✓' : '…'}</span>
+              <span className="seg" style={{ color: ed.g2 ? 'var(--ok)' : 'var(--text-3)' }}>G2 {ed.g2 ? '✓' : '…'}</span>
               {ed.pending_pages > 0 && (
                 <span className="seg" style={{ color: 'var(--fail)' }}>待复核 {ed.pending_pages} 页</span>
               )}

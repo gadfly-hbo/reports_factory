@@ -232,11 +232,12 @@ export class WorkspaceStore {
     await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(records, null, 2));
   }
 
-  async createProject(input: { title: string; purpose?: string }): Promise<Project> {
+  async createProject(input: { title: string; purpose?: string; brand?: Project['brand'] }): Promise<Project> {
     const project = ProjectSchema.parse({
       project_id: shortId('proj'),
       title: input.title,
       purpose: input.purpose,
+      brand: input.brand,
       created_at: nowIso(),
       updated_at: nowIso(),
     });

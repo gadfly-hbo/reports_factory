@@ -24,7 +24,11 @@ if (!ready) { console.error('服务未就绪'); server.kill(); process.exit(1); 
 const base = `http://127.0.0.1:${PORT}`;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-const shot = (name) => page.screenshot({ path: `${OUT}/${name}.png` });
+// 截图前把主工作区滚回顶部:点击动作的自动滚动会把卡片顶到粘性阶段条下沿,造成碎片状残影
+const shot = async (name) => {
+  await page.evaluate(() => document.getElementById('main')?.scrollTo(0, 0));
+  await page.screenshot({ path: `${OUT}/${name}.png` });
+};
 
 try {
   await page.goto(base);
@@ -45,13 +49,13 @@ try {
   await page.waitForSelector('table.tbl tr:has-text("sales-conflict.csv")');
   await shot('03-materials');
 
-  await page.click('.stage:has-text("大纲")');
-  await page.click('button:has-text("生成大纲")');
+  await page.click('.stage:has-text("编审")');
+  await page.click('button:has-text("生成蓝图")');
   await page.waitForSelector('.outline-page');
   await sleep(3500); // 等 toast 消散再截
   await shot('04-outline');
 
-  await page.click('button:has-text("确认大纲")');
+  await page.click('button:has-text("确认蓝图")');
   await page.waitForSelector('.preview-frame');
   await sleep(900); // 预览 iframe 渲染
   await shot('05-compose');

@@ -13,3 +13,6 @@ export const BrandConfigSchema = z.object({
   font_name: z.string().min(1).optional(),
 });
 export type BrandConfig = z.infer<typeof BrandConfigSchema>;
+
+/** 新项目默认品牌:JuanerAI Xanthil 橘 accent(对齐全局设计契约,替代旧青绿默认) */
+export const DEFAULT_BRAND: BrandConfig = { primary: '#e8643a', accent: '#bf4927' };

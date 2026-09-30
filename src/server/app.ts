@@ -26,6 +26,7 @@ import {
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
 import { ZodError } from 'zod';
+import { DEFAULT_BRAND } from '../schema/brand.js';
 import { chainFromEnv } from '../model/client.js';
 import { hasApiKey, modelChainAvailable } from '../model/pi-transport.js';
 
@@ -55,7 +56,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.post('/api/projects', async (req, reply) => {
     const body = parseBody(CreateProjectRequestSchema, req.body);
-    const project = await store.createProject({ title: body.title, purpose: body.purpose });
+    const project = await store.createProject({ title: body.title, purpose: body.purpose, brand: { ...DEFAULT_BRAND } });
     if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
     return { project };
   });

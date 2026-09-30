@@ -15,14 +15,6 @@ export function Sidebar() {
 
   return (
     <nav className="sidebar" aria-label="项目与阶段导航">
-      <div className="sb-brand">
-        <div className="mark" aria-hidden="true">报</div>
-        <div>
-          <strong>Report Studio</strong>
-          <small>报告工厂 · 材料到交付</small>
-        </div>
-      </div>
-
       <div className="sb-top">
         <button className="sb-search" type="button" onClick={ui.openPalette}>
           <span aria-hidden="true">⌕</span> 搜索项目与命令 <kbd>⌘K</kbd>

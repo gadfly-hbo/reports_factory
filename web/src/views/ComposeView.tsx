@@ -53,8 +53,8 @@ export function ComposeView() {
 
   const currentBrand = d.project.brand;
   const draft = brand ?? {
-    primary: currentBrand?.primary ?? '#0f766e',
-    accent: currentBrand?.accent ?? '#155e75',
+    primary: currentBrand?.primary ?? '#e8643a',
+    accent: currentBrand?.accent ?? '#bf4927',
     logo: currentBrand?.logo_data_url,
     font: currentBrand?.font_name,
   };
