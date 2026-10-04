@@ -272,9 +272,9 @@ export function EditorialView() {
                   {aiBusy ? 'AI 分析中…' : 'AI 推荐取舍(授权摘要)'}
                 </button>
               )}
-              <button className="btn btn-primary" type="button" onClick={doAdopt}>采纳编排</button>
               {recSource && <span className="fine">当前建议来源:{recSource === 'ai' ? 'AI 推荐' : '规则推荐'}</span>}
               <span className="fine">先推荐再调整例外;「不采用」有粘性,不会在下次生成时自动回正文。</span>
+              <button className="btn btn-primary" type="button" onClick={doAdopt}>采纳编排</button>
             </div>
             {findings.map((f) => (
               <div className="finding-card" key={f.logical_key} data-testid="finding-card">

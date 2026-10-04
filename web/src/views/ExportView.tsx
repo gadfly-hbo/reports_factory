@@ -62,6 +62,12 @@ export function ExportView() {
           )}
         </div>
         <div className="actions">
+          <button className="btn" type="button" disabled={p.busy === 'export'} onClick={async () => setLast(await p.doExport({ mode: 'draft', exportScope: scope }))}>
+            草稿导出(带未解决标识)
+          </button>
+          <button className="btn" type="button" disabled={p.busy === 'export'} onClick={async () => setLast(await p.doExport({ mode: 'formal', deliverable: 'executive_summary' }))}>
+            导出一页摘要(PPTX/PDF/HTML)
+          </button>
           <button
             className="btn btn-primary"
             type="button"
@@ -75,12 +81,6 @@ export function ExportView() {
             }))}
           >
             {p.busy === 'export' ? '导出中…' : '正式导出'}
-          </button>
-          <button className="btn" type="button" disabled={p.busy === 'export'} onClick={async () => setLast(await p.doExport({ mode: 'draft', exportScope: scope }))}>
-            草稿导出(带未解决标识)
-          </button>
-          <button className="btn" type="button" disabled={p.busy === 'export'} onClick={async () => setLast(await p.doExport({ mode: 'formal', deliverable: 'executive_summary' }))}>
-            导出一页摘要(PPTX/PDF/HTML)
           </button>
         </div>
         {last && !last.allowed && <div className="notice fail" style={{ marginTop: 10 }}>{last.reason}</div>}

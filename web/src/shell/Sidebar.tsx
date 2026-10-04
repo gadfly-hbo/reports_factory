@@ -2,7 +2,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useProjects } from '../state/projects';
 import { useUI } from '../state/ui';
-import { PROJECT_STAGE_LABEL, STAGES } from '../state/types';
+import { isStageKey, PROJECT_STAGE_LABEL, STAGES, STAGE_TITLE } from '../state/types';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -32,6 +32,11 @@ export function Sidebar() {
           <ul className="sb-list" role="list">
             {projects.map((p) => {
               const isCurrent = p.project_id === currentId;
+              // 当前项目以路由阶段为准(STAGE_TITLE 与面包屑同一套五阶段词汇)——
+              // 列表数据可能滞后于本会话操作,且 PROJECT_STAGE_LABEL 是后端粗阶段词汇,与路由阶段不一致
+              const meta = isCurrent && currentStage && isStageKey(currentStage)
+                ? STAGE_TITLE[currentStage]
+                : (PROJECT_STAGE_LABEL[p.stage] ?? p.stage);
               return (
                 <li key={p.project_id}>
                   <div
@@ -42,7 +47,7 @@ export function Sidebar() {
                     onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/project/${p.project_id}`); }}
                   >
                     <span className="sb-label" title={p.title}>{p.title}</span>
-                    <span className="sb-meta">{PROJECT_STAGE_LABEL[p.stage] ?? p.stage}</span>
+                    <span className="sb-meta">{meta}</span>
                   </div>
                 </li>
               );
@@ -74,7 +79,6 @@ export function Sidebar() {
       )}
 
       <div className="sb-foot">
-        <span className="pill pill-offline" title="仅在本机运行(127.0.0.1),材料默认不出本机">● 本机服务 · 本地优先</span>
         <button
           className={`sb-item${location.pathname === '/settings' ? ' active' : ''}`}
           type="button"
