@@ -14,5 +14,5 @@ export const BrandConfigSchema = z.object({
 });
 export type BrandConfig = z.infer<typeof BrandConfigSchema>;
 
-/** 新项目默认品牌:JuanerAI Xanthil 橘 accent(对齐全局设计契约,替代旧青绿默认) */
-export const DEFAULT_BRAND: BrandConfig = { primary: '#e8643a', accent: '#bf4927' };
+/** 新项目默认品牌:与工作台 UI accent 同源(系统蓝图 v4.2 铁锈橘) */
+export const DEFAULT_BRAND: BrandConfig = { primary: '#b44626', accent: '#8f3820' };

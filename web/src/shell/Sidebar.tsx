@@ -69,6 +69,7 @@ export function Sidebar() {
                     type="button"
                     onClick={() => navigate(`/project/${currentId}/${s.key}`)}
                   >
+                    <span className="sb-num" aria-hidden="true">{String(s.n).padStart(2, '0')}</span>
                     <span className="sb-label">{s.title}</span>
                   </button>
                 </li>

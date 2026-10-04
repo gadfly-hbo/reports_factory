@@ -29,6 +29,16 @@ export function ExportView() {
         正式定稿需阻断项清零。
       </p>
 
+      {/* 贯穿全流程的发布原则(蓝图 focusbar 形态):闸门由系统守,人只做关键决策 */}
+      <div className="focusbar" role="note" aria-label="发布原则">
+        <strong>有据、不越界、可检查</strong>
+        <span className="focus-chip">G1 内容批准</span>
+        <span className="focus-chip">G2 发布确认</span>
+        <span className="focus-chip">外发单独授权</span>
+        <span className="focus-chip">本机边界常驻</span>
+        <small>系统守住边界与闸门,并不等于让用户逐个批准每一步。</small>
+      </div>
+
       <div className="card">
         <div className="card-h">导出选项</div>
         <div className="fld-row">
