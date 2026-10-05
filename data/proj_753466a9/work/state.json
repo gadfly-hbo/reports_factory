@@ -1,0 +1,406 @@
+{
+  "brief": {
+    "audience": "会员负责人",
+    "purpose": "会员运营经验分享",
+    "page_budget": 20,
+    "language": "zh-CN",
+    "deliverable_type": "meeting_deck",
+    "core_question": "",
+    "non_goals": [],
+    "required_boundaries": []
+  },
+  "outline": {
+    "pages": [
+      {
+        "page_id": "page_01",
+        "type": "cover",
+        "headline": "会员运营经验分享（会员负责人）",
+        "intent": "info",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "开场：明确本次待决事项与边界",
+          "core_message": ""
+        }
+      },
+      {
+        "page_id": "page_02",
+        "type": "summary",
+        "headline": "待补充：尚无已确认的主要发现",
+        "intent": "conclusion",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [
+          "材料中未找到明确的结论标记（## 结论），请补充材料或手动填写"
+        ],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "结论：呈现主线关键发现"
+        }
+      },
+      {
+        "page_id": "page_03",
+        "type": "metrics_overview",
+        "headline": "待补充：尚无汇总表格",
+        "intent": "evidence",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [
+          "缺少汇总表（CSV）材料，无法生成指标总览"
+        ],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "证据：关键指标总览"
+        }
+      },
+      {
+        "page_id": "page_04",
+        "type": "trend",
+        "headline": "待补充：尚无趋势数据",
+        "intent": "evidence",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [
+          "缺少时间序列表格，无法生成趋势页"
+        ],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "证据：趋势与变化方向"
+        }
+      },
+      {
+        "page_id": "page_05",
+        "type": "issue_breakdown",
+        "headline": "待补充：尚无推断类材料",
+        "intent": "conclusion",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [
+          "材料中未找到推断标记（## 推断）"
+        ],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "限制：可能原因与不确定性"
+        }
+      },
+      {
+        "page_id": "page_06",
+        "type": "option_comparison",
+        "headline": "方案讨论：基于以上验证与对标",
+        "intent": "decision",
+        "claim_refs": [
+          "claim_src_01afdac6_1",
+          "claim_src_01afdac6_2",
+          "claim_src_01afdac6_3"
+        ],
+        "table_ids": [],
+        "gap_notes": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "决策：方案与适用条件比较"
+        }
+      },
+      {
+        "page_id": "page_07",
+        "type": "action_items",
+        "headline": "建议行动：基于以上验证与对标",
+        "intent": "decision",
+        "claim_refs": [
+          "claim_src_01afdac6_1",
+          "claim_src_01afdac6_2",
+          "claim_src_01afdac6_3"
+        ],
+        "table_ids": [],
+        "gap_notes": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "决策：待决行动与停止条件"
+        }
+      },
+      {
+        "page_id": "page_08",
+        "type": "evidence_appendix",
+        "headline": "附录：口径、来源与说明",
+        "intent": "info",
+        "claim_refs": [],
+        "table_ids": [],
+        "gap_notes": [
+          "——基于《关于森马会员私域的几点思考》框架的验证、扩展与行业对标：**研究说明**：本报告以原创文档《关于森马会员私域的几点思考（长文版）》的「四条路」（CLV 驱动、VOC 驱动、一线员工忠诚驱动、增长黑客驱动）为骨架，结合 2025–2026 年最新行业数据与标杆案例，对框架进行逐路径验证、补充量化证据、识别框架缺口，并对服饰行业会员私域进行专项对标。研究风格以实战经营为导向，所有关键数据均标注来源与口径。研究完成时间：2026 年 10 月。",
+          "——基于《关于森马会员私域的几点思考》框架的验证、扩展与行业对标：---",
+          "执行摘要：**核心结论一：原文档的「四条路」框架经受住了 2025–2026 年行业数据的检验，且每一条都比文档写作时更加重要。** 私域电商交易规模 2025 年达到 **6.4 万亿元**、同比增长 **28%**，用户规模 6.8 亿，行业已从「流量红利」转入「用户经营+深度转化」的成熟爆发期 ([网经社](https://www.100ec.cn/detail--6659353.html))。与此同时，公域投流成本持续恶化：2026 年第一季度信息流广告 CPM 同比上涨 **28%–32%**，部分行业涨幅超过 35%，主流平台 CPM 较三年前上涨近 **50%** ([东辰科技](https://www.dcweb.com.cn/news_1631.html), [东辰科技](https://www.dcweb.com.cn/news_1319.html))。文档「CPM 约等于 0 才可持续」的流量公式，正在被行业成本数据反向验证。",
+          "执行摘要：**核心结论二：CLV 路径的行业证据比文档中更强。** 华住会会员突破 **3 亿**、会员预订间夜占比 **74%**；泡泡玛特会员贡献销售占比 **93.7%**、会员复购率 **55.7%**；Costco 执行会员贡献全球净销售额的 **73.6%** ([雪球](https://xueqiu.com/5809541025/361975910), [泡泡玛特年报](https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0325/2026032500286_c.pdf), [SEC](https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/cost-20250831.htm))。头部企业的经营重心已完成从「渠道分销」到「会员资产财务化管理」的切换。",
+          "执行摘要：**核心结论三：「一线员工忠诚驱动」是四条路径中被行业最低估、财务证据最硬的一条。** 胖东来 2025 年员工流失率仅 **1.05%**，员工税后月薪近万元、店长平均月薪 7.8 万元，支撑起 235 亿元销售额与 38.7% 的同比增长 ([联商网](http://m.linkshop.com/article/news/542140), [潇湘晨报](https://www.toutiao.com/article/7606200381621748239/))；而零售一线导购群体年流失率高达 **40% 以上**——文档记录的森马线下导购 50% 年流失率，恰恰是会员私域体系「建了也白建」的第一性原因。"
+        ],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "附录：口径、来源与补充说明"
+        }
+      }
+    ],
+    "open_questions": []
+  },
+  "spec": {
+    "schema_version": "1.0",
+    "report_id": "report_proj_753466a9",
+    "revision_id": "rev_001",
+    "brief": {
+      "audience": "会员负责人",
+      "purpose": "会员运营经验分享",
+      "page_budget": 20,
+      "language": "zh-CN",
+      "deliverable_type": "meeting_deck",
+      "core_question": "",
+      "non_goals": [],
+      "required_boundaries": []
+    },
+    "source_snapshot": [
+      {
+        "source_id": "src_01afdac6",
+        "version": "v1",
+        "is_demo": true
+      }
+    ],
+    "metrics": [],
+    "claims": [
+      {
+        "claim_id": "claim_src_01afdac6_1",
+        "logical_key": "source:local:会员私域运营深度研究报告::c1",
+        "kind": "recommendation",
+        "text": "基于以上验证与对标，以下五个动作按「投入小、证据硬、杠杆大」排序，可作为原文档「干法建议」部分的补充。**动作一：把会员贡献占比设为公司级北极星指标，目标 50%+。** 行业均值 35.2%、服饰头部 50%–70%、泡泡玛特 93.7%——森马当前水平未公开披露，但以销售费用率 28% 推算，流量结构仍以公域买量为主；建议按「会员资产（CE）=平均 CLV×会员数量」的公式做年度财务测算并进入经营分析报告，让会员资产像库存一样被盘账 ([网经社](https://www.100ec.cn/detail--6659353.html))。**动作二：重启并升级「百万导购」为「导购经营者计划」。** 把海底捞师徒制的利益逻辑移植到加盟体系：门店注册的企微会员，其复购佣金终身归属该门店；店长收入与会员复购挂钩而非仅与流水挂钩。对标安踏（50% 会员来自门店引流）与胖东来（流失率 1.05%），导购流失率每降 10 个百分点，私域资产的存续率就接近翻倍 ([亿邦动力](https://m.ebrun.com/526443.html), [联商网](http://m.linkshop.com/article/news/542140))。**动作三：给客服「按灯权」，建立童装安全客诉的强制响应 SOP。** 单一 SKU 同类安全投诉达到阈值即自动触发下架评审，客诉原声周度通晒至商品/供应链负责人——用制度补上「水杯事件」暴露的缺口，成本几乎为零。**动作四：设立「增长黑客小组」，把微信小店新场景当蓝海测试田。** 送礼物/一起买/点赞买的社交裂变场景正处于两年红利窗口（对标当年旺旺自动化），建议以巴拉巴拉为试点跑通「礼物场景×童装（母婴礼赠天然适配）」的闭环。**动作五：用企业微信+DeepSeek 搭建最小 AI VOC 中台。** 先把全渠道评论接入智能表格做情感打标与异常预警（童装安全舆情优先），再逐步扩展到 AI 客销——目标一年内把质量类舆情平均发现时间从「周」压缩到「小时」。",
+        "metric_refs": [],
+        "evidence_refs": [
+          "ev_src_01afdac6_1"
+        ],
+        "verification_state": "unverified",
+        "source_truth_verified": false
+      },
+      {
+        "claim_id": "claim_src_01afdac6_2",
+        "logical_key": "source:local:会员私域运营深度研究报告::c2",
+        "kind": "recommendation",
+        "text": "这五个动作分别对应文档「道术器人」的四层：动作一是「道」（以 CLV 定义增长），动作二、三是「人」（向下负责的组织转型），动作四、五是「术与器」（顺势创新与持续投入）。它们的共同特征是都不依赖大预算先行，而是先把「机制」立起来——这与胖东来、海底捞、美捷步的全部经验一致：**会员私域的护城河从来不是系统采购清单，而是组织里谁有权为谁说话**。",
+        "metric_refs": [],
+        "evidence_refs": [
+          "ev_src_01afdac6_2"
+        ],
+        "verification_state": "unverified",
+        "source_truth_verified": false
+      },
+      {
+        "claim_id": "claim_src_01afdac6_3",
+        "logical_key": "source:local:会员私域运营深度研究报告::c3",
+        "kind": "recommendation",
+        "text": "---",
+        "metric_refs": [],
+        "evidence_refs": [
+          "ev_src_01afdac6_3"
+        ],
+        "verification_state": "unverified",
+        "source_truth_verified": false
+      }
+    ],
+    "pages": [
+      {
+        "page_id": "page_01",
+        "type": "cover",
+        "headline": "会员运营经验分享（会员负责人）",
+        "subtitle": "会员运营经验分享",
+        "meta": {
+          "audience": "会员负责人",
+          "version": "草稿"
+        },
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "required_note": "演示数据，非真实经营结论",
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "开场：明确本次待决事项与边界",
+          "core_message": ""
+        }
+      },
+      {
+        "page_id": "page_02",
+        "type": "summary",
+        "headline": "待补充：尚无已确认的主要发现",
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "结论：呈现主线关键发现"
+        },
+        "bullets": [],
+        "required_note": "材料中未找到明确的结论标记（## 结论），请补充材料或手动填写"
+      },
+      {
+        "page_id": "page_03",
+        "type": "metrics_overview",
+        "headline": "待补充：尚无汇总表格",
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "required_note": "缺少汇总表（CSV）材料，无法生成指标总览",
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "证据：关键指标总览"
+        }
+      },
+      {
+        "page_id": "page_04",
+        "type": "trend",
+        "headline": "待补充：尚无趋势数据",
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "required_note": "缺少时间序列表格，无法生成趋势页",
+        "layout_id": "headline_chart_note",
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "证据：趋势与变化方向"
+        }
+      },
+      {
+        "page_id": "page_05",
+        "type": "issue_breakdown",
+        "headline": "待补充：尚无推断类材料",
+        "bullets": [],
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "required_note": "材料中未找到推断标记（## 推断）",
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "限制：可能原因与不确定性"
+        }
+      },
+      {
+        "page_id": "page_06",
+        "type": "option_comparison",
+        "headline": "方案讨论：基于以上验证与对标",
+        "bullets": [
+          {
+            "label": "方案",
+            "text": "基于以上验证与对标，以下五个动作按「投入小、证据硬、杠杆大」排序，可作为原文档「干法建议」部分的补充。**动作一：把会员贡献占比设为公司级北极星指标，目标 50%+。** 行业均值 35.2%、服饰头部 50%–70%、泡泡玛特 93.7%——森马当前水平未公开披露，但以销售费用率 28% 推算，流量结构仍以公域买量为主；建议按「会员资产（CE）=平均 CLV×会员数量」的公式做年度财务测算并进入经营分析报告，让会员资产像库存一样被盘账 ([网经社](https://www.100ec.cn/detail--6659353.html))。**动作二：重启并升级「百万导购」为「导购经营者计划」。** 把海底捞师徒制的利益逻辑移植到加盟体系：门店注册的企微会员，其复购佣金终身归属该门店；店长收入与会员复购挂钩而非仅与流水挂钩。对标安踏（50% 会员来自门店引流）与胖东来（流失率 1.05%），导购流失率每降 10 个百分点，私域资产的存续率就接近翻倍 ([亿邦动力](https://m.ebrun.com/526443.html), [联商网](http://m.linkshop.com/article/news/542140))。**动作三：给客服「按灯权」，建立童装安全客诉的强制响应 SOP。** 单一 SKU 同类安全投诉达到阈值即自动触发下架评审，客诉原声周度通晒至商品/供应链负责人——用制度补上「水杯事件」暴露的缺口，成本几乎为零。**动作四：设立「增长黑客小组」，把微信小店新场景当蓝海测试田。** 送礼物/一起买/点赞买的社交裂变场景正处于两年红利窗口（对标当年旺旺自动化），建议以巴拉巴拉为试点跑通「礼物场景×童装（母婴礼赠天然适配）」的闭环。**动作五：用企业微信+DeepSeek 搭建最小 AI VOC 中台。** 先把全渠道评论接入智能表格做情感打标与异常预警（童装安全舆情优先），再逐步扩展到 AI 客销——目标一年内把质量类舆情平均发现时间从「周」压缩到「小时」。",
+            "claim_ref": "claim_src_01afdac6_1",
+            "status": "unverified"
+          },
+          {
+            "label": "方案",
+            "text": "这五个动作分别对应文档「道术器人」的四层：动作一是「道」（以 CLV 定义增长），动作二、三是「人」（向下负责的组织转型），动作四、五是「术与器」（顺势创新与持续投入）。它们的共同特征是都不依赖大预算先行，而是先把「机制」立起来——这与胖东来、海底捞、美捷步的全部经验一致：**会员私域的护城河从来不是系统采购清单，而是组织里谁有权为谁说话**。",
+            "claim_ref": "claim_src_01afdac6_2",
+            "status": "unverified"
+          },
+          {
+            "label": "方案",
+            "text": "---",
+            "claim_ref": "claim_src_01afdac6_3",
+            "status": "unverified"
+          }
+        ],
+        "claim_refs": [
+          "claim_src_01afdac6_1",
+          "claim_src_01afdac6_2",
+          "claim_src_01afdac6_3"
+        ],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "决策：方案与适用条件比较"
+        }
+      },
+      {
+        "page_id": "page_07",
+        "type": "action_items",
+        "headline": "建议行动：基于以上验证与对标",
+        "table": {
+          "columns": [
+            {
+              "key": "item",
+              "label": "事项"
+            },
+            {
+              "key": "owner",
+              "label": "责任人"
+            },
+            {
+              "key": "due",
+              "label": "时间"
+            },
+            {
+              "key": "status",
+              "label": "状态"
+            }
+          ],
+          "rows": [
+            {
+              "key": "claim_src_01afdac6_1",
+              "cells": [
+                "基于以上验证与对标，以下五个动作按「投入小、证据硬、杠杆大」排序，可作为原文档「干法建议」部分的补充。**动作一：把会员贡献占比设为公司级北极星指标，目标 50%+。** 行业均值 35.2%、服饰头部 50%–70%、泡泡玛特 93.7%——森马当前水平未公开披露，但以销售费用率 28% 推算，流量结构仍以公域买量为主；建议按「会员资产（CE）=平均 CLV×会员数量」的公式做年度财务测算并进入经营分析报告，让会员资产像库存一样被盘账 ([网经社](https://www.100ec.cn/detail--6659353.html))。**动作二：重启并升级「百万导购」为「导购经营者计划」。** 把海底捞师徒制的利益逻辑移植到加盟体系：门店注册的企微会员，其复购佣金终身归属该门店；店长收入与会员复购挂钩而非仅与流水挂钩。对标安踏（50% 会员来自门店引流）与胖东来（流失率 1.05%），导购流失率每降 10 个百分点，私域资产的存续率就接近翻倍 ([亿邦动力](https://m.ebrun.com/526443.html), [联商网](http://m.linkshop.com/article/news/542140))。**动作三：给客服「按灯权」，建立童装安全客诉的强制响应 SOP。** 单一 SKU 同类安全投诉达到阈值即自动触发下架评审，客诉原声周度通晒至商品/供应链负责人——用制度补上「水杯事件」暴露的缺口，成本几乎为零。**动作四：设立「增长黑客小组」，把微信小店新场景当蓝海测试田。** 送礼物/一起买/点赞买的社交裂变场景正处于两年红利窗口（对标当年旺旺自动化），建议以巴拉巴拉为试点跑通「礼物场景×童装（母婴礼赠天然适配）」的闭环。**动作五：用企业微信+DeepSeek 搭建最小 AI VOC 中台。** 先把全渠道评论接入智能表格做情感打标与异常预警（童装安全舆情优先），再逐步扩展到 AI 客销——目标一年内把质量类舆情平均发现时间从「周」压缩到「小时」。",
+                "待定",
+                "待确认",
+                "待批准"
+              ]
+            },
+            {
+              "key": "claim_src_01afdac6_2",
+              "cells": [
+                "这五个动作分别对应文档「道术器人」的四层：动作一是「道」（以 CLV 定义增长），动作二、三是「人」（向下负责的组织转型），动作四、五是「术与器」（顺势创新与持续投入）。它们的共同特征是都不依赖大预算先行，而是先把「机制」立起来——这与胖东来、海底捞、美捷步的全部经验一致：**会员私域的护城河从来不是系统采购清单，而是组织里谁有权为谁说话**。",
+                "待定",
+                "待确认",
+                "待批准"
+              ]
+            },
+            {
+              "key": "claim_src_01afdac6_3",
+              "cells": [
+                "---",
+                "待定",
+                "待确认",
+                "待批准"
+              ]
+            }
+          ]
+        },
+        "claim_refs": [
+          "claim_src_01afdac6_1",
+          "claim_src_01afdac6_2",
+          "claim_src_01afdac6_3"
+        ],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "决策：待决行动与停止条件"
+        }
+      },
+      {
+        "page_id": "page_08",
+        "type": "evidence_appendix",
+        "headline": "附录：口径、来源与说明",
+        "bullets": [
+          {
+            "label": "来源",
+            "text": "src_01afdac6@v1（演示）"
+          }
+        ],
+        "claim_refs": [],
+        "metric_refs": [],
+        "evidence_refs": [],
+        "required_note": "演示数据，非真实经营结论",
+        "locked": false,
+        "blueprint": {
+          "page_purpose": "附录：口径、来源与补充说明"
+        }
+      }
+    ],
+    "export_policy": {
+      "freeze_revision": true,
+      "include_source_notes": true,
+      "external_share_allowed": false
+    }
+  }
+}

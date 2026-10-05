@@ -1,0 +1,36 @@
+{
+  "export_id": "exp_006",
+  "revision_id": "rev_004",
+  "format": "pptx",
+  "artifact_path": "exports/exp_006.pptx",
+  "artifact_hash": "eae2fc75a1f4f1d928108a38ec1478d3eb4b73f546dfe7253ca8f17f2f64f120",
+  "checks": {
+    "blockers": 0,
+    "warnings": 3,
+    "issues": [
+      {
+        "id": "claim_unverified",
+        "severity": "warning",
+        "object_ref": "claim_src_01afdac6_1",
+        "message": "陈述「基于以上验证与对标，以下五个动作按「投入小、证据…」为未核实状态"
+      },
+      {
+        "id": "claim_unverified",
+        "severity": "warning",
+        "object_ref": "claim_src_01afdac6_2",
+        "message": "陈述「这五个动作分别对应文档「道术器人」的四层：动作一…」为未核实状态"
+      },
+      {
+        "id": "claim_unverified",
+        "severity": "warning",
+        "object_ref": "claim_src_01afdac6_3",
+        "message": "陈述「---…」为未核实状态"
+      }
+    ]
+  },
+  "is_draft": false,
+  "created_at": "2026-10-05T13:58:15.550Z",
+  "export_scope": "internal",
+  "privacy_report": null,
+  "delivery_status": "formal"
+}

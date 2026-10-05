@@ -1,0 +1,29 @@
+[
+  {
+    "proposal_id": "pr_08037964",
+    "report_id": "report_proj_753466a9",
+    "expected_revision": "rev_pending",
+    "op": {
+      "kind": "regenerate_page",
+      "page_id": "page_02"
+    },
+    "approved_scope": "content_rebuild",
+    "required_checks": [
+      "editorial_scope_drift",
+      "editorial_boundary_visibility",
+      "editorial_causal_overclaim"
+    ],
+    "changes": [
+      {
+        "object_id": "page_02",
+        "field": "content",
+        "before": "待补充：尚无已确认的主要发现",
+        "after": "待补充：尚无已确认的主要发现"
+      }
+    ],
+    "affected": [],
+    "state": "applied",
+    "created_at": "2026-10-05T13:57:07.323Z",
+    "applied_at": "2026-10-05T13:57:07.324Z"
+  }
+]

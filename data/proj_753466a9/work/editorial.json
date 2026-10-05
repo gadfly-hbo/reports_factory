@@ -1,0 +1,14 @@
+{
+  "status": "blueprint_review",
+  "brief": {
+    "audience": "会员负责人",
+    "purpose": "会员运营经验分享",
+    "page_budget": 20,
+    "language": "zh-CN",
+    "deliverable_type": "meeting_deck",
+    "core_question": "",
+    "non_goals": [],
+    "required_boundaries": []
+  },
+  "decisions": {}
+}
