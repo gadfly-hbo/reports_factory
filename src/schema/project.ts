@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BrandConfigSchema } from './brand.js';
+import { DEFAULT_TEMPLATE_ID } from './template.js';
 
 /** 项目与存储对象（proposal §9.1）：首期用结构化文件 + 轻量元数据，不建库。 */
 
@@ -26,6 +27,16 @@ export const ProjectSchema = z.object({
   privacy_policy: PrivacyPolicySchema.default('local_only'),
   stage: ProjectStageSchema.default('materials'),
   brand: BrandConfigSchema.optional(),
+  /** 报告模版引用（S1）；缺省回退经营复盘 deck */
+  template_id: z.string().min(1).default(DEFAULT_TEMPLATE_ID),
+  /** S5 项目级预算覆盖（三线：调用次数/墙钟秒/轮次；env 优先，见 model/budget.ts） */
+  budget: z
+    .object({
+      max_calls: z.number().int().positive().optional(),
+      max_wall_seconds: z.number().int().positive().optional(),
+      max_turns: z.number().int().positive().optional(),
+    })
+    .optional(),
 });
 
 export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'bundle']);

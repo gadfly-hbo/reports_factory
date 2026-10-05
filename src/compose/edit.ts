@@ -114,6 +114,32 @@ export function applyEdit(spec: ReportSpec, op: EditOp, ctx: Partial<AssembleCon
       if (effectiveLock(page, 'layout')) throw new EditRejectedError(`页面 ${op.page_id} 的版式已锁定`);
       return updatePage(spec, op.page_id, (p) => ({ ...p, layout_id: op.layout_id }));
     }
+    case 'delete_page': {
+      const page = findPage(spec, op.page_id);
+      if (spec.locks?.page_order) throw new EditRejectedError('报告页序已锁定（report locks.page_order）');
+      if (page.locked || anyContentLock(page)) throw new EditRejectedError(`页面 ${op.page_id} 已锁定，拒绝删除`);
+      if (spec.pages.length <= 1) throw new EditRejectedError('最后一页不可删除');
+      // 页 id 不重排（编辑稳定性）：删除只移除目标页
+      return { ...spec, pages: spec.pages.filter((p) => p.page_id !== op.page_id) };
+    }
+    case 'rewrite_page': {
+      // S6 整页重生成：替换 headline/bullets，body 仅在显式给出时替换（不静默清空）；
+      // 表格/图表/锁保留；bullet claim_ref 须在页 claim_refs 白名单内
+      const page = findPage(spec, op.page_id);
+      if (page.locked || anyContentLock(page)) throw new EditRejectedError(`页面 ${op.page_id} 已锁定，拒绝整页重写`);
+      const whitelist = new Set(page.claim_refs ?? []);
+      for (const b of op.bullets) {
+        if (b.claim_ref && !whitelist.has(b.claim_ref)) {
+          throw new EditRejectedError(`bullet claim_ref 不在页面白名单：${b.claim_ref}`);
+        }
+      }
+      return updatePage(spec, op.page_id, (p) => ({
+        ...p,
+        headline: op.headline,
+        ...(op.body !== undefined ? { body: op.body } : {}),
+        bullets: op.bullets.map((b) => ({ text: b.text, ...(b.label ? { label: b.label } : {}), ...(b.claim_ref ? { claim_ref: b.claim_ref } : {}) })),
+      }));
+    }
     case 'toggle_lock': {
       findPage(spec, op.page_id);
       return updatePage(spec, op.page_id, (p) => ({ ...p, locked: op.locked }));

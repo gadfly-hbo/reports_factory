@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { BrandConfig } from '../schema/brand.js';
-import type { Claim, ReportBrief, ReportSpec } from '../schema/report-spec.js';
+import type { Claim, PageType, ReportBrief, ReportSpec } from '../schema/report-spec.js';
 import type { SourceConflict, TableAsset, EvidenceRef } from '../schema/assets.js';
 import { EditorialStateSchema, type EditorialDecision, type EditorialState, type EditorialStatus, type EvidenceRequest, type FindingCard, type G1Approval, type Placement } from '../schema/editorial.js';
 import type { PagePlanItem, OutlineDraft } from '../model/gateway.js';
@@ -14,10 +14,13 @@ import { replayTransport, loadRecordings } from '../model/recording.js';
 import { aiComposeOutline } from '../model/ai-outline.js';
 import { aiRecommendPlacements } from '../model/ai-recommend.js';
 import { aiDraftProposal } from '../model/ai-proposal.js';
+import { aiPageRewrite } from '../model/ai-page.js';
 import { aiSemanticChecks, aiSuggestEvidenceGaps, type SemanticIssue } from '../model/ai-review.js';
 import { ModelUnavailableError } from '../model/client.js';
 import type { OutboundFindingCtx } from '../model/outbound.js';
 import type { Project } from '../schema/project.js';
+import { getTemplate } from '../schema/template.js';
+import { checkBudget, resolveBudget, type BudgetEntry } from '../model/budget.js';
 import type { PlacementRecommendation } from '../schema/editorial.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
@@ -51,6 +54,19 @@ interface WorkState {
   outline?: OutlineDraft;
   brief?: ReportBrief;
   spec?: ReportSpec;
+  /** S2 一键生成管线阶段 checkpoint（断点续跑判据） */
+  generation?: GenerationState;
+}
+
+export interface GenerationStage {
+  name: 'outline' | 'assemble' | 'checks';
+  status: 'pending' | 'done' | 'failed';
+  error?: string;
+}
+
+export interface GenerationState {
+  status: 'running' | 'done' | 'failed';
+  stages: GenerationStage[];
 }
 
 /** 发现卡片（F02）：组合视图，不另建事实对象；类型定义在 schema/editorial.ts */
@@ -78,8 +94,19 @@ export class WorkbenchService {
     return this._modelClient;
   }
 
-  /** 出站门统一入口：拒绝时记录零内容阻断审计（L1"并记录"）并抛 403（R2-4） */
+  /** 出站门统一入口：预算三线封顶（S5/KA-3）+ 批准检查；拒绝时记录零内容阻断审计并抛 403（R2-4） */
   private async gateOrThrow(projectId: string, mode: OutboundMode, stage: string): Promise<void> {
+    const log = await this.store.readOutboundLog(projectId);
+    const project = await this.store.getProject(projectId);
+    const budget = resolveBudget(project ?? {}, process.env);
+    const verdict = checkBudget(log as BudgetEntry[], budget, stage, Date.now());
+    if (!verdict.allowed) {
+      await this.store.appendOutboundLog(projectId, {
+        at: new Date().toISOString(), stage, provider: 'none', modelId: '', mode, itemCount: 0, bytes: 0, cost: 0, blocked: true,
+      });
+      await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'gate_decision', stage, status: 'budget_blocked', detail: { line: verdict.line } });
+      throw Object.assign(new Error(verdict.reason ?? '预算超帽'), { statusCode: 403, budgetLine: verdict.line });
+    }
     const gate = await this.checkOutbound(projectId, mode);
     if (!gate.allowed) {
       await this.store.appendOutboundLog(projectId, {
@@ -189,8 +216,19 @@ export class WorkbenchService {
 
   // ---- M5 出站治理：会话批准（进程内，重启失效=安全默认）+ 预览 + 出站门 ----
 
-  /** 会话批准集：`projectId|mode`（G2：不同发送类别分开批准） */
+  /** 会话批准缓存：`projectId|mode`（G2：不同发送类别分开批准）；持久化源在 workspace，重启不失效 */
   private readonly outboundApproved = new Set<string>();
+
+  private async isApproved(projectId: string, mode: OutboundMode): Promise<boolean> {
+    const key = approvalKey(projectId, mode);
+    if (this.outboundApproved.has(key)) return true;
+    const persisted = await this.store.readOutboundApprovals(projectId);
+    if (persisted[mode]) {
+      this.outboundApproved.add(key);
+      return true;
+    }
+    return false;
+  }
 
   /** 出站上下文：brief（工作区草稿）+ 资产清单 + 编审工作区已可见的发现（带 sensitive 标记，红队 K3） */
   private async outboundCtx(projectId: string): Promise<OutboundCtx> {
@@ -234,7 +272,7 @@ export class WorkbenchService {
   async checkOutbound(projectId: string, mode: OutboundMode): Promise<{ allowed: boolean; reason?: string }> {
     const policy = await this.policyFor(projectId);
     if (policy.disabled) return { allowed: false, reason: '项目隐私策略为仅本地，AI 出站已关闭' };
-    if (policy.needsApproval && !this.outboundApproved.has(approvalKey(projectId, mode))) {
+    if (policy.needsApproval && !(await this.isApproved(projectId, mode))) {
       return { allowed: false, reason: '本次会话尚未批准该类出站内容' };
     }
     return { allowed: true };
@@ -248,7 +286,7 @@ export class WorkbenchService {
     return {
       descriptor: built.descriptor,
       itemCount: built.itemCount,
-      policy: { needsApproval: policy.needsApproval, approved: this.outboundApproved.has(approvalKey(projectId, mode)) },
+      policy: { needsApproval: policy.needsApproval, approved: await this.isApproved(projectId, mode) },
       session: { calls: log.length, totalCost: log.reduce((s, e) => s + e.cost, 0) },
       /** 目标模型链（预览展示，R2-6） */
       target: chainFromEnv().map((c) => `${c.provider}/${c.modelId}`).join(' → '),
@@ -259,12 +297,18 @@ export class WorkbenchService {
     const policy = await this.policyFor(projectId);
     if (policy.disabled) throw Object.assign(new Error('项目隐私策略为仅本地，AI 出站已关闭'), { statusCode: 403 });
     this.outboundApproved.add(approvalKey(projectId, mode));
+    // 持久化（S5）：重启不失效、随数据同步；记录批准时间
+    const approvals = await this.store.readOutboundApprovals(projectId);
+    approvals[mode] = new Date().toISOString();
+    await this.store.writeOutboundApprovals(projectId, approvals);
+    await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'outbound_approval', stage: 'gate', status: 'approved', detail: { mode } });
   }
 
   /** capabilities（项目详情携带，驱动前端 AI 入口渲染） */
   async aiCapabilities(projectId: string) {
     const project = await this.store.getProject(projectId);
     const policy = resolveOutboundPolicy(project?.privacy_policy ?? 'local_only');
+    if (!policy.disabled) for (const m of OUTBOUND_MODES) await this.isApproved(projectId, m);
     return {
       ai: {
         enabled: !policy.disabled,
@@ -273,6 +317,7 @@ export class WorkbenchService {
         approvedModes: policy.disabled
           ? []
           : OUTBOUND_MODES.filter((m) => this.outboundApproved.has(approvalKey(projectId, m))),
+        // 持久化批准并入缓存后再算 approvedModes（重启后入口不重复弹窗）
       },
     };
   }
@@ -405,6 +450,81 @@ export class WorkbenchService {
     await this.advanceStatus(projectId, 'brief_draft');
     const work = await this.readWork(projectId);
     await this.writeWork(projectId, { ...work, brief });
+  }
+
+  /**
+   * S2 一键生成管线（PRD D2）：brief → outline → assemble → checks。
+   * 全确定性、零模型调用、禁 tool-call 循环；每阶段落 checkpoint，
+   * 失败停在断点并续跑从失败阶段继续（routine 关口程序放行，不消耗人）。
+   */
+  async generate(
+    projectId: string,
+    input: { audience: string; purpose: string },
+  ): Promise<GenerationState> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error(`project not found: ${projectId}`), { statusCode: 404 });
+    const template = getTemplate(project.template_id);
+    if (!template) throw new Error(`unknown template: ${project.template_id}`);
+
+    const brief: ReportBrief = {
+      audience: input.audience,
+      purpose: input.purpose,
+      page_budget: template.page_plan.length,
+      deliverable_type: template.deliverable_type,
+      language: 'zh-CN',
+    };
+
+    const work0 = await this.readWork(projectId);
+    const prior = work0.generation;
+    if (prior?.status === 'done') return prior;
+    // 断点续跑：已完成阶段沿用 checkpoint 不重跑；失败阶段重置重试
+    const stages: GenerationStage[] = (['outline', 'assemble', 'checks'] as const).map((name) => {
+      const p = prior?.stages.find((s) => s.name === name);
+      return p?.status === 'done' ? { name, status: 'done' } : { name, status: 'pending' };
+    });
+
+    const markFailed = async (name: GenerationStage['name'], error: string): Promise<GenerationState> => {
+      const failed: GenerationStage[] = stages.map((s) => (s.name === name ? { ...s, status: 'failed', error } : s));
+      const state: GenerationState = { status: 'failed', stages: failed };
+      await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: state });
+      return state;
+    };
+
+    const auditStage = async (stage: GenerationStage['name'], status: string, detail?: Record<string, unknown>) => {
+      await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'generation_stage', stage, status, detail });
+    };
+
+    try {
+      if (stages[0]!.status !== 'done') {
+        await auditStage('outline', 'started');
+        await this.saveBrief(projectId, brief);
+        await this.composeOutline(projectId, brief, { pagePlan: template.page_plan });
+        stages[0] = { name: 'outline', status: 'done' };
+        await auditStage('outline', 'done');
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: { status: 'running', stages } });
+      }
+      if (stages[1]!.status !== 'done') {
+        await auditStage('assemble', 'started');
+        await this.assemble(projectId);
+        stages[1] = { name: 'assemble', status: 'done' };
+        await auditStage('assemble', 'done');
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: { status: 'running', stages } });
+      }
+      if (stages[2]!.status !== 'done') {
+        await auditStage('checks', 'started');
+        await this.checks(projectId);
+        stages[2] = { name: 'checks', status: 'done' };
+        await auditStage('checks', 'done');
+      }
+      const done: GenerationState = { status: 'done', stages };
+      await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: done });
+      return done;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const failedAt = stages.find((s) => s.status !== 'done')?.name ?? 'checks';
+      await auditStage(failedAt, 'failed');
+      return markFailed(failedAt, msg);
+    }
   }
 
   /** 编审状态视图（状态机 + brief 草稿 + 当前报告决定 + G1/G2 记录 + 待复核更新） */
@@ -588,17 +708,18 @@ export class WorkbenchService {
   }
 
   /** 确定性大纲（模型经 PrivacyGate 包装：local_only 下也只有本地确定性通道可用） */
-  async composeOutline(projectId: string, brief: ReportBrief): Promise<OutlineDraft> {
+  async composeOutline(projectId: string, brief: ReportBrief, opts?: { pagePlan?: PageType[] }): Promise<OutlineDraft> {
     const { all } = await this.loadDerived(projectId);
     const conflicts = await this.getConflicts(projectId);
     const project = await this.store.getProject(projectId);
     const gateway = new PrivacyGate(createDeterministicGateway(), {
       policy: () => project?.privacy_policy ?? 'local_only',
     });
+    // page_plan 投影仅由 generate 管线传入（模版驱动）；手动大纲路径保持主线原生序列（m3-e2e 回归保障）
     const draft = await gateway.composeOutline({
       brief, claims: all.claims, tables: all.tables, evidence: all.evidence,
       conflicts, notes: all.notes, confirmations: all.confirmations,
-    });
+    }, opts?.pagePlan ? { pagePlan: opts.pagePlan } : {});
     const work = await this.readWork(projectId);
     await this.writeWork(projectId, { ...work, outline: draft, brief });
     await this.store.updateProject(projectId, { stage: 'outline' });
@@ -764,8 +885,12 @@ export class WorkbenchService {
   }
 
   /** AI 提案起草（S5）：只起草不应用；应用仍由人经 /propose 确认（锁/版本由控制器把关） */
-  async draftProposal(projectId: string, intent: string): Promise<{
-    op: { kind: 'edit_text'; page_id: string; field: 'headline' | 'body'; text: string };
+  async draftProposal(
+    projectId: string,
+    intent: string,
+    opts?: { scope?: 'edit_text' | 'rewrite_page'; page_id?: string },
+  ): Promise<{
+    op: Record<string, unknown>;
     note: string;
     expected_revision: string;
     source: 'model-draft';
@@ -776,6 +901,29 @@ export class WorkbenchService {
     if (!spec) throw Object.assign(new Error('尚未组装报告，无法起草提案'), { statusCode: 400 });
     try {
       const client = await this.modelClient();
+      if (opts?.scope === 'rewrite_page') {
+        if (!opts.page_id) throw Object.assign(new Error('整页重生成需要 page_id'), { statusCode: 400 });
+        // sensitive 来源的 claim_id 排除（与 outbound authorized-summary 同规则，红队 K3）
+        const { all } = await this.loadDerived(projectId);
+        const sources = await this.store.listSourceAssets(projectId);
+        const sensitiveSources = new Set(sources.filter((x) => x.sensitivity === 'sensitive').map((x) => x.source_id));
+        const sensitiveEvidence = new Set(all.evidence.filter((e) => sensitiveSources.has(e.source_id)).map((e) => e.evidence_id));
+        const excludeClaimRefs = all.claims
+          .filter((c) => c.evidence_refs.some((r) => sensitiveEvidence.has(r)))
+          .map((c) => c.claim_id);
+        const drafted = await aiPageRewrite(client, spec, opts.page_id, intent, { excludeClaimRefs });
+        await this.recordOutboundCall(projectId, {
+          at: new Date().toISOString(),
+          stage: 'page-rewrite',
+          provider: drafted.provider,
+          modelId: drafted.modelId,
+          mode: 'authorized-summary',
+          itemCount: 1,
+          bytes: drafted.bytes,
+          cost: drafted.cost,
+        });
+        return { op: drafted.op as unknown as Record<string, unknown>, note: drafted.note, expected_revision: spec.revision_id, source: 'model-draft', provider: drafted.provider };
+      }
       const drafted = await aiDraftProposal(client, spec, intent);
       await this.recordOutboundCall(projectId, {
         at: new Date().toISOString(),

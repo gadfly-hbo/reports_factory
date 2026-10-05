@@ -12,6 +12,7 @@ export const CreateProjectRequestSchema = z.object({
   title: z.string().min(1),
   purpose: z.string().optional(),
   privacy_policy: PrivacyPolicySchema.optional(),
+  template_id: z.string().min(1).optional(),
 });
 
 export const SourceUploadRequestSchema = z.object({
@@ -24,6 +25,12 @@ export const SourceUploadRequestSchema = z.object({
 
 export const OutlineRequestSchema = z.object({
   brief: ReportBriefSchema,
+});
+
+/** S2 一键生成管线请求（模版决定 deliverable_type 与页数上限） */
+export const GenerateRequestSchema = z.object({
+  audience: z.string().min(1),
+  purpose: z.string().min(1),
 });
 
 export const PagePlanItemSchema = z.object({
@@ -56,6 +63,15 @@ export const EditOpSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('regenerate_page'), page_id: z.string().min(1) }),
   z.object({ kind: z.literal('split_page'), page_id: z.string().min(1) }),
   z.object({ kind: z.literal('switch_layout'), page_id: z.string().min(1), layout_id: z.string().min(1) }),
+  z.object({ kind: z.literal('delete_page'), page_id: z.string().min(1) }),
+  /** S6 整页重生成（模型起草）：整页替换 headline/bullets/body；表格图表不在此范围 */
+  z.object({
+    kind: z.literal('rewrite_page'),
+    page_id: z.string().min(1),
+    headline: z.string().min(1),
+    bullets: z.array(z.object({ text: z.string().min(1), label: z.string().optional(), claim_ref: z.string().optional() })).min(1),
+    body: z.string().optional(),
+  }),
   z.object({ kind: z.literal('toggle_lock'), page_id: z.string().min(1), locked: z.boolean() }),
   z.object({ kind: z.literal('set_locks'), page_id: z.string().min(1), locks: PageLocksSchema.partial().optional() }),
   z.object({ kind: z.literal('set_report_locks'), locks: ReportLocksSchema.partial().optional() }),
@@ -72,6 +88,9 @@ export const ProposeRequestSchema = z.object({
 /** M5 提案起草请求（§12.1）：自然语言意图，模型只产草案不应用 */
 export const ProposalDraftRequestSchema = z.object({
   intent: z.string().min(1).max(500),
+  /** S6：scope=rewrite_page 时整页重生成（需 page_id）；缺省为单标题修改 */
+  scope: z.enum(['edit_text', 'rewrite_page']).optional(),
+  page_id: z.string().min(1).optional(),
 });
 export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
 

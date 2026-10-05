@@ -78,7 +78,7 @@ describe('S2 出站治理', () => {
     expect(resolveOutboundPolicy('allow_external')).toEqual({ disabled: false, needsApproval: false });
   });
 
-  it('L2：预览可见；未批准调用被拒；按 projectId|mode 批准；服务重启（新实例）批准失效', async () => {
+  it('L2：预览可见；未批准调用被拒；按 projectId|mode 批准；批准持久化跨重启生效（PRD D6）', async () => {
     await store.updateProject(projectId, { privacy_policy: 'allow_external_with_approval' });
 
     // 预览：未批准也可查看（知情是批准的前提）
@@ -98,10 +98,13 @@ describe('S2 出站治理', () => {
     const otherMode = (await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/check`, payload: { mode: 'structure-only' } })).json();
     expect(otherMode.allowed).toBe(false);
 
-    // 服务重启（新 Workbench 实例）→ 会话批准失效（安全默认）
+    // 服务重启（新 Workbench 实例）→ 批准持久化仍生效（PRD D6 story 11：重启不重复弹批准，记录可审计）
     const app2 = buildServer(new WorkspaceStore(dir));
     const gateRestart = (await app2.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/check`, payload: { mode: 'authorized-summary' } })).json();
-    expect(gateRestart.allowed).toBe(false);
+    expect(gateRestart.allowed).toBe(true);
+    // 新模式（另一发送类别）重启后仍需单独批准（G2 分类别不变）
+    const gateOtherRestart = (await app2.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/check`, payload: { mode: 'structure-only' } })).json();
+    expect(gateOtherRestart.allowed).toBe(false);
     await app2.close();
   });
 

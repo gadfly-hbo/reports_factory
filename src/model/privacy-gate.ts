@@ -1,4 +1,5 @@
 import type { ModelGateway, OutlineContext, OutlineDraft } from './gateway.js';
+import type { PageType } from '../schema/report-spec.js';
 import type { PrivacyPolicy } from '../schema/project.js';
 
 /**
@@ -43,7 +44,7 @@ export class PrivacyGate implements ModelGateway {
 
   async composeOutline(
     ctx: OutlineContext,
-    opts?: { approval?: string },
+    opts?: { approval?: string; pagePlan?: PageType[] },
   ): Promise<OutlineDraft> {
     const policy = this.config.policy();
     const summary = { claim_count: ctx.claims.length, table_count: ctx.tables.length };

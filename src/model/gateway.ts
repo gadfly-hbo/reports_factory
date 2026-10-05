@@ -55,7 +55,37 @@ export interface ModelGateway {
   id: string;
   /** 是否会把内容发送到本机之外（决定 PrivacyGate 行为） */
   external: boolean;
-  composeOutline(ctx: OutlineContext, opts?: { approval?: string }): Promise<OutlineDraft>;
+  composeOutline(ctx: OutlineContext, opts?: { approval?: string; pagePlan?: PageType[] }): Promise<OutlineDraft>;
+}
+
+/**
+ * 模版 page_plan 投影（PRD D1/D2）：产出页型序列必须逐项等于注册表 page_plan。
+ * 按序从主线产出中取同型页；该型缺失时生成待补充页（不编造）。
+ */
+export function projectOutlineToPlan(draft: OutlineDraft, plan: PageType[]): OutlineDraft {
+  const remaining = new Map<PageType, PagePlanItem[]>();
+  for (const p of draft.pages) {
+    const list = remaining.get(p.type) ?? [];
+    list.push(p);
+    remaining.set(p.type, list);
+  }
+  const pages = plan.map((type, i) => {
+    const page = remaining.get(type)?.shift();
+    return (
+      page ?? {
+        page_id: `page_${String(i + 1).padStart(2, '0')}`,
+        type,
+        headline: '待补充',
+        intent: 'info' as const,
+        claim_refs: [],
+        table_ids: [],
+        gap_notes: ['该页型无对应材料——留待补充，不编造'],
+        locked: false,
+      }
+    );
+  });
+  // 页号重排与模版序列对齐（page_id 顺序稳定，编辑锚点不漂移）
+  return { ...draft, pages: pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` })) };
 }
 
 /** 研究报告 7 节文档主线（§4.1：问题→口径→方法→发现→证据→限制→建议），全部映射现有页型 */
@@ -151,11 +181,13 @@ export function createDeterministicGateway(): ModelGateway {
   return {
     id: 'deterministic',
     external: false,
-    async composeOutline(ctx: OutlineContext): Promise<OutlineDraft> {
+    async composeOutline(ctx: OutlineContext, opts?: { pagePlan?: PageType[] }): Promise<OutlineDraft> {
       const page = buildPage;
+      const project = (draft: OutlineDraft): OutlineDraft =>
+        opts?.pagePlan && opts.pagePlan.length > 0 ? projectOutlineToPlan(draft, opts.pagePlan) : draft;
       if (ctx.brief.deliverable_type === 'research_report') {
         const draft = researchOutline(ctx, page);
-        return { ...draft, pages: withBlueprints(draft.pages, ctx.brief) };
+        return project({ ...draft, pages: withBlueprints(draft.pages, ctx.brief) });
       }
       const facts = ctx.claims.filter((c) => c.kind === 'fact_statement');
       const inferences = ctx.claims.filter((c) => c.kind === 'inference');
@@ -256,7 +288,7 @@ export function createDeterministicGateway(): ModelGateway {
         })),
       ];
 
-      return { pages: withBlueprints(pages, ctx.brief), open_questions };
+      return project({ pages: withBlueprints(pages, ctx.brief), open_questions });
     },
   };
 }

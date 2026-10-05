@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useProject } from '../state/projectDetail';
 import { DELIVERABLE_LABEL } from '../state/types';
 import Chip from '../components/Chip';
-import type { ExportResult } from '../state/types';
+import Empty from '../components/Empty';
+import type { CheckReport, ExportResult } from '../state/types';
 
 export function ExportView() {
   const p = useProject();
@@ -12,6 +13,7 @@ export function ExportView() {
   const [ackData, setAckData] = useState(false);
   const [ackShare, setAckShare] = useState(false);
   const [last, setLast] = useState<ExportResult | null>(null);
+  const [checkReport, setCheckReport] = useState<CheckReport | null>(null);
   const d = p.detail;
 
   if (!d) return <div className="view"><p className="fine">加载中…</p></div>;
@@ -37,6 +39,41 @@ export function ExportView() {
         <span className="focus-chip">外发单独授权</span>
         <span className="focus-chip">本机边界常驻</span>
         <small>系统守住边界与闸门,并不等于让用户逐个批准每一步。</small>
+      </div>
+
+      <div className="card">
+        <div className="card-h">导出前体检<span className="card-h-note">检查全跑，问题清单可视化；阻断项未清零不得正式导出</span></div>
+        <div className="actions">
+          <button
+            className="btn"
+            type="button"
+            data-testid="run-checkup"
+            disabled={p.busy === 'checks'}
+            onClick={async () => setCheckReport(await p.runChecks(scope))}
+          >
+            一键体检
+          </button>
+          {checkReport && (
+            <span className="fine">
+              阻断 {checkReport.blockers} 项 / 警告 {checkReport.warnings} 项——{checkReport.blockers === 0 ? '可进入审批' : '请先处理阻断项'}
+            </span>
+          )}
+        </div>
+        {checkReport && (
+          <div style={{ marginTop: 8 }}>
+            {checkReport.issues.length === 0 ? (
+              <Empty>全部检查通过。</Empty>
+            ) : (
+              checkReport.issues.map((i) => (
+                <div className="issue" key={i.id}>
+                  <Chip kind={i.severity === 'blocker' ? 'chip-fail' : 'chip-warn'}>{i.severity === 'blocker' ? '阻断' : '警告'}</Chip>
+                  <span className="msg">{i.message}</span>
+                  {i.object_ref && <span className="msg" style={{ color: 'var(--text-3)' }}>{i.object_ref}</span>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card">

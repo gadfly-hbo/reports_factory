@@ -11,7 +11,7 @@ import type { ChangeProposal } from '../schema/proposal.js';
  * G1 前允许编辑并留审计（G2 决议：单管线）；G1 后重生成/拆页属实质变更，需重新编审。
  */
 
-const SUBSTANTIVE_OPS = new Set<EditOp['kind']>(['regenerate_page', 'split_page']);
+const SUBSTANTIVE_OPS = new Set<EditOp['kind']>(['regenerate_page', 'split_page', 'rewrite_page', 'delete_page']);
 
 /** §12.1 approved_scope：由操作类型推导的作用范围类别（审计可读） */
 function scopeOf(op: EditOp): string {
@@ -23,7 +23,9 @@ function scopeOf(op: EditOp): string {
     case 'set_locks':
     case 'set_report_locks': return 'lock';
     case 'regenerate_page':
-    case 'split_page': return 'content_rebuild';
+    case 'split_page':
+    case 'rewrite_page':
+    case 'delete_page': return 'content_rebuild';
   }
 }
 
@@ -53,8 +55,8 @@ export function evaluateProposal(
     op: input.op,
     approved_scope: scopeOf(input.op),
     ...(input.source ? { source: input.source } : {}),
-    required_checks: input.op.kind === 'edit_text' || input.op.kind === 'reorder'
-      || input.op.kind === 'regenerate_page' || input.op.kind === 'split_page' ? CONTENT_RECHECKS : [],
+    required_checks: ['edit_text', 'reorder', 'regenerate_page', 'split_page', 'rewrite_page', 'delete_page']
+      .includes(input.op.kind) ? CONTENT_RECHECKS : [],
     changes: [],
     affected: [],
     state: 'applied',
@@ -131,5 +133,20 @@ function describeChanges(before: ReportSpec, after: ReportSpec, op: EditOp): Cha
       return [{ object_id: op.page_id, field: 'locks', before: before.pages.find((p) => p.page_id === op.page_id)?.locks, after: op.locks }];
     case 'set_report_locks':
       return [{ object_id: 'report', field: 'locks', before: before.locks, after: op.locks }];
+    case 'delete_page':
+      return [{
+        object_id: op.page_id,
+        field: 'page',
+        before: before.pages.find((p) => p.page_id === op.page_id)?.headline,
+        after: undefined,
+      }];
+    case 'rewrite_page': {
+      const before_ = before.pages.find((p) => p.page_id === op.page_id);
+      return [
+        { object_id: op.page_id, field: 'headline', before: before_?.headline, after: op.headline },
+        { object_id: op.page_id, field: 'bullets', before: (before_?.bullets ?? []).map((b) => b.text), after: op.bullets.map((b) => b.text) },
+        ...(op.body !== undefined ? [{ object_id: op.page_id, field: 'body', before: before_?.body, after: op.body }] : []),
+      ];
+    }
   }
 }

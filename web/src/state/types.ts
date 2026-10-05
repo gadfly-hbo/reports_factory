@@ -46,6 +46,15 @@ export interface Project {
   privacy_policy: string;
   stage: ProjectStage;
   brand?: BrandConfig;
+  template_id: string;
+}
+
+export interface TemplateInfo {
+  id: string;
+  name: string;
+  description: string;
+  deliverable_type: string;
+  page_plan: string[];
 }
 
 export interface BrandConfig {
@@ -104,7 +113,7 @@ export interface Spec {
   brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string };
   claims: Claim[];
   metrics: Metric[];
-  pages: { page_id: string; type: string; headline: string; claim_refs: string[] }[];
+  pages: { page_id: string; type: string; headline: string; claim_refs: string[]; layout_id?: string }[];
   source_snapshot: { source_id: string; version: string; is_demo?: boolean }[];
 }
 

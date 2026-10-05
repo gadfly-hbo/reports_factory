@@ -18,6 +18,7 @@ import {
   EvidenceRequestCreateSchema,
   ExportRequestSchema,
   OutlineRequestSchema,
+  GenerateRequestSchema,
   OutboundModeRequestSchema,
   ProposalDraftRequestSchema,
   ProposeRequestSchema,
@@ -27,6 +28,7 @@ import {
 } from '../schema/requests.js';
 import { ZodError } from 'zod';
 import { DEFAULT_BRAND } from '../schema/brand.js';
+import { listTemplates, getTemplate } from '../schema/template.js';
 import { chainFromEnv } from '../model/client.js';
 import { hasApiKey, modelChainAvailable } from '../model/pi-transport.js';
 
@@ -54,9 +56,21 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { projects };
   });
 
+  app.get('/api/templates', async () => {
+    return { templates: listTemplates() };
+  });
+
   app.post('/api/projects', async (req, reply) => {
     const body = parseBody(CreateProjectRequestSchema, req.body);
-    const project = await store.createProject({ title: body.title, purpose: body.purpose, brand: { ...DEFAULT_BRAND } });
+    if (body.template_id && !getTemplate(body.template_id)) {
+      throw httpError(400, `unknown template_id: ${body.template_id}`);
+    }
+    const project = await store.createProject({
+      title: body.title,
+      purpose: body.purpose,
+      brand: { ...DEFAULT_BRAND },
+      template_id: body.template_id,
+    });
     if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
     return { project };
   });
@@ -277,6 +291,14 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { draft };
   });
 
+  // S2 一键生成管线：brief → outline → assemble → checks，checkpoint 落盘可续跑
+  app.post('/api/projects/:id/generate', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(GenerateRequestSchema, req.body);
+    const generation = await workbench.generate(id, body);
+    return { generation };
+  });
+
   // M5 AI 蓝图编排（仅结构模式）：批准门 403(needsApproval) → 模型结构 + 确定性绑定；失败自动兜底
   app.post('/api/projects/:id/outline/ai', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -302,7 +324,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     const body = parseBody(ProposalDraftRequestSchema, req.body);
     try {
-      return await workbench.draftProposal(id, body.intent);
+      return await workbench.draftProposal(id, body.intent, { scope: body.scope, page_id: body.page_id });
     } catch (e) {
       const err = e as Error & { statusCode?: number; needsApproval?: boolean };
       if (err.statusCode) reply.code(err.statusCode);

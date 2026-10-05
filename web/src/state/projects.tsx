@@ -10,7 +10,7 @@ interface ProjectsCtx {
   loaded: boolean;
   error: string | null;
   reload(): Promise<void>;
-  create(form: { title: string; purpose?: string }): Promise<string | null>;
+  create(form: { title: string; purpose?: string; template_id?: string }): Promise<string | null>;
   remove(p: Project): Promise<void>;
 }
 
@@ -36,7 +36,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const create = useCallback(async (form: { title: string; purpose?: string }): Promise<string | null> => {
+  const create = useCallback(async (form: { title: string; purpose?: string; template_id?: string }): Promise<string | null> => {
     try {
       const r = await post<{ project: Project }>('/api/projects', form);
       toast.show('项目已创建', 'ok');

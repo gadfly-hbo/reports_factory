@@ -177,6 +177,49 @@ export class WorkspaceStore {
     }
   }
 
+  /** S5 出站批准持久化（`projectId|mode` + 批准时间；重启不失效，随数据同步） */
+  async readOutboundApprovals(projectId: string): Promise<Record<string, string>> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'outbound-approvals.json'), 'utf-8'));
+    } catch {
+      return {};
+    }
+  }
+
+  async writeOutboundApprovals(projectId: string, approvals: Record<string, string>): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'outbound-approvals.json'), JSON.stringify(approvals, null, 2));
+  }
+
+  /** S5 审计事件流（零内容：阶段/调用/门决策元数据，P5 可回放） */
+  async appendAuditLog(
+    projectId: string,
+    entry: { at: string; kind: string; stage: string; status: string; detail?: Record<string, unknown> },
+  ): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'work');
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, 'audit-log.json');
+    let log: unknown[] = [];
+    try {
+      log = JSON.parse(await readFile(path, 'utf-8'));
+    } catch {
+      log = [];
+    }
+    log.push(entry);
+    await writeFile(path, JSON.stringify(log, null, 2));
+  }
+
+  async readAuditLog(
+    projectId: string,
+  ): Promise<Array<{ at: string; kind: string; stage: string; status: string; detail?: Record<string, unknown> }>> {
+    try {
+      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'audit-log.json'), 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+
   /** M4 补证请求（§11.2）：持久化生命周期，request_id 幂等去重 */
   async readEvidenceRequests(projectId: string): Promise<unknown[]> {
     try {
@@ -232,12 +275,18 @@ export class WorkspaceStore {
     await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(records, null, 2));
   }
 
-  async createProject(input: { title: string; purpose?: string; brand?: Project['brand'] }): Promise<Project> {
+  async createProject(input: {
+    title: string;
+    purpose?: string;
+    brand?: Project['brand'];
+    template_id?: string;
+  }): Promise<Project> {
     const project = ProjectSchema.parse({
       project_id: shortId('proj'),
       title: input.title,
       purpose: input.purpose,
       brand: input.brand,
+      template_id: input.template_id,
       created_at: nowIso(),
       updated_at: nowIso(),
     });
@@ -282,7 +331,7 @@ export class WorkspaceStore {
 
   async updateProject(
     projectId: string,
-    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy' | 'stage' | 'brand'>>,
+    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy' | 'stage' | 'brand' | 'template_id' | 'budget'>>,
   ): Promise<Project> {
     const p = await this.getProject(projectId);
     if (!p) throw new Error(`project not found: ${projectId}`);

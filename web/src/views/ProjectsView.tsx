@@ -2,7 +2,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProjects } from '../state/projects';
-import { PROJECT_STAGE_LABEL } from '../state/types';
+import { PROJECT_STAGE_LABEL, type TemplateInfo } from '../state/types';
+import { api } from '../state/api';
+
+const PAGE_TYPE_LABEL: Record<string, string> = {
+  cover: '封面',
+  summary: '结论摘要',
+  metrics_overview: '指标总览',
+  trend: '趋势',
+  issue_breakdown: '原因/限制',
+  option_comparison: '方案比较',
+  action_items: '行动建议',
+  evidence_appendix: '证据附录',
+};
 import Empty from '../components/Empty';
 
 export function ProjectsView() {
@@ -12,12 +24,23 @@ export function ProjectsView() {
   const [title, setTitle] = useState('');
   const [purpose, setPurpose] = useState('');
   const [open, setOpen] = useState(params.get('new') === '1');
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [tpl, setTpl] = useState('');
 
   useEffect(() => { if (params.get('new') === '1') setOpen(true); }, [params]);
 
+  useEffect(() => {
+    api<{ templates: TemplateInfo[] }>('/api/templates')
+      .then((r) => {
+        setTemplates(r.templates);
+        if (r.templates.length > 0) setTpl(r.templates[0]!.id);
+      })
+      .catch(() => void 0);
+  }, []);
+
   const submit = async () => {
     if (!title.trim()) return;
-    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined });
+    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined, template_id: tpl || undefined });
     if (id) navigate(`/project/${id}/materials`);
   };
 
@@ -39,6 +62,24 @@ export function ProjectsView() {
                 <label className="fld-label" htmlFor="np-purpose">用途（可选）</label>
                 <input id="np-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="如:经营例会汇报" />
               </div>
+              {templates.length > 0 && (
+                <div className="fld">
+                  <label className="fld-label" htmlFor="np-tpl">报告模版</label>
+                  <select id="np-tpl" value={tpl} onChange={(e) => setTpl(e.target.value)}>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  {templates.filter((t) => t.id === tpl).map((t) => (
+                    <div key={t.id} className="fine" style={{ marginTop: 6 }}>
+                      <div>{t.description}</div>
+                      <div style={{ marginTop: 4 }}>
+                        结构：{t.page_plan.map((pt) => PAGE_TYPE_LABEL[pt] ?? pt).join(' → ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="actions">
                 <button className="btn btn-primary" type="button" disabled={!title.trim()} onClick={submit}>创建</button>
               </div>

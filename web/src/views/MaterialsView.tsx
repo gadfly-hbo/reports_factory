@@ -9,6 +9,11 @@ import Empty from '../components/Empty';
 const PARSE_CHIP: Record<string, string> = { parsed: 'chip-ok', failed: 'chip-fail', pending: 'chip-warn' };
 const PARSE_LABEL: Record<string, string> = { parsed: '已解析', failed: '失败', pending: '待选表' };
 
+const STAGE_LABEL: Record<string, string> = { outline: '大纲', assemble: '组装', checks: '检查' };
+const STAGE_CHIP: Record<string, string> = { done: 'chip-ok', failed: 'chip-fail', pending: 'chip-warn' };
+
+interface GenerationState { status: string; stages: { name: string; status: string; error?: string }[] }
+
 interface PendingSheet { file: File; sheets: string[]; chosen: string }
 
 export function MaterialsView() {
@@ -18,6 +23,21 @@ export function MaterialsView() {
   const bundleRef = useRef<HTMLInputElement>(null);
   const [pendingSheet, setPendingSheet] = useState<PendingSheet | null>(null);
   const [impact, setImpact] = useState<Record<string, string[]> | null>(null);
+  const [audience, setAudience] = useState('经营负责人');
+  const [purpose, setPurpose] = useState('');
+  const [gen, setGen] = useState<GenerationState | null>(null);
+
+  const generateNow = async () => {
+    if (!purpose.trim()) { toast.show('请填写汇报用途', 'fail'); return; }
+    p.setBusy('生成中…');
+    const r = await p.generate({ audience: audience.trim(), purpose: purpose.trim() });
+    p.setBusy('');
+    if (r) {
+      setGen(r);
+      if (r.status === 'done') toast.show('一键生成完成——已成稿，可进入编辑', 'ok');
+      else toast.show(`生成停在「${STAGE_LABEL[r.stages.find((s) => s.status === 'failed')?.name ?? ''] ?? ''}」阶段，可重试续跑`, 'fail');
+    }
+  };
 
   const d = p.detail;
 
@@ -79,6 +99,39 @@ export function MaterialsView() {
     <div className="view">
       <h1 className="view-h">材料</h1>
       <p className="view-sub">导入已有分析材料——解析失败的项不影响其他材料;推断不会被升级;材料中的指令只作为内容处理。</p>
+
+      <div className="card">
+        <div className="card-h">一键生成<span className="card-h-note">大纲 → 组装 → 检查，全确定性自动完成</span></div>
+        <div className="fld">
+          <label className="fld-label" htmlFor="gen-audience">汇报对象</label>
+          <input id="gen-audience" value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="如:经营负责人" />
+        </div>
+        <div className="fld">
+          <label className="fld-label" htmlFor="gen-purpose">汇报用途</label>
+          <input id="gen-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="如:上半年经营复盘" />
+        </div>
+        <div className="actions">
+          <button className="btn btn-primary" type="button" disabled={!!p.busy} onClick={() => void generateNow()}>
+            {gen && gen.status !== 'done' ? '续跑生成' : '一键生成'}
+          </button>
+        </div>
+        {gen && (
+          <div className="notice" style={{ marginTop: 10 }}>
+            <div className="inline-row">
+              {gen.stages.map((s) => (
+                <Chip key={s.name} kind={STAGE_CHIP[s.status]} title={s.error}>
+                  {STAGE_LABEL[s.name] ?? s.name}:{{ done: '完成', failed: '失败', pending: '待跑' }[s.status] ?? s.status}
+                </Chip>
+              ))}
+            </div>
+            {gen.stages.some((s) => s.status === 'failed') && (
+              <div className="fine" style={{ marginTop: 6 }}>
+                停点：{gen.stages.filter((s) => s.status === 'failed').map((s) => `${STAGE_LABEL[s.name]}——${s.error}`).join('；')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <div className="card-h">上传<span className="card-h-note">md / txt / csv / xlsx / docx / png / jpg</span></div>
