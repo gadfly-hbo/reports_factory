@@ -1,6 +1,7 @@
 /* 导出阶段:范围/图表数据选择/确认链 + 正式/草稿/一页摘要 + 隐私明细 + 导出记录。 */
 import { useState } from 'react';
 import { useProject } from '../state/projectDetail';
+import { useToast } from '../state/toast';
 import { DELIVERABLE_LABEL } from '../state/types';
 import Chip from '../components/Chip';
 import Empty from '../components/Empty';
@@ -14,6 +15,8 @@ export function ExportView() {
   const [ackShare, setAckShare] = useState(false);
   const [last, setLast] = useState<ExportResult | null>(null);
   const [checkReport, setCheckReport] = useState<CheckReport | null>(null);
+  const [approver, setApprover] = useState('');
+  const toast = useToast();
   const d = p.detail;
 
   if (!d) return <div className="view"><p className="fine">加载中…</p></div>;
@@ -40,6 +43,30 @@ export function ExportView() {
         <span className="focus-chip">本机边界常驻</span>
         <small>系统守住边界与闸门,并不等于让用户逐个批准每一步。</small>
       </div>
+
+      {!d.editorial?.g1 && (
+        <div className="card" data-testid="g1-gate">
+          <div className="card-h">内容审核（G1）<span className="card-h-note">冻结蓝图与来源快照；未签批仅可导出【草稿】</span></div>
+          <div className="fld-row">
+            <div className="fld" style={{ maxWidth: 220 }}>
+              <label className="fld-label" htmlFor="g1-approver">批准人</label>
+              <input id="g1-approver" value={approver} onChange={(e) => setApprover(e.target.value)} placeholder="填你的姓名（可追责）" />
+            </div>
+            <div className="actions" style={{ alignItems: 'flex-end' }}>
+              <button
+                className="btn btn-primary" type="button" data-testid="approve-g1-export"
+                disabled={!approver.trim() || p.busy !== ''}
+                onClick={async () => {
+                  const r = await p.approveG1(approver.trim());
+                  if (r.ok) { toast.show('G1 已签批（蓝图与来源快照已冻结）', 'ok'); await p.reload(); }
+                }}
+              >
+                批准 G1
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-h">导出前体检<span className="card-h-note">检查全跑，问题清单可视化；阻断项未清零不得正式导出</span></div>

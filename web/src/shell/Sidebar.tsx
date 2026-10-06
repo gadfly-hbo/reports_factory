@@ -2,13 +2,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useProjects } from '../state/projects';
 import { useUI } from '../state/ui';
-import { isStageKey, PROJECT_STAGE_LABEL, STAGES, STAGE_TITLE } from '../state/types';
+import { isStageKey, MAIN_STAGES, PROJECT_STAGE_LABEL, STAGES, STAGE_TITLE } from '../state/types';
+import { useState } from 'react';
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const ui = useUI();
   const { projects } = useProjects();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const currentId = location.pathname.match(/^\/project\/([^/]+)/)?.[1] ?? null;
   const currentStage = location.pathname.match(/^\/project\/[^/]+\/(\w+)$/)?.[1] ?? null;
@@ -58,9 +60,9 @@ export function Sidebar() {
 
       {currentId && (
         <div className="sb-section">
-          <h2 className="sb-h">当前项目阶段</h2>
-          <ul className="sb-list" role="list">
-            {STAGES.map((s) => {
+          <h2 className="sb-h">制作主路径</h2>
+          <ul className="sb-list" role="list" data-testid="main-path-nav">
+            {MAIN_STAGES.map((s) => {
               const isCurrent = currentStage === s.key;
               return (
                 <li key={s.key}>
@@ -76,6 +78,32 @@ export function Sidebar() {
               );
             })}
           </ul>
+          <button
+            className="sb-h sb-adv-toggle" type="button" data-testid="advanced-toggle"
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', marginTop: 10 }}
+          >
+            高级 {advancedOpen ? '▾' : '▸'}
+          </button>
+          {advancedOpen && (
+            <ul className="sb-list" role="list" data-testid="advanced-nav">
+              {STAGES.map((s) => {
+                const isCurrent = currentStage === s.key;
+                return (
+                  <li key={s.key}>
+                    <button
+                      className={`sb-item${isCurrent ? ' active' : ''}`}
+                      type="button"
+                      onClick={() => navigate(`/project/${currentId}/${s.key}`)}
+                    >
+                      <span className="sb-label">{s.title}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 

@@ -59,8 +59,9 @@ describe('一键生成管线（S2）', () => {
     expect(res.statusCode).toBe(200);
     const gen = res.json().generation;
     expect(gen.status).toBe('done');
-    expect(gen.stages.map((s: { name: string }) => s.name)).toEqual(['outline', 'assemble', 'checks']);
-    expect(gen.stages.every((s: { status: string }) => s.status === 'done')).toBe(true);
+    expect(gen.stages.map((s: { name: string }) => s.name)).toEqual(['outline', 'draft', 'assemble', 'checks']);
+    // M7：draft 阶段在 local_only/无密钥下阶段级回退（规则版骨架），主线不阻塞
+    expect(gen.stages.filter((s: { name: string }) => s.name !== 'draft').every((s: { status: string }) => s.status === 'done')).toBe(true);
 
     // 成稿可编辑：spec 已落库
     const detail = (await app.inject({ url: `/api/projects/${pid}` })).json();
@@ -126,13 +127,13 @@ describe('一键生成管线（S2）', () => {
 
     const failed = await wb.generate(pid, { audience: '商品经营负责人', purpose: '上半年复盘' });
     expect(failed.status).toBe('failed');
-    expect(failed.stages.map((s) => s.status)).toEqual(['done', 'done', 'failed']);
-    expect(failed.stages[2]!.error).toContain('注入故障');
+    expect(failed.stages.map((s) => s.status)).toEqual(['done', 'fallback', 'done', 'failed']);
+    expect(failed.stages[3]!.error).toContain('注入故障');
 
     // 续跑：只重跑 checks，outline/assemble 沿用 checkpoint
     const resumed = await wb.generate(pid, { audience: '商品经营负责人', purpose: '上半年复盘' });
     expect(resumed.status).toBe('done');
-    expect(resumed.stages.every((s) => s.status === 'done')).toBe(true);
+    expect(resumed.stages.every((s) => s.status === 'done' || (s.name === 'draft' && s.status === 'fallback'))).toBe(true);
   });
 
   it('重复调用幂等：状态 done 后重跑返回同一成稿', async () => {

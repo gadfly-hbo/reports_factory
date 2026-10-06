@@ -27,10 +27,16 @@ export const OutlineRequestSchema = z.object({
   brief: ReportBriefSchema,
 });
 
-/** S2 一键生成管线请求（模版决定 deliverable_type 与页数上限） */
+/** M7 一键生成管线请求（模版决定 deliverable_type 与页数上限；confirm_outline=大纲确认开关） */
 export const GenerateRequestSchema = z.object({
   audience: z.string().min(1),
   purpose: z.string().min(1),
+  confirm_outline: z.boolean().optional(),
+});
+
+/** 大纲确认请求（REVIEW Low10：headlines 强校验，空串拒绝） */
+export const ConfirmGenerateRequestSchema = z.object({
+  headlines: z.record(z.string().min(1), z.string().min(1)).optional(),
 });
 
 export const PagePlanItemSchema = z.object({

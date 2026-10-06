@@ -9,6 +9,7 @@ import { exportReport } from '../pipeline/export.js';
 import { WorkbenchService } from './workbench.js';
 import {
   ApproveG1RequestSchema,
+  ConfirmGenerateRequestSchema,
   AssembleRequestSchema,
   BrandRequestSchema,
   CreateProjectRequestSchema,
@@ -27,7 +28,6 @@ import {
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
 import { ZodError } from 'zod';
-import { DEFAULT_BRAND } from '../schema/brand.js';
 import { listTemplates, getTemplate } from '../schema/template.js';
 import { chainFromEnv } from '../model/client.js';
 import { hasApiKey, modelChainAvailable } from '../model/pi-transport.js';
@@ -68,7 +68,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const project = await store.createProject({
       title: body.title,
       purpose: body.purpose,
-      brand: { ...DEFAULT_BRAND },
+      // M7 D6：创建不预设品牌——brand 留空时用模版预设，用户自定义后覆盖（优先级见 assemble）
       template_id: body.template_id,
     });
     if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
@@ -291,12 +291,40 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { draft };
   });
 
-  // S2 一键生成管线：brief → outline → assemble → checks，checkpoint 落盘可续跑
-  app.post('/api/projects/:id/generate', async (req) => {
+  // M7 一键生成管线：outline → 逐页 LLM 起草 → assemble → checks；403(needsApproval) 上抛
+  app.post('/api/projects/:id/generate', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = parseBody(GenerateRequestSchema, req.body);
-    const generation = await workbench.generate(id, body);
-    return { generation };
+    try {
+      const generation = await workbench.generate(id, body);
+      return { generation };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
+      if (err.statusCode) reply.code(err.statusCode);
+      else reply.code(500);
+      return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
+  });
+
+  // 生成状态查询（进度轮询：POST 同步执行期间读 checkpoint）
+  app.get('/api/projects/:id/generation', async (req) => {
+    const { id } = req.params as { id: string };
+    return { generation: await workbench.getGeneration(id) };
+  });
+
+  // 大纲确认后续跑（PRD D7）：应用 headline 修改并继续起草
+  app.post('/api/projects/:id/generate/confirm', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(ConfirmGenerateRequestSchema, req.body);
+    try {
+      const generation = await workbench.confirmGenerate(id, body.headlines);
+      return { generation };
+    } catch (e) {
+      const err = e as Error & { statusCode?: number };
+      if (err.statusCode) reply.code(err.statusCode);
+      else reply.code(500);
+      return { ok: false, error: err.message };
+    }
   });
 
   // M5 AI 蓝图编排（仅结构模式）：批准门 403(needsApproval) → 模型结构 + 确定性绑定；失败自动兜底

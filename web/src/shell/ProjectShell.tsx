@@ -5,7 +5,7 @@ import { StageBar } from './StageBar';
 import { useProject } from '../state/projectDetail';
 import { useUI } from '../state/ui';
 import { Inspector } from './Inspector';
-import { STAGES, STAGE_TITLE } from '../state/types';
+import { MAIN_STAGES, STAGE_TITLE } from '../state/types';
 import type { StageKey } from '../state/types';
 
 export function ProjectShell({ stage, children }: { stage: StageKey; children?: ReactNode }) {
@@ -32,7 +32,7 @@ export function ProjectShell({ stage, children }: { stage: StageKey; children?: 
             <span className="sep" aria-hidden="true">/</span>
             <span>{STAGE_TITLE[stage]}</span>
           </div>
-          <div className="eyebrow">制作工作台 · 阶段 {STAGES.find((s) => s.key === stage)?.n}</div>
+          <div className="eyebrow">制作工作台 · {MAIN_STAGES.find((s) => s.key === stage) ? `第 ${String(MAIN_STAGES.find((s) => s.key === stage)!.n).padStart(2, '0')} 步` : '高级'}</div>
         </div>
         {children ?? <Outlet />}
       </div>

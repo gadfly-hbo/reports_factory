@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '../state/ui';
 import { useProjects } from '../state/projects';
 import { useProjectOrNull } from '../state/projectDetail';
-import { STAGES } from '../state/types';
+import { MAIN_STAGES, STAGES } from '../state/types';
 
 interface Cmd { label: string; hint: string; run(): void }
 
@@ -25,9 +25,16 @@ export function Palette() {
       run: () => navigate(`/project/${proj.project_id}/materials`),
     }));
     if (p?.id) {
-      for (const s of STAGES) {
+      for (const s of MAIN_STAGES) {
         list.push({
           label: `跳转:${s.title}`,
+          hint: '主路径',
+          run: () => navigate(`/project/${p.id}/${s.key}`),
+        });
+      }
+      for (const s of STAGES) {
+        list.push({
+          label: `高级:${s.title}`,
           hint: '阶段',
           run: () => navigate(`/project/${p.id}/${s.key}`),
         });

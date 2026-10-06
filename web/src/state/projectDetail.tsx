@@ -6,7 +6,7 @@ import { api, post, put, del, errMsg } from './api';
 import { useToast } from './toast';
 import { useProjects } from './projects';
 import type {
-  BrandConfig, CheckIssueLite, CheckReport, Conflict, ExportResult, OutlineDraft, OutboundPreview, ProjectDetail,
+  BrandConfig, CheckIssueLite, CheckReport, Conflict, ExportResult, GenerationState, OutlineDraft, OutboundPreview, ProjectDetail,
 } from './types';
 
 interface UploadResult {
@@ -37,7 +37,9 @@ interface ProjectCtx {
   doExport(opts: { mode: 'formal' | 'draft'; deliverable?: 'executive_summary'; exportScope?: 'internal' | 'external'; chart_data_mode?: string; ack_editable_data?: boolean; ack_external_share?: boolean }): Promise<ExportResult | null>;
   applyBrand(brand: BrandConfig): Promise<boolean>;
   saveBrief(brief: Record<string, unknown>): Promise<boolean>;
-  generate(brief: { audience: string; purpose: string }): Promise<{ status: string; stages: { name: string; status: string; error?: string }[] } | null>;
+  generate(brief: { audience: string; purpose: string; confirm_outline?: boolean }): Promise<GenerationState | 'needsApproval' | 'blocked' | null>;
+  confirmGenerate(headlines?: Record<string, string>): Promise<GenerationState | null>;
+  getGeneration(): Promise<GenerationState | null>;
   composeOutlineAI(brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string }): Promise<{ draft?: OutlineDraft; ai?: { used: boolean; usedFallback: boolean; provider?: string; reason?: string }; needsApproval?: boolean } | null>;
   outboundPreview(mode: 'structure-only' | 'authorized-summary'): Promise<OutboundPreview | null>;
   approveOutbound(mode: 'structure-only' | 'authorized-summary'): Promise<boolean>;
@@ -256,13 +258,31 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
     }
   }, [id, reload, toast]);
 
-  /** S2 一键生成管线：outline → assemble → checks，checkpoint 可续跑 */
-  const generate = useCallback(async (brief: { audience: string; purpose: string }) => {
+  /** M7 一键生成管线：outline → 逐页起草 → assemble → checks；403 区分未批准/预算 */
+  const generate = useCallback(async (brief: { audience: string; purpose: string; confirm_outline?: boolean }): Promise<GenerationState | 'needsApproval' | 'blocked' | null> => {
     try {
-      const r = await post<{ generation: { status: string; stages: { name: string; status: string; error?: string }[] } }>(
-        `/api/projects/${id}/generate`,
-        brief,
-      );
+      const r = await post<{ generation: GenerationState; ok?: boolean; error?: string }>(`/api/projects/${id}/generate`, brief);
+      if (r.ok === false) {
+        toast.show(r.error ?? '生成失败', 'fail');
+        return null;
+      }
+      await reload();
+      return r.generation;
+    } catch (e) {
+      const msg = errMsg(e);
+      if (msg.includes('→ 403')) {
+        const pv = await post<{ policy: { approved: boolean } }>(`/api/projects/${id}/outbound/preview`, { mode: 'authorized-summary' }).catch(() => null);
+        return pv && !pv.policy.approved ? 'needsApproval' : 'blocked';
+      }
+      toast.show(msg, 'fail');
+      return null;
+    }
+  }, [id, reload, toast]);
+
+  /** 大纲确认后续跑 */
+  const confirmGenerate = useCallback(async (headlines?: Record<string, string>): Promise<GenerationState | null> => {
+    try {
+      const r = await post<{ generation: GenerationState }>(`/api/projects/${id}/generate/confirm`, { headlines });
       await reload();
       return r.generation;
     } catch (e) {
@@ -270,6 +290,16 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
       return null;
     }
   }, [id, reload, toast]);
+
+  /** 生成状态轮询 */
+  const getGeneration = useCallback(async (): Promise<GenerationState | null> => {
+    try {
+      const r = await api<{ generation: GenerationState | null }>(`/api/projects/${id}/generation`);
+      return r.generation;
+    } catch {
+      return null;
+    }
+  }, [id]);
 
   /** M5 提案起草（S5）：只起草不应用，应用由视图确认后走 edit */
   const draftProposal = useCallback(async (intent: string, opts?: { scope?: 'edit_text' | 'rewrite_page'; page_id?: string }) => {
@@ -386,7 +416,7 @@ export function ProjectDetailProvider({ id, children }: { id: string; children: 
   }, [id, reload, toast]);
 
   return (
-    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, uploadBundle, resolveConflict, composeOutline, assemble, edit, draftProposal, runChecks, runSemanticChecks, draftEvidenceGaps, doExport, applyBrand, saveBrief, generate, composeOutlineAI, outboundPreview, approveOutbound, recommend, recommendAI, decide, approveG1, resolvePending }}>
+    <Ctx.Provider value={{ id, detail, loadFailed, busy, setBusy, reload, upload, uploadBundle, resolveConflict, composeOutline, assemble, edit, draftProposal, runChecks, runSemanticChecks, draftEvidenceGaps, doExport, applyBrand, saveBrief, generate, confirmGenerate, getGeneration, composeOutlineAI, outboundPreview, approveOutbound, recommend, recommendAI, decide, approveG1, resolvePending }}>
       {children}
     </Ctx.Provider>
   );

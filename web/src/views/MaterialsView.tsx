@@ -1,5 +1,6 @@
 /* 材料阶段:上传 / 解析状态 / 冲突解决 / XLSX 选表 / 影响面。 */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProject } from '../state/projectDetail';
 import { useToast } from '../state/toast';
 import { api } from '../state/api';
@@ -18,6 +19,7 @@ interface PendingSheet { file: File; sheets: string[]; chosen: string }
 
 export function MaterialsView() {
   const p = useProject();
+  const navigate = useNavigate();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const bundleRef = useRef<HTMLInputElement>(null);
@@ -32,10 +34,13 @@ export function MaterialsView() {
     p.setBusy('生成中…');
     const r = await p.generate({ audience: audience.trim(), purpose: purpose.trim() });
     p.setBusy('');
-    if (r) {
+    if (r && r !== 'needsApproval' && r !== 'blocked') {
       setGen(r);
       if (r.status === 'done') toast.show('一键生成完成——已成稿，可进入编辑', 'ok');
       else toast.show(`生成停在「${STAGE_LABEL[r.stages.find((s) => s.status === 'failed')?.name ?? ''] ?? ''}」阶段，可重试续跑`, 'fail');
+    } else if (r === 'needsApproval' || r === 'blocked') {
+      toast.show('需要批准出站或预算受限——请到「生成」页完成', 'fail');
+      navigate(`/project/${p.id}/generate`);
     }
   };
 

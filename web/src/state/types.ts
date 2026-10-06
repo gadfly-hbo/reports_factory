@@ -1,6 +1,6 @@
 /* 领域类型:与后端 schema 对齐的最小集(前端只声明用到的字段)。 */
 
-export type StageKey = 'materials' | 'outline' | 'compose' | 'check' | 'export';
+export type StageKey = 'generate' | 'materials' | 'outline' | 'compose' | 'check' | 'export';
 export type ProjectStage = 'materials' | 'outline' | 'draft' | 'checked' | 'exported';
 export type DeliverableType = 'meeting_deck' | 'research_report' | 'executive_summary';
 
@@ -12,7 +12,15 @@ export const STAGES: { key: StageKey; title: string; n: number }[] = [
   { key: 'export', title: '导出', n: 5 },
 ];
 
+/** M7 三步主路径：生成 → 编辑 → 审批导出（侧栏主组；五阶段收进高级组） */
+export const MAIN_STAGES: { key: StageKey; title: string; n: number }[] = [
+  { key: 'generate', title: '生成', n: 1 },
+  { key: 'compose', title: '编辑', n: 2 },
+  { key: 'export', title: '审批导出', n: 3 },
+];
+
 export const STAGE_TITLE: Record<StageKey, string> = {
+  generate: '生成',
   materials: '材料',
   outline: '编审',
   compose: '组装',
@@ -21,7 +29,25 @@ export const STAGE_TITLE: Record<StageKey, string> = {
 };
 
 export const isStageKey = (v: string): v is StageKey =>
-  v === 'materials' || v === 'outline' || v === 'compose' || v === 'check' || v === 'export';
+  v === 'generate' || v === 'materials' || v === 'outline' || v === 'compose' || v === 'check' || v === 'export';
+
+export interface GenerationStage {
+  name: 'outline' | 'draft' | 'assemble' | 'checks';
+  status: 'pending' | 'done' | 'failed' | 'fallback';
+  error?: string;
+  note?: string;
+  pages?: Record<string, string>;
+  total?: number;
+}
+
+export interface GenerationState {
+  status: 'running' | 'done' | 'failed' | 'awaiting_confirmation';
+  stages: GenerationStage[];
+  /** 待确认大纲时附带的结构摘要（getGeneration） */
+  outline?: { page_id: string; type: string; headline: string }[];
+  /** 累计模型调用次数（零内容，预算可见） */
+  calls?: number;
+}
 
 export const DELIVERABLE_LABEL: Record<string, string> = {
   meeting_deck: '会议汇报',
@@ -55,6 +81,7 @@ export interface TemplateInfo {
   description: string;
   deliverable_type: string;
   page_plan: string[];
+  brand?: { primary: string; accent: string };
 }
 
 export interface BrandConfig {

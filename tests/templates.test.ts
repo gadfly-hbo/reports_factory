@@ -6,6 +6,8 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server/app.js';
 import { WorkspaceStore } from '../src/storage/workspace.js';
 import { TemplateConfigSchema, listTemplates, getTemplate, DEFAULT_TEMPLATE_ID } from '../src/schema/template.js';
+import { WorkbenchService } from '../src/server/workbench.js';
+import { ingestAndSave } from '../src/ingest/persist.js';
 
 describe('模版注册表与选择（S1）', () => {
   it('注册表含 3 个模版，页型序列全部合法，id 唯一', () => {
@@ -40,6 +42,49 @@ describe('模版注册表与选择（S1）', () => {
   it('查不存在的模版返回 undefined', () => {
     expect(getTemplate('nope')).toBeUndefined();
     expect(getTemplate(DEFAULT_TEMPLATE_ID)).toBeDefined();
+  });
+
+  it('三模版各带合法 brand 预设（G4 色值）；非法色值注册被拒', () => {
+    for (const t of listTemplates()) {
+      expect(t.brand).toBeDefined();
+      expect(t.brand!.primary).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(t.brand!.accent).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+    expect(getTemplate('ops_review_deck')!.brand!.primary).toBe('#b44626');
+    expect(getTemplate('exec_summary_deck')!.brand!.primary).toBe('#263442');
+    expect(getTemplate('research_doc')!.brand!.primary).toBe('#1f3a3d');
+    const bad = { id: 'bad', name: '坏', description: 'd', deliverable_type: 'meeting_deck', page_plan: ['cover'], brand: { primary: 'red', accent: '#8f3820' } };
+    expect(() => TemplateConfigSchema.parse(bad)).toThrow();
+  });
+});
+
+describe('brand 预设应用优先级（S2）', () => {
+  it('未自定义 brand 的项目生成后用模版预设；自定义覆盖预设', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'rs-brand-tpl-'));
+    const store = new WorkspaceStore(dir);
+    try {
+      const wb = new WorkbenchService(store);
+      const p1 = await store.createProject({ title: '预设生效' });
+      await ingestAndSave(store, p1.project_id, {
+        filename: 'conclusion.md',
+        content: Buffer.from('## 结论\n上半年销售额同比下降 7.1%', 'utf-8'),
+        kind: 'markdown', media_type: 'text/markdown',
+      });
+      await wb.generate(p1.project_id, { audience: 'a', purpose: 'p' });
+      const work1 = JSON.parse(await import('node:fs/promises').then((m) => m.readFile(join(dir, p1.project_id, 'work', 'state.json'), 'utf-8')));
+      expect(work1.spec.theme?.brand?.primary).toBe('#b44626'); // ops_review_deck 预设
+
+      // 自定义覆盖预设
+      const p2 = await store.createProject({ title: '自定义覆盖', template_id: 'research_doc' });
+      await store.updateProject(p2.project_id, { brand: { primary: '#123456', accent: '#654321' } });
+      await wb.generate(p2.project_id, { audience: 'a', purpose: 'p' });
+      const work2 = JSON.parse(await import('node:fs/promises').then((m) => m.readFile(join(dir, p2.project_id, 'work', 'state.json'), 'utf-8')));
+      expect(work2.spec.theme?.brand?.primary).toBe('#123456');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

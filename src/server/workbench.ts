@@ -20,7 +20,9 @@ import { ModelUnavailableError } from '../model/client.js';
 import type { OutboundFindingCtx } from '../model/outbound.js';
 import type { Project } from '../schema/project.js';
 import { getTemplate } from '../schema/template.js';
+import { DEFAULT_BRAND } from '../schema/brand.js';
 import { checkBudget, resolveBudget, type BudgetEntry } from '../model/budget.js';
+import { aiDraftPage, buildPageMaterialsSensitiveAware, type PageDraft, type PageTask } from '../model/ai-draft.js';
 import type { PlacementRecommendation } from '../schema/editorial.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
@@ -54,19 +56,28 @@ interface WorkState {
   outline?: OutlineDraft;
   brief?: ReportBrief;
   spec?: ReportSpec;
-  /** S2 一键生成管线阶段 checkpoint（断点续跑判据） */
+  /** 生成管线阶段 checkpoint（断点续跑判据） */
   generation?: GenerationState;
+  /** M7 逐页起草产出（outline 源层的正文覆盖，assemble 时合成） */
+  drafts?: Record<string, PageDraft>;
 }
 
 export interface GenerationStage {
-  name: 'outline' | 'assemble' | 'checks';
-  status: 'pending' | 'done' | 'failed';
+  name: 'outline' | 'draft' | 'assemble' | 'checks';
+  status: 'pending' | 'done' | 'failed' | 'fallback';
   error?: string;
+  note?: string;
+  /** 逐页起草结果：page_id -> ai | uncovered | fallback */
+  pages?: Record<string, string>;
+  /** 起草总页数（进度 N/M 展示） */
+  total?: number;
 }
 
 export interface GenerationState {
-  status: 'running' | 'done' | 'failed';
+  status: 'running' | 'done' | 'failed' | 'awaiting_confirmation';
   stages: GenerationStage[];
+  /** checkpoint 最近落盘时间（running 僵尸回收判据，REVIEW M-A） */
+  stale_at?: string;
 }
 
 /** 发现卡片（F02）：组合视图，不另建事实对象；类型定义在 schema/editorial.ts */
@@ -453,13 +464,14 @@ export class WorkbenchService {
   }
 
   /**
-   * S2 一键生成管线（PRD D2）：brief → outline → assemble → checks。
-   * 全确定性、零模型调用、禁 tool-call 循环；每阶段落 checkpoint，
-   * 失败停在断点并续跑从失败阶段继续（routine 关口程序放行，不消耗人）。
+   * M7 一键生成管线（PRD D1）：brief → outline（确定性结构）→ draft（逐页 LLM 起草）
+   * → assemble（确定性合成）→ checks。逐页 checkpoint 断点续跑；模型不可用/护栏拒绝
+   * 页级回退（不阻塞）；确认开关停在 awaiting_confirmation。
    */
   async generate(
     projectId: string,
-    input: { audience: string; purpose: string },
+    input: { audience: string; purpose: string; confirm_outline?: boolean },
+    opts?: { fromConfirm?: boolean },
   ): Promise<GenerationState> {
     const project = await this.store.getProject(projectId);
     if (!project) throw Object.assign(new Error(`project not found: ${projectId}`), { statusCode: 404 });
@@ -476,21 +488,36 @@ export class WorkbenchService {
 
     const work0 = await this.readWork(projectId);
     const prior = work0.generation;
-    if (prior?.status === 'done') return prior;
-    // 断点续跑：已完成阶段沿用 checkpoint 不重跑；失败阶段重置重试
-    const stages: GenerationStage[] = (['outline', 'assemble', 'checks'] as const).map((name) => {
-      const p = prior?.stages.find((s) => s.name === name);
-      return p?.status === 'done' ? { name, status: 'done' } : { name, status: 'pending' };
-    });
+    // 受众/用途变化：重置整条管线并丢弃旧起草（内容随 brief 失效）——对 failed/awaiting/done 一致（REVIEW M1）
+    const briefChanged = !!prior && !!work0.brief
+      && (work0.brief.audience !== input.audience || work0.brief.purpose !== input.purpose);
+    // 粘性确认：awaiting 状态只能经 /generate/confirm 续跑（输入未变时）
+    if (prior?.status === 'awaiting_confirmation' && !opts?.fromConfirm && !briefChanged) return prior;
+    // 并发守卫：进行中直接返回当前 checkpoint，由 UI 轮询；
+    // 崩溃/重启遗留的 running（10 分钟无 checkpoint 更新）视为僵尸，允许重入自愈（REVIEW M-A）
+    const lastTouch = prior?.stale_at;
+    if (prior?.status === 'running' && lastTouch && Date.now() - Date.parse(lastTouch) < 10 * 60_000) return prior;
+    // done 幂等（阶段级回退或存在页级回退时重入起草，只重跑回退页）
+    if (prior?.status === 'done' && !briefChanged) {
+      const draft = prior.stages.find((s) => s.name === 'draft');
+      const hasFallback = draft?.status === 'fallback'
+        || !!draft?.pages && Object.values(draft.pages).includes('fallback');
+      if (!hasFallback) return prior;
+    }
 
-    const markFailed = async (name: GenerationStage['name'], error: string): Promise<GenerationState> => {
-      const failed: GenerationStage[] = stages.map((s) => (s.name === name ? { ...s, status: 'failed', error } : s));
-      const state: GenerationState = { status: 'failed', stages: failed };
-      await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: state });
-      return state;
-    };
+    const withStale = (g: GenerationState): GenerationState => ({ ...g, stale_at: new Date().toISOString() });
+    const stages: GenerationStage[] = briefChanged
+      ? (['outline', 'draft', 'assemble', 'checks'] as const).map((name) => ({ name, status: 'pending' }) as GenerationStage)
+      : (['outline', 'draft', 'assemble', 'checks'] as const).map((name) => {
+          const p = prior?.stages.find((s) => s.name === name);
+          if (p?.status === 'done' || p?.status === 'fallback') return { ...p };
+          // failed 重置保留 draft 页级 checkpoint（续跑跳过已完成页，L3）
+          if (name === 'draft' && p?.pages) return { name, status: 'pending', pages: p.pages, total: p.total } as GenerationStage;
+          return { name, status: 'pending' } as GenerationStage;
+        });
+    if (briefChanged) await this.writeWork(projectId, { ...work0, drafts: {} });
 
-    const auditStage = async (stage: GenerationStage['name'], status: string, detail?: Record<string, unknown>) => {
+    const auditStage = async (stage: string, status: string, detail?: Record<string, unknown>) => {
       await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'generation_stage', stage, status, detail });
     };
 
@@ -501,30 +528,239 @@ export class WorkbenchService {
         await this.composeOutline(projectId, brief, { pagePlan: template.page_plan });
         stages[0] = { name: 'outline', status: 'done' };
         await auditStage('outline', 'done');
-        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: { status: 'running', stages } });
       }
-      if (stages[1]!.status !== 'done') {
-        await auditStage('assemble', 'started');
-        await this.assemble(projectId);
-        stages[1] = { name: 'assemble', status: 'done' };
-        await auditStage('assemble', 'done');
-        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: { status: 'running', stages } });
+      // 大纲确认开关（PRD D7/G6）：停在确认层，confirm 后续跑
+      if (input.confirm_outline && stages[1]!.status === 'pending') {
+        const awaiting: GenerationState = withStale({ status: 'awaiting_confirmation', stages });
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: awaiting });
+        return awaiting;
+      }
+      // 起草重入：pending/failed/fallback，或 checkpoint 中存在回退页（只重跑回退页）
+      const draftStageObj = stages[1]!;
+      const needsDraft = draftStageObj.status === 'pending' || draftStageObj.status === 'failed' || draftStageObj.status === 'fallback'
+        || Object.values(draftStageObj.pages ?? {}).includes('fallback');
+      if (needsDraft) {
+        await this.draftStage(projectId, stages, auditStage);
+        // 起草重跑过 → 成稿必须重组装（REVIEW H2：沿用 assemble/checks 的 done 会产出 stale spec）
+        stages[2] = { name: 'assemble', status: 'pending' };
+        stages[3] = { name: 'checks', status: 'pending' };
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: withStale({ status: 'running', stages }) });
       }
       if (stages[2]!.status !== 'done') {
+        await auditStage('assemble', 'started');
+        await this.assemble(projectId);
+        stages[2] = { name: 'assemble', status: 'done' };
+        await auditStage('assemble', 'done');
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: withStale({ status: 'running', stages }) });
+      }
+      if (stages[3]!.status !== 'done') {
         await auditStage('checks', 'started');
         await this.checks(projectId);
-        stages[2] = { name: 'checks', status: 'done' };
+        stages[3] = { name: 'checks', status: 'done' };
         await auditStage('checks', 'done');
       }
-      const done: GenerationState = { status: 'done', stages };
+      const done: GenerationState = withStale({ status: 'done', stages });
       await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: done });
       return done;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const failedAt = stages.find((s) => s.status !== 'done')?.name ?? 'checks';
+      // 批准门（403 needsApproval）等带状态码错误必须上抛给路由——不能吞成阶段失败
+      const err = e as Error & { statusCode?: number };
+      if (err.statusCode) throw err;
+      const msg = err.message ?? String(e);
+      const failedAt = stages.find((s) => s.status === 'failed' || s.status === 'pending')?.name ?? 'checks';
       await auditStage(failedAt, 'failed');
-      return markFailed(failedAt, msg);
+      const failed: GenerationStage[] = stages.map((s) => (s.name === failedAt ? { ...s, status: 'failed', error: msg } : s));
+      const state: GenerationState = withStale({ status: 'failed', stages: failed });
+      await this.writeWork(projectId, { ...(await this.readWork(projectId)), generation: state });
+      return state;
     }
+  }
+
+  /** 生成状态查询（进度轮询）；待确认大纲附页结构摘要；携带调用计数（story 11 预算可见） */
+  async getGeneration(projectId: string): Promise<(GenerationState & { outline?: { page_id: string; type: string; headline: string }[]; calls?: number }) | null> {
+    const work = await this.readWork(projectId);
+    const generation = work.generation;
+    if (!generation) return null;
+    const log = await this.store.readOutboundLog(projectId);
+    const calls = log.filter((e) => !e.blocked).length;
+    if (generation.status === 'awaiting_confirmation' && work.outline) {
+      return {
+        ...generation,
+        outline: work.outline.pages.map((p) => ({ page_id: p.page_id, type: p.type, headline: p.headline })),
+        calls,
+      };
+    }
+    return { ...generation, calls };
+  }
+
+  /** 大纲确认后续跑（PRD D7）：应用 headline 修改，从 draft 阶段继续 */
+  async confirmGenerate(projectId: string, headlines?: Record<string, string>): Promise<GenerationState> {
+    const work = await this.readWork(projectId);
+    if (work.generation?.status !== 'awaiting_confirmation') {
+      throw Object.assign(new Error('生成不在等待大纲确认状态'), { statusCode: 400 });
+    }
+    if (headlines && work.outline) {
+      work.outline = {
+        ...work.outline,
+        pages: work.outline.pages.map((p) => (headlines[p.page_id] ? { ...p, headline: headlines[p.page_id]! } : p)),
+      };
+      await this.writeWork(projectId, { ...work, outline: work.outline });
+    }
+    return this.generate(projectId, {
+      audience: work.brief?.audience ?? '未指定',
+      purpose: work.brief?.purpose ?? '未指定',
+    }, { fromConfirm: true });
+  }
+
+  /**
+   * 起草阶段（PRD D1/D2/D4；REVIEW 修复循环 1）：
+   * 逐页 LLM 起草 + 逐页 checkpoint（中断不丢、续跑只重跑回退页）；
+   * sensitive 来源的主张与表格都排除出站（红队 K3）；
+   * 预算逐页复查（次数/墙钟/轮次以 draft 记账，失败的真实调用也计量）；
+   * 模型整体不可用 → 阶段 fallback（确定性骨架，明示「已用规则版」）。
+   */
+  private async draftStage(projectId: string, stages: GenerationStage[], auditStage: (s: string, st: string, d?: Record<string, unknown>) => Promise<void>): Promise<void> {
+    const stage = stages[1]!;
+    await auditStage('draft', 'started');
+    // local_only：起草不可用（隐私围栏），阶段级回退规则版——不阻塞主线也不报错
+    const policy = await this.policyFor(projectId);
+    if (policy.disabled) {
+      stage.status = 'fallback';
+      stage.note = '项目隐私策略为仅本地，已用规则版骨架';
+      await auditStage('draft', 'fallback', { reason: 'local_only' });
+      return;
+    }
+    // 出站门：authorized-summary（预览/批准/预算/审计在 gate 内强制）；未批准 403 needsApproval 上抛
+    await this.gateOrThrow(projectId, 'authorized-summary', 'draft');
+
+    const work = await this.readWork(projectId);
+    const outline = work.outline;
+    if (!outline) throw new Error('尚未生成大纲');
+
+    // 无密钥预检（replay 模式除外）：避免逐页慢试，直接阶段级回退
+    if (!process.env['REPORT_STUDIO_MODEL_REPLAY'] && !modelChainAvailable()) {
+      stage.status = 'fallback';
+      stage.note = '未配置模型密钥，已用规则版骨架';
+      await auditStage('draft', 'fallback', { reason: 'model_unavailable' });
+      return;
+    }
+
+    let client;
+    try {
+      client = await this.modelClient();
+    } catch {
+      stage.status = 'fallback';
+      stage.note = '模型不可用，已用规则版骨架';
+      await auditStage('draft', 'fallback', { reason: 'model_unavailable' });
+      return;
+    }
+
+    const project = await this.store.getProject(projectId);
+    const budget = resolveBudget(project ?? {}, process.env);
+
+    // sensitive 来源排除（红队 K3）：生产与测试同一实现（REVIEW H1/M2）
+    const { all } = await this.loadDerived(projectId);
+    const sources = await this.store.listSourceAssets(projectId);
+
+    const priorPages = stage.pages ?? {};
+    const drafts: Record<string, PageDraft> = { ...(work.drafts ?? {}) };
+    const pageOutcomes: Record<string, string> = {};
+    stage.total = outline.pages.length;
+
+    for (const plan of outline.pages) {
+      const pageId = plan.page_id;
+      // 逐页 checkpoint：上次已完成（ai/uncovered）的页沿用，不重跑不重复计费
+      if ((priorPages[pageId] === 'ai' || priorPages[pageId] === 'uncovered') && drafts[pageId]) {
+        pageOutcomes[pageId] = priorPages[pageId]!;
+        continue;
+      }
+      // 该页材料派生文本（sensitive 主张/表格排除；绑定敏感主张的页整页不出站——headline 可能嵌入敏感原文）
+      const { materials, claimRefs, pageBlocked } = buildPageMaterialsSensitiveAware(plan, all, sources);
+      if (pageBlocked) {
+        pageOutcomes[pageId] = 'fallback';
+        await auditStage('draft', 'page_fallback', { page_id: pageId, reason: 'sensitive_page' });
+        stage.pages = { ...pageOutcomes };
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), drafts, generation: { status: 'running', stages: stages.map((x) => ({ ...x })) } });
+        continue;
+      }
+      if (materials.length === 0) {
+        // 空材料页：确定性短路为 uncovered（不烧调用，模型散文无从进稿）
+        pageOutcomes[pageId] = 'uncovered';
+        await auditStage('draft', 'page_done', { page_id: pageId, outcome: 'uncovered', reason: 'no_materials' });
+        stage.pages = { ...pageOutcomes };
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), drafts, generation: { status: 'running', stages: stages.map((x) => ({ ...x })), stale_at: new Date().toISOString() } });
+        continue;
+      }
+      const task: PageTask = { page_id: pageId, type: plan.type, headline: plan.headline };
+
+      let done = false;
+      let lastError = '';
+      for (let attempt = 0; attempt < 2 && !done; attempt++) {
+        // 逐页预算复查：超帽停在当前页，剩余页回退并明示
+        const log = await this.store.readOutboundLog(projectId);
+        const verdict = checkBudget(log as BudgetEntry[], budget, 'draft', Date.now());
+        if (!verdict.allowed) {
+          lastError = verdict.reason ?? '预算超帽';
+          await auditStage('draft', 'budget_stop', { page_id: pageId, line: verdict.line });
+          break;
+        }
+        try {
+          const result = await aiDraftPage(client, task, materials, { claimWhitelist: claimRefs });
+          drafts[pageId] = result.draft;
+          pageOutcomes[pageId] = result.draft.uncovered ? 'uncovered' : 'ai';
+          await this.recordOutboundCall(projectId, {
+            at: new Date().toISOString(),
+            stage: 'draft',
+            provider: result.provider,
+            modelId: result.modelId,
+            mode: 'authorized-summary',
+            itemCount: materials.length,
+            bytes: result.bytes,
+            cost: result.cost,
+          });
+          done = true;
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
+          // 失败的真实调用也计量（次数/轮次线不失真）
+          await this.recordOutboundCall(projectId, {
+            at: new Date().toISOString(),
+            stage: 'draft',
+            provider: 'none',
+            modelId: '',
+            mode: 'authorized-summary',
+            itemCount: materials.length,
+            bytes: 0,
+            cost: 0,
+          });
+        }
+      }
+      if (!done) {
+        // 页级回退：不加覆盖（确定性占位），明示不编造；审计 reason 用粗粒度代码（零内容纯度，L4）
+        const code = /数字/.test(lastError) ? 'digit_guard' : /录制未命中|ReplayMiss/.test(lastError) ? 'replay_miss' : /熔断/.test(lastError) ? 'circuit_open' : /预算超帽/.test(lastError) ? 'budget' : 'error';
+        pageOutcomes[pageId] = 'fallback';
+        await auditStage('draft', 'page_fallback', { page_id: pageId, reason: code });
+      } else {
+        await auditStage('draft', 'page_done', { page_id: pageId, outcome: pageOutcomes[pageId] });
+      }
+      // 逐页落盘 checkpoint（进度轮询可见 + 中断不丢已完成页）
+      stage.pages = { ...pageOutcomes };
+      await this.writeWork(projectId, {
+        ...(await this.readWork(projectId)),
+        drafts,
+        generation: { status: 'running', stages: stages.map((x) => ({ ...x })), stale_at: new Date().toISOString() },
+      });
+    }
+    stage.status = 'done';
+    stage.pages = { ...pageOutcomes };
+    stage.error = undefined;
+    const fallbackCount = Object.values(pageOutcomes).filter((v) => v === 'fallback').length;
+    if (fallbackCount > 0 && fallbackCount === outline.pages.length) {
+      stage.note = '全部页面未能 AI 起草，已用规则版骨架';
+    } else if (fallbackCount > 0) {
+      stage.note = `${fallbackCount} 页未能 AI 起草，已回退规则版占位`;
+    }
+    await this.writeWork(projectId, { ...(await this.readWork(projectId)), drafts });
+    await auditStage('draft', 'done', { pages: Object.values(pageOutcomes).filter((v) => v === 'ai').length });
   }
 
   /** 编审状态视图（状态机 + brief 草稿 + 当前报告决定 + G1/G2 记录 + 待复核更新） */
@@ -770,9 +1006,28 @@ export class WorkbenchService {
       sourceSnapshot: sources.map((s) => ({ source_id: s.source_id, version: s.version, is_demo: s.has_data !== false })),
     };
     const spec = assembleReportSpec({ report_id: `report_${projectId}`, ctx });
-    // 品牌配置注入（项目级 → spec 冻结快照）
+    // M7 起草覆盖（PRD D3）：LLM 起草内容合成进 spec（uncovered 页不覆盖）；
+    // drafts 属 outline 源层，重新组装保持一致；/propose 编辑仍作用于 spec
+    const drafts = (await this.readWork(projectId)).drafts;
+    if (drafts) {
+      for (const page of spec.pages) {
+        const draft = drafts[page.page_id];
+        if (!draft || draft.uncovered) continue;
+        page.headline = draft.headline;
+        if (draft.bullets.length > 0 && page.bullets) {
+          page.bullets = draft.bullets.map((b) => ({
+            text: b.text,
+            claim_ref: b.claim_ref && page.claim_refs.includes(b.claim_ref) ? b.claim_ref : undefined,
+            status: 'confirmed' as const,
+          }));
+        }
+        if (draft.body !== undefined) page.body = draft.body;
+      }
+    }
+    // 品牌配置注入（M7 D6 优先级：project.brand 显式 > 模版预设 > DEFAULT_BRAND → spec 冻结快照）
     const project = await this.store.getProject(projectId);
-    if (project?.brand) spec.theme = { brand: project.brand };
+    const brand = project?.brand ?? (project ? getTemplate(project.template_id)?.brand : undefined) ?? DEFAULT_BRAND;
+    spec.theme = { brand };
     await this.writeWork(projectId, { ...work, outline: { ...work.outline, pages: pagePlans }, spec });
     await this.store.updateProject(projectId, { stage: 'draft' });
     // G1 后首次生成 = 初稿编辑；G1 前组装只是草拟预览，不推进状态（T07）
