@@ -132,8 +132,8 @@ describe('S1 ModelClient 运输层', () => {
   it('chainFromEnv：解析 REPORT_STUDIO_MODEL_CHAIN；缺省为 minimax 主/小米备', () => {
     const def = chainFromEnv({});
     expect(def.map((c) => `${c.provider}/${c.modelId}`)).toEqual([
-      'minimax-cn/MiniMax-M2.7',
-      'xiaomi-token-plan-cn/mimo-v2.5-pro',
+      'minimax-cn/MiniMax-M3',
+      'xiaomi-token-plan-cn/mimo-v2.6-flash',
     ]);
     const custom = chainFromEnv({ REPORT_STUDIO_MODEL_CHAIN: 'moonshotai/kimi-k2' });
     expect(custom).toEqual([{ provider: 'moonshotai', modelId: 'kimi-k2' }]);

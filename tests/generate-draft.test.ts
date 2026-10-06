@@ -62,7 +62,7 @@ describe('M7 S1 LLM 逐页起草', () => {
   /** 按模版 page_plan 全页配 replay（未指定页默认 uncovered——无数字不触护栏，且避免熔断污染） */
   async function stageDraftReplay(pages: Record<string, unknown>, opts?: { headlines?: Record<string, string> }): Promise<void> {
     const wb = new WorkbenchService(store);
-    const brief = { audience: '商品经营负责人', purpose: '上半年复盘', page_budget: 8, language: 'zh-CN', deliverable_type: 'meeting_deck' } as const;
+    const brief = { audience: '商品经营负责人', purpose: '上半年复盘', page_budget: 8, language: 'zh-CN', deliverable_type: 'meeting_deck' as const, required_boundaries: ['缺货尚未被证明为销售下降主因'] };
     await wb.saveBrief(projectId, brief);
     const tpl = (await import('../src/schema/template.js')).getTemplate('ops_review_deck')!;
     await wb.composeOutline(projectId, brief, { pagePlan: tpl.page_plan });
@@ -75,10 +75,10 @@ describe('M7 S1 LLM 逐页起草', () => {
       const output = pages[page.page_id] ?? { uncovered: true, headline: page.headline, bullets: [] };
       const { materials, pageBlocked } = buildPageMaterialsSensitiveAware(page, loaded.all, sources);
       if (pageBlocked) continue; // 生产对敏感绑定页整页不出站
-      const { system, user } = buildPageDraftRequest(page, materials);
+      const { system, user } = buildPageDraftRequest(page, materials, { boundaries: brief.required_boundaries });
       calls.push({
-        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }, { system, user }),
-        request: { provider: 'minimax-cn', modelId: 'MiniMax-M2.7', system, user },
+        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M3' }, { system, user }),
+        request: { provider: 'minimax-cn', modelId: 'MiniMax-M3', system, user },
         response: { text: JSON.stringify(output), cost: 0.001 },
       });
     }
@@ -329,8 +329,8 @@ describe('M7 S1 LLM 逐页起草', () => {
         ? { uncovered: false, headline: '上半年销售承压', bullets: [{ text: '上半年销售额同比下降 7.1%' }] }
         : { uncovered: true, headline: pg.headline, bullets: [] };
       calls.push({
-        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }, { system, user }),
-        request: { provider: 'minimax-cn', modelId: 'MiniMax-M2.7', system, user },
+        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M3' }, { system, user }),
+        request: { provider: 'minimax-cn', modelId: 'MiniMax-M3', system, user },
         response: { text: JSON.stringify(output), cost: 0.001 },
       });
     }
@@ -363,6 +363,24 @@ describe('M7 S1 LLM 逐页起草', () => {
     } finally {
       await app2.close();
     }
+  });
+
+  it('必要边界注入：起草请求载荷含 brief.required_boundaries（M8 S1/§4.6）', async () => {
+    const wb = new WorkbenchService(store);
+    const brief = {
+      audience: '商品经营负责人', purpose: '上半年复盘', page_budget: 8, language: 'zh-CN',
+      deliverable_type: 'meeting_deck' as const,
+      required_boundaries: ['缺货尚未被证明为销售下降主因'],
+    };
+    const page = { page_id: 'page_02', type: 'summary', headline: '上半年销售承压' };
+    const { system, user } = buildPageDraftRequest(page, ['上半年销售额同比下降 7.1%'], {
+      boundaries: brief.required_boundaries,
+    });
+    expect(user).toContain('缺货尚未被证明为销售下降主因');
+    expect(system).toContain('边界');
+    // 未设置时省略字段（载荷不出现空 boundaries 键）
+    const { user: user2 } = buildPageDraftRequest(page, ['x']);
+    expect(user2).not.toContain('boundaries');
   });
 
   it('审计流含 draft 阶段事件且零内容', async () => {

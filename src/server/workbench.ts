@@ -478,15 +478,17 @@ export class WorkbenchService {
     const template = getTemplate(project.template_id);
     if (!template) throw new Error(`unknown template: ${project.template_id}`);
 
+    const work0 = await this.readWork(projectId);
     const brief: ReportBrief = {
+      // 保留既有 brief 的领域字段（core_question/non_goals/required_boundaries 等）——
+      // 一键生成只重置受众/用途/结构，不清用户在编审里设的必要边界（M8 修复发现）
+      ...work0.brief,
       audience: input.audience,
       purpose: input.purpose,
       page_budget: template.page_plan.length,
       deliverable_type: template.deliverable_type,
       language: 'zh-CN',
     };
-
-    const work0 = await this.readWork(projectId);
     const prior = work0.generation;
     // 受众/用途变化：重置整条管线并丢弃旧起草（内容随 brief 失效）——对 failed/awaiting/done 一致（REVIEW M1）
     const briefChanged = !!prior && !!work0.brief
@@ -676,6 +678,7 @@ export class WorkbenchService {
       }
       // 该页材料派生文本（sensitive 主张/表格排除；绑定敏感主张的页整页不出站——headline 可能嵌入敏感原文）
       const { materials, claimRefs, pageBlocked } = buildPageMaterialsSensitiveAware(plan, all, sources);
+      const boundaries = (work.brief?.required_boundaries ?? []).filter(Boolean);
       if (pageBlocked) {
         pageOutcomes[pageId] = 'fallback';
         await auditStage('draft', 'page_fallback', { page_id: pageId, reason: 'sensitive_page' });
@@ -705,7 +708,7 @@ export class WorkbenchService {
           break;
         }
         try {
-          const result = await aiDraftPage(client, task, materials, { claimWhitelist: claimRefs });
+          const result = await aiDraftPage(client, task, materials, { claimWhitelist: claimRefs, boundaries });
           drafts[pageId] = result.draft;
           pageOutcomes[pageId] = result.draft.uncovered ? 'uncovered' : 'ai';
           await this.recordOutboundCall(projectId, {
@@ -1166,7 +1169,12 @@ export class WorkbenchService {
         const excludeClaimRefs = all.claims
           .filter((c) => c.evidence_refs.some((r) => sensitiveEvidence.has(r)))
           .map((c) => c.claim_id);
-        const drafted = await aiPageRewrite(client, spec, opts.page_id, intent, { excludeClaimRefs });
+        const state0 = await this.readEditorialState(projectId);
+        const briefForRewrite = (state0.brief as ReportBrief | undefined) ?? (await this.readWork(projectId)).brief;
+        const drafted = await aiPageRewrite(client, spec, opts.page_id, intent, {
+          excludeClaimRefs,
+          boundaries: (briefForRewrite?.required_boundaries ?? []).filter(Boolean),
+        });
         await this.recordOutboundCall(projectId, {
           at: new Date().toISOString(),
           stage: 'page-rewrite',
@@ -1179,7 +1187,11 @@ export class WorkbenchService {
         });
         return { op: drafted.op as unknown as Record<string, unknown>, note: drafted.note, expected_revision: spec.revision_id, source: 'model-draft', provider: drafted.provider };
       }
-      const drafted = await aiDraftProposal(client, spec, intent);
+      const state0 = await this.readEditorialState(projectId);
+      const briefForDraft = (state0.brief as ReportBrief | undefined) ?? (await this.readWork(projectId)).brief;
+      const drafted = await aiDraftProposal(client, spec, intent, {
+        boundaries: (briefForDraft?.required_boundaries ?? []).filter(Boolean),
+      });
       await this.recordOutboundCall(projectId, {
         at: new Date().toISOString(),
         stage: 'proposal-draft',

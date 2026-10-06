@@ -62,7 +62,7 @@ describe('S6 语义检查 + 补证建议', () => {
     const workbench = new WorkbenchService(store);
     await workbench.approveOutbound(projectId, 'authorized-summary');
     const fake = new LlmStageClient({
-      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }],
+      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M3' }],
       transport: async () => ({ text: MODEL_ISSUES, cost: 0.0007 }),
     });
     const r = await workbench.aiSemanticChecks(projectId, { client: fake });
@@ -105,7 +105,7 @@ describe('S6 语义检查 + 补证建议', () => {
     const workbench = new WorkbenchService(store);
     await workbench.approveOutbound(projectId, 'authorized-summary');
     const fake = new LlmStageClient({
-      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }],
+      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M3' }],
       transport: async () => ({ text: MODEL_GAPS, cost: 0.0006 }),
     });
     const r = await workbench.aiDraftEvidenceGaps(projectId, { client: fake });

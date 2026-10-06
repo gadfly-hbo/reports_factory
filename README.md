@@ -30,7 +30,7 @@ UI 走查（真实浏览器全链冒烟）：`node scripts/smoke-ui.mjs`（需�
 | AI 用点 ×5 | 蓝图编排（仅结构）、取舍推荐、自然语言→变更提案、语义检查（warning-only）、补证建议——全部自动回退确定性/规则版，模型不可用不阻塞 |
 | 程序约束不变 | 提案起草仍走 ChangeProposal 控制器（锁/版本/原子应用/审计，标记 model-draft）；语义结果永不计入阻断；excluded 粘性对模型推荐生效 |
 | 离线测试 | 录制/重放（仅合成 fixture 可录制）；全部测试离线绿；探针 `npm run probe:model`（手动） |
-| 密钥注入 | `scripts/with-model-env.sh`（来源同 deep-research：`~/.pi/agent/auth.json` / `~/.zcode/v2/config.json`；密钥不进仓库）。默认链已按探针实测 pin：`minimax-cn/MiniMax-M2.7`（主）+ `xiaomi-token-plan-cn/mimo-v2.5-pro`（备） |
+| 密钥注入 | `scripts/with-model-env.sh`（来源同 deep-research：`~/.pi/agent/auth.json` / `~/.zcode/v2/config.json`；密钥不进仓库）。默认链已按探针实测 pin：`minimax-cn/MiniMax-M3`（主）+ `xiaomi-token-plan-cn/mimo-v2.6-flash`（备） |
 
 ### M4 分析成果编审模块
 | 能力 | 说明 |

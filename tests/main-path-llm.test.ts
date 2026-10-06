@@ -69,8 +69,8 @@ describe('S4 主路径 tracer（LLM 模式）', () => {
         ? { uncovered: false, headline: '上半年销售承压', bullets: [{ text: '上半年销售额同比下降 7.1%' }] }
         : { uncovered: true, headline: page.headline, bullets: [] };
       calls.push({
-        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }, { system, user }),
-        request: { provider: 'minimax-cn', modelId: 'MiniMax-M2.7', system, user },
+        key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M3' }, { system, user }),
+        request: { provider: 'minimax-cn', modelId: 'MiniMax-M3', system, user },
         response: { text: JSON.stringify(output), cost: 0.001 },
       });
     }

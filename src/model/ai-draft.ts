@@ -15,7 +15,8 @@ export const DRAFT_SYSTEM_PROMPT =
   '{"uncovered":boolean,"headline":string,"bullets":[{"text":string,"claim_ref":string?}],"body":string?}。' +
   'headline 为该页标题；bullets 为该页要点（每条一句话，可带 claim_ref 指向材料要点 id，只能用输入中出现过的 id）；' +
   'uncovered=true 表示材料未覆盖该页主题（此时 bullets 为空数组，headline 填页面主旨本身）；' +
-  '只能使用材料中出现的事实、数字与结论，严禁编造任何数字；语气陈述、克制，不使用夸张措辞；不要输出其他文字。';
+  '只能使用材料中出现的事实、数字与结论，严禁编造任何数字；若提供 boundaries（必要边界约束），内容必须遵守、不得推翻或弱化；' +
+  '语气陈述、克制，不使用夸张措辞；不要输出其他文字。';
 
 export const PageDraftOutputSchema = z.object({
   uncovered: z.boolean().default(false),
@@ -37,12 +38,17 @@ export interface PageTask {
   headline: string;
 }
 
-/** 起草请求构造（每页白名单出站：页任务 + 该页材料派生文本；导出供 replay 构造 transport 键） */
-export function buildPageDraftRequest(page: PageTask, materials: string[]): { system: string; user: string } {
+/** 起草请求构造（每页白名单出站：页任务 + 该页材料派生文本 + 必要边界，§4.6 领域装配；导出供 replay 构造 transport 键） */
+export function buildPageDraftRequest(
+  page: PageTask,
+  materials: string[],
+  opts?: { boundaries?: string[] },
+): { system: string; user: string } {
   const user = JSON.stringify(
     {
       page: { page_id: page.page_id, type: page.type, goal: page.headline },
       materials,
+      ...(opts?.boundaries && opts.boundaries.length > 0 ? { boundaries: opts.boundaries } : {}),
     },
     null,
     1,
@@ -121,9 +127,9 @@ export async function aiDraftPage(
   client: LlmStageClient,
   page: PageTask,
   materials: string[],
-  opts?: { claimWhitelist?: string[] },
+  opts?: { claimWhitelist?: string[]; boundaries?: string[] },
 ): Promise<PageDraftResult> {
-  const { system, user } = buildPageDraftRequest(page, materials);
+  const { system, user } = buildPageDraftRequest(page, materials, { boundaries: opts?.boundaries });
   const { output, provider, modelId, cost } = await client.complete({
     stage: 'page-draft',
     callKey: `page-draft:${shortHash(user)}`,

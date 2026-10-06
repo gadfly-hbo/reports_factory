@@ -10,7 +10,7 @@ import { shortHash } from './outbound.js';
  */
 
 export const PROPOSAL_SYSTEM_PROMPT =
-  '你是报告修改助手。根据用户意图，生成对报告的单一、最小范围的标题修改提案。只输出 JSON：{"op":{"kind":"edit_text","page_id":string,"field":"headline","text":string},"note":string}。field 只能是 headline（本版本不支持正文改写）；text 必须是修改后的完整标题；不得修改数字、删除必要限制、改动其他页面；page_id 必须来自输入页面清单；note 用一句话说明理由；不要输出其他文字。';
+  '你是报告修改助手。根据用户意图，生成对报告的单一、最小范围的标题修改提案。只输出 JSON：{"op":{"kind":"edit_text","page_id":string,"field":"headline","text":string},"note":string}。field 只能是 headline（本版本不支持正文改写）；text 必须是修改后的完整标题；不得修改数字、删除必要限制、改动其他页面；若提供 boundaries（必要边界约束），提案必须遵守、不得推翻或弱化；page_id 必须来自输入页面清单；note 用一句话说明理由；不要输出其他文字。';
 
 const DraftOutputSchema = z.object({
   op: z.object({
@@ -22,12 +22,13 @@ const DraftOutputSchema = z.object({
   note: z.string().min(1),
 });
 
-/** 起草请求构造（导出：probe/replay 测试据此计算精确的 transport 键） */
-export function buildProposalRequest(spec: ReportSpec, intent: string): { system: string; user: string } {
+/** 起草请求构造（必要边界 §4.6 装配；导出：probe/replay 测试据此计算精确的 transport 键） */
+export function buildProposalRequest(spec: ReportSpec, intent: string, opts?: { boundaries?: string[] }): { system: string; user: string } {
   const user = JSON.stringify(
     {
       intent,
       revision: spec.revision_id,
+      ...(opts?.boundaries && opts.boundaries.length > 0 ? { boundaries: opts.boundaries } : {}),
       pages: spec.pages.map((p) => ({
         page_id: p.page_id,
         type: p.type,
@@ -52,8 +53,8 @@ export interface DraftedProposal {
   bytes: number;
 }
 
-export async function aiDraftProposal(client: LlmStageClient, spec: ReportSpec, intent: string): Promise<DraftedProposal> {
-  const { system, user } = buildProposalRequest(spec, intent);
+export async function aiDraftProposal(client: LlmStageClient, spec: ReportSpec, intent: string, opts?: { boundaries?: string[] }): Promise<DraftedProposal> {
+  const { system, user } = buildProposalRequest(spec, intent, opts);
   const { output, provider, modelId, cost } = await client.complete({
     stage: 'proposal-draft',
     callKey: `proposal:${shortHash(user)}`,

@@ -89,6 +89,11 @@ export interface PiTransportOptions {
   apiKeyFor?: (provider: string) => string;
 }
 
+/** 坑表 #7（标准 v1.1）：剥离 MiniMax-M3 思考标签（导出供测试） */
+export function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
 export function piTransport(opts: PiTransportOptions = {}): ModelTransport {
   const apiKeyFor = opts.apiKeyFor ?? envApiKey;
   return async (cfg, req) => {
@@ -124,6 +129,8 @@ export function piTransport(opts: PiTransportOptions = {}): ModelTransport {
         throw new Error(`模型调用失败(${cfg.provider}/${cfg.modelId}): ${event.error?.errorMessage ?? JSON.stringify(event).slice(0, 300)}`);
       }
     }
+    // 坑表 #7（标准 v1.1）：MiniMax-M3 输出前附 <think>...</think> 思考标签——剥离后再进下游 JSON 解析
+    text = stripThinkTags(text);
     if (process.env['REPORT_STUDIO_MODEL_DEBUG']) {
       console.error(`[model] ${cfg.provider}/${cfg.modelId} ok ${((Date.now() - startedAt) / 1000).toFixed(1)}s text=${text.length} cost=${cost}`);
     }

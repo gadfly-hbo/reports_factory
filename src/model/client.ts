@@ -120,7 +120,7 @@ export function parseJsonLoose(text: string): unknown {
     .replace(/```\s*$/, '')
     .trim();
   try {
-    return JSON.parse(cleaned);
+    return unwrapEncodedJson(JSON.parse(cleaned));
   } catch {
     // 继续尝试截取第一个 JSON 块
   }
@@ -128,12 +128,33 @@ export function parseJsonLoose(text: string): unknown {
   const end = Math.max(cleaned.lastIndexOf('}'), cleanLastIndex(cleaned));
   if (start >= 0 && end > start) {
     try {
-      return JSON.parse(cleaned.slice(start, end + 1));
+      return unwrapEncodedJson(JSON.parse(cleaned.slice(start, end + 1)));
     } catch {
       return {};
     }
   }
   return {};
+}
+
+/** 坑表 #11（标准 v1.1）：模型不守 JSON 包装（double-encoded，如 {"reportMd":"{...}"}）——coerce 展开 ≤3 层 */
+function unwrapEncodedJson(value: unknown, depth = 0): unknown {
+  if (depth >= 3) return value;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+      try {
+        return unwrapEncodedJson(JSON.parse(t), depth + 1);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((v) => unwrapEncodedJson(v, depth + 1));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, unwrapEncodedJson(v, depth + 1)]));
+  }
+  return value;
 }
 
 function cleanLastIndex(text: string): number {
@@ -157,7 +178,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /** 交互场景默认超时（R2：单一来源；pi-transport 与 workbench 共用） */
-export const DEFAULT_TIMEOUT_MS = Number(process.env['REPORT_STUDIO_MODEL_TIMEOUT_MS'] ?? 120_000);
+export const DEFAULT_TIMEOUT_MS = Number(process.env['REPORT_STUDIO_MODEL_TIMEOUT_MS'] ?? 300_000);
 
 export interface LlmStageClientOptions {
   transport: ModelTransport;
@@ -206,7 +227,7 @@ export class LlmStageClient {
 }
 
 /** 默认模型链（R2：minimax 主 + 小米备；model id 经 probe 实测确认） */
-export const DEFAULT_MODEL_CHAIN = 'minimax-cn/MiniMax-M2.7,xiaomi-token-plan-cn/mimo-v2.5-pro';
+export const DEFAULT_MODEL_CHAIN = 'minimax-cn/MiniMax-M3,xiaomi-token-plan-cn/mimo-v2.6-flash';
 
 export function chainFromEnv(env: NodeJS.ProcessEnv = process.env): ProviderConfig[] {
   const raw = env['REPORT_STUDIO_MODEL_CHAIN']?.trim() || DEFAULT_MODEL_CHAIN;

@@ -61,7 +61,7 @@ describe('S4 AI 取舍推荐', () => {
 
     const captured: { user: string }[] = [];
     const fakeClient = new LlmStageClient({
-      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }],
+      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M3' }],
       transport: async (_cfg, req) => {
         captured.push({ user: req.user });
         const placements = [
@@ -112,7 +112,7 @@ describe('S4 AI 取舍推荐', () => {
     const app = buildServer(store);
     const pid = await setupProject(app, store);
     const failing = new LlmStageClient({
-      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }],
+      chain: [{ provider: 'minimax-cn', modelId: 'MiniMax-M3' }],
       transport: async () => {
         throw new Error('429 rate limit');
       },

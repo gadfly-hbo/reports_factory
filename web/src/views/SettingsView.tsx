@@ -50,7 +50,7 @@ export function SettingsView() {
               </div>
               <div><dt>可用性</dt><dd>{ai.modelAvailable ? '已就绪(至少一把密钥)' : '不可用——AI 入口关闭;确定性功能不受影响'}</dd></div>
               <div><dt>出站模式</dt><dd>仅结构模式(不含发现原文/数值)与授权摘要(需会话批准;sensitive 来源默认排除),由项目隐私策略决定;每次调用记零内容审计</dd></div>
-              <div><dt>探针</dt><dd className="mono">scripts/with-model-env.sh npm run probe:model -- --provider minimax-cn --model MiniMax-M2.7</dd></div>
+              <div><dt>探针</dt><dd className="mono">scripts/with-model-env.sh npm run probe:model -- --provider minimax-cn --model MiniMax-M3</dd></div>
             </dl>
           ) : (
             <p className="fine">加载中…</p>

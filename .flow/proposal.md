@@ -1,39 +1,45 @@
-# 提案：M7 成品感一键生成——LLM 进默认生成路径 + 主路径三步化
+# 提案：M8 Agent Runtime 合规收敛——对照全局标准逐项审计与补齐
 
-> 来源：2026-10-06。M6（模版驱动一键生成，bc7054f）交付后用户判定「产品重构失败」；随后完成 AI PPT 外部调研（`docs/research-ai-ppt-2026-10.md`：Kimi/ChatGPT/Gemini/Gamma/WPS 等），根因定位与本方案经用户确认：「确认这个方向，起新一轮 dev-flow 开工」。本文件取代 M6 proposal，是 PRD / GRILL / 拆解的根规范源。
+> 来源：2026-10-06 用户指令：「agent runtime 接入标准参考 agents.md 的要求，实际成功案例参考：本地仓库 deep-research 项目」。本文件是 PRD / GRILL / 拆解的根规范源。
 
-## 失败根因（调研反推，已确认）
+## 目标（用户裁定）
 
-行业标准体验是「材料进 → **内容完整、排版成型的成品**出」（Kimi/Gemini/Gamma/WPS 一致：大纲可改 → 一键生成 30 秒~分钟级 → 逐页编辑）。M6 的默认「一键生成」是**确定性组装**（AI 是可选旁路，M6 GRILL G2 决议「零模型调用」），产出骨架式 deck——材料标记不足时大量「待补充」页。流程压缩对了，产物完整度/成品感不对。**M6 GRILL G2（默认全确定性）由本提案正式取代**（用户 2026-10-06 确认）。
+把 Report Studio 的模型接入对照全局 AGENT-RUNTIME 标准（`~/.zcode/standards/AGENT-RUNTIME.md`，v1.0 强制标准）做**逐项合规审计与补齐**，以本地 `~/DevWorkSpace/Projects/deep-research` 为成功案例参照。产出必须是**有证据的合规记录**，不是纸面打勾。
 
-## 方案（用户确认的四项）
+## 参照系：deep-research 可迁移模式（审计笔记 2026-10-06）
 
-1. **LLM 进默认生成路径**：材料 → LLM 逐页起草完整内容（headline/bullets/正文，绑定材料来源）→ 排版成型，一键出整套；确定性规则降级为**校验/兜底**（不编造约束、schema 校验、id 白名单、引用绑定全保留）。无密钥/模型不可用时回退确定性骨架并明示（沿用 L4 兜底纪律）。
-2. **主路径三步化**：生成页（上传/粘贴材料 + 选模版风格 + 一个生成按钮）→ 逐页编辑画布 → 审批导出。**五阶段壳层降级为高级入口**（不删除，M6 遗留缺口一并补）；采证/冲突/口径收进二级面板。
-3. **大纲确认可选化**：默认直出整套；提供「先看大纲再生成」开关（对齐 Kimi/Gemini 的可改大纲环节但非强制）。
-4. **补模板 brand 预设**：模版注册表补品牌/风格预设（M6 缺口），生成时随模版应用；对齐 Gamma theme / Kimi 风格选择，仍不做任意模板导入设计器（M3 红线）。
+| 模式 | deep-research 落点 | 迁移判定 |
+|---|---|---|
+| pi import 单点收敛 | adapters/live.ts 唯一直接 import + 动态加载 | reports-factory 已合规（pi-transport.ts 单点，已核实） |
+| 端口接口层 | adapters/types.ts（SearchProvider/ModelProvider…） | 形态不同（我们以 LlmStageClient.complete 为单一入口），实质等价——不强改目录 |
+| 瞬时/配置二分 + 熔断 + maxRetries:1 快失败 | modelFailover.ts | 已合规（client.ts TRANSIENT + 熔断 + pi-transport maxRetries:1） |
+| 循环内零工具 + stopReason=error 主动重抛 | live.ts | 我们无 runAgentLoop（单发工人）；streamSimple error 事件已主动 throw（已核实） |
+| 录制缺键报错不合成 | replay.ts | 已合规（ReplayMissError） |
+| run/checkpoint/audit 分账、audit 零内容 | fsStore.ts | 已合规（work/state.json + outbound-log.json + audit-log.json 三账） |
+| 预算：显式 > 档位 > 默认，到顶有限交付 | runResearch.ts overBudget | 我们有预算三线（次数/墙钟/轮次）+ 成本次级；「到顶有限交付」语义已由页级回退实现 |
+| 领域字典注入（ModuleConfig/questionFramework） | modules/ + evidencePacks | 部分等价（brief.required_boundaries/non_goals + 页绑定材料注入）；需审计确认口径类注入是否充分 |
+| 钉版 | pi-ai: "latest"（**反面教材**） | 我们 "0.86.1" 精确钉版，优于参照 |
 
-## 保留（差异化与围栏，不削弱）
+## 范围（裁定）
 
-- **审批工作流**（G1 签批、内用/外发两级、外发 ack）：全行业真空（调研证实），是本产品立足点。
-- **单页编辑 + 单页 LLM 重生成**（M6 S3/S6 能力对齐 WPS/Gemini 档）：主路径中前置。
-- **围栏资产**：出站白名单、批准持久化、预算三线封顶、零内容审计流、/propose 控制器不变式——AGENT-RUNTIME 标准（P1–P6）要求，任何改动不得削弱。
+1. **逐项审计**：标准 §11 合规清单 8 项 × 现状证据（file:line + 测试锚点），N/A 项逐条论证（无 tool-call 架构下的工具注册表/写门/沙箱），产出 `docs/agent-runtime-compliance.md`（仓库内长期维护文档，含 §9.2 偏差声明）。
+2. **缺口修复**：审计发现的实质缺口（预计为加固级，非重构级）逐项修复并带测试。
+3. **§10 坑表逐条核对**：已核实 system 并入 user / stream error 主动抛 / cost=0 用次数线 / 无工具故无 toolResult 坑 / 精确钉版；审计补齐剩余项证据。
 
 ## 约束
 
-- 模型仍为工人模式：每阶段独立单发 completion + schema 校验，**禁 tool-call 循环**（红队 KA-5 延续，§5 工人模式裁决不变）。
-- 逐页起草的调用计量过预算三线（次数/墙钟/轮次）与出站批准门；逐页出站走既定白名单规则（sensitive 来源排除）。
-- 生成质量依赖 minimax/mimo 中文表现：内容质量风险以「可回退 + 单页重生成 + 人审批」消化；KA-2 盲评作为交付后跟进项。
-- gated dev-flow；技术栈沿用（TypeScript、pi-ai 0.86.x 钉版、zod、Fastify、React 19）；UI 遵循全局 DESIGN.md（蓝图 v4.2）。
+- **substance over form**：只收敛实质合规，不做目录重命名/形态化重构（M5 R4、M7 架构决策延续）。
+- **不引入 pi-agent-core**：单发工人架构不变（M5 R4 用户授权偏差延续，§9.2 记档）；本里程碑若审计认为需要循环，升级为升级问题而非静默引入。
+- 标准 §11 是验收门：文档中每项必须「合规 / N/A（论证）/ 偏差（已授权）」三态之一，禁止无证据打勾。
+- gated dev-flow；技术栈不动（pi-ai 0.86.1 钉版）。
 
 ## 否决的备选
 
-- 维持默认确定性生成（M6 路线）：已证伪——骨架式产物是失败根因。
-- 引入 tool-call agent 循环整体重写：§5 工人模式裁决不变，单发工人即可满足。
+- 引入 pi-agent-core 对齐标准字面（§3.1）：无循环需求，M5 R4 决议延续；引入属范围升级需用户单独授权。
+- 目录重构为 adapters/core 形态：deep-research 形态不必然可迁移，substance over form。
 
 ## 开放问题（GRILL 定）
 
-- 逐页起草的调用形态：整副一次调用 vs 每页一次调用（质量/成本/超时权衡）。
-- LLM 起草内容与确定性资产（表格/图表/口径注）的合成规则。
-- 三步化主路径的路由与壳层改造范围（哪些视图降级、命令面板/侧栏怎么改）。
-- brand 预设的字段集与首批风格清单。
+- 合规文档的颗粒度与维护方式（随代码漂移怎么办）。
+- 「领域字典注入」的达标线（现有 brief/材料注入是否算，还是要加口径表装配）。
+- 审计发现缺口的修复深度分级（加固 vs 记账后置）。

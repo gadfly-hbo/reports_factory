@@ -15,7 +15,7 @@ import { transportKey, type RecordedCall } from '../src/model/recording.js';
 const OUTLINE_SYSTEM =
   '你是汇报蓝图设计师。基于任务书与资产清单设计页计划，只输出 JSON：{"pages":[{"type":"cover|summary|metrics_overview|trend|issue_breakdown|option_comparison|action_items|evidence_appendix","headline":string,"purpose":string}],"open_questions":[{"text":string,"kind":"conflict|confirmation|gap"}]}。页数不超过任务书预算；不要输出其他文字。';
 
-function outlineRecording(user: string, text: string, provider = 'minimax-cn', modelId = 'MiniMax-M2.7'): RecordedCall {
+function outlineRecording(user: string, text: string, provider = 'minimax-cn', modelId = 'MiniMax-M3'): RecordedCall {
   return {
     key: transportKey({ provider, modelId }, { system: OUTLINE_SYSTEM, user }),
     request: { provider, modelId, system: OUTLINE_SYSTEM, user },

@@ -8,6 +8,7 @@ import { transportKey } from '../src/model/recording.js';
 import { buildPageRewriteRequest, digitGuardViolation } from '../src/model/ai-page.js';
 import { EditOpSchema } from '../src/schema/requests.js';
 import { retailBundleRich, retailBrief } from './helpers/retail.js';
+import type { ReportBrief } from '../src/schema/report-spec.js';
 
 /**
  * S6：LLM 整页重生成（PRD D3/G4-C）。
@@ -62,10 +63,13 @@ describe('S6 LLM 整页重生成', () => {
   async function stageReplay(modelOutput: string): Promise<string> {
     await store.updateProject(projectId, { privacy_policy: 'allow_external' });
     const spec = (await app.inject({ url: `/api/projects/${projectId}` })).json().spec;
-    const { system, user } = buildPageRewriteRequest(spec, 'page_02', INSTRUCTION);
+    // 与 workbench 同参：boundaries 来自 editorial state 的 brief（retailBrief.required_boundaries）
+    const { system, user } = buildPageRewriteRequest(spec, 'page_02', INSTRUCTION, {
+      boundaries: (retailBrief as ReportBrief).required_boundaries ?? [],
+    });
     writeFileSync(replayPath, JSON.stringify({ calls: [{
-      key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }, { system, user }),
-      request: { provider: 'minimax-cn', modelId: 'MiniMax-M2.7', system, user },
+      key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M3' }, { system, user }),
+      request: { provider: 'minimax-cn', modelId: 'MiniMax-M3', system, user },
       response: { text: modelOutput, cost: 0.001 },
     }] }));
     return spec.revision_id;

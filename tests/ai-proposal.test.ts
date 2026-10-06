@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { transportKey } from '../src/model/recording.js';
 import { buildProposalRequest } from '../src/model/ai-proposal.js';
 import { retailBundleRich, retailBrief } from './helpers/retail.js';
+import type { ReportBrief } from '../src/schema/report-spec.js';
 
 /**
  * S5（M5）：自然语言 → 变更提案（授权摘要）。
@@ -57,10 +58,13 @@ describe('S5 自然语言→变更提案', () => {
   async function stageHappyReplay(): Promise<string> {
     await store.updateProject(projectId, { privacy_policy: 'allow_external' });
     const spec = (await app.inject({ url: `/api/projects/${projectId}` })).json().spec;
-    const { system, user } = buildProposalRequest(spec, INTENT);
+    // 与 workbench 同参：boundaries 来自 editorial state 的 brief（retailBrief.required_boundaries，M8 B1）
+    const { system, user } = buildProposalRequest(spec, INTENT, {
+      boundaries: (retailBrief as ReportBrief).required_boundaries ?? [],
+    });
     writeFileSync(replayPath, JSON.stringify({ calls: [{
-      key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M2.7' }, { system, user }),
-      request: { provider: 'minimax-cn', modelId: 'MiniMax-M2.7', system, user },
+      key: transportKey({ provider: 'minimax-cn', modelId: 'MiniMax-M3' }, { system, user }),
+      request: { provider: 'minimax-cn', modelId: 'MiniMax-M3', system, user },
       response: { text: MODEL_OUTPUT, cost: 0.0008 },
     }] }));
     return spec.revision_id;

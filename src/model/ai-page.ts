@@ -14,7 +14,8 @@ export const PAGE_REWRITE_SYSTEM_PROMPT =
   '你是报告改写助手。根据用户指令，对指定单页做整页重写。只输出 JSON：' +
   '{"op":{"kind":"rewrite_page","page_id":string,"headline":string,"bullets":[{"text":string,"label":string?}],"body":string?},"note":string}。' +
   'page_id 必须与指令指定的页面一致，不得改动其他页面；headline 与 bullets 必须完整给出（将整页替换）；' +
-  '不得修改、发明任何数字（原有数字要删除可以，改成别的数字不行）；不得删除必要限制；表格与图表不在此操作范围；' +
+  '不得修改、发明任何数字（原有数字要删除可以，改成别的数字不行）；不得删除必要限制；' +
+  '若提供 boundaries（必要边界约束），改写内容必须遵守、不得推翻或弱化；表格与图表不在此操作范围；' +
   'note 用一句话说明理由；不要输出其他文字。';
 
 const PageRewriteOutputSchema = z.object({
@@ -35,7 +36,7 @@ export function buildPageRewriteRequest(
   spec: ReportSpec,
   pageId: string,
   instruction: string,
-  opts?: { excludeClaimRefs?: string[] },
+  opts?: { excludeClaimRefs?: string[]; boundaries?: string[] },
 ): { system: string; user: string } {
   const page = spec.pages.find((p) => p.page_id === pageId);
   const exclude = new Set(opts?.excludeClaimRefs ?? []);
@@ -47,6 +48,7 @@ export function buildPageRewriteRequest(
     {
       instruction,
       revision: spec.revision_id,
+      ...(opts?.boundaries && opts.boundaries.length > 0 ? { boundaries: opts.boundaries } : {}),
       target: page
         ? {
             page_id: page.page_id,
@@ -95,7 +97,7 @@ export async function aiPageRewrite(
   spec: ReportSpec,
   pageId: string,
   instruction: string,
-  opts?: { excludeClaimRefs?: string[] },
+  opts?: { excludeClaimRefs?: string[]; boundaries?: string[] },
 ): Promise<PageRewriteDraft> {
   const { system, user } = buildPageRewriteRequest(spec, pageId, instruction, opts);
   const { output, provider, modelId, cost } = await client.complete({

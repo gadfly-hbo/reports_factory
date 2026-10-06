@@ -1,7 +1,7 @@
 // S1 模型探针（手动，不进测试/CI）：对指定 provider/model 发固定合成任务，测连通性与 schema 遵从率。
 // 用法（密钥经 with-model-env.sh 注入，不落仓）：
 //   npm run build && scripts/with-model-env.sh node scripts/probe-model.mjs \
-//     --provider minimax-cn --model MiniMax-M2.7 --runs 3 [--out tests/fixtures/recordings/s1-probe.json]
+//     --provider minimax-cn --model MiniMax-M3 --runs 3 [--out tests/fixtures/recordings/s1-probe.json]
 // 合成任务 = fixtures 内嵌清单（无任何真实业务数据），录制文件可安全入库供 replay 测试。
 import { argv, exit } from 'node:process';
 import { writeFileSync } from 'node:fs';
