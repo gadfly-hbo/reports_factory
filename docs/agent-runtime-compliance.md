@@ -66,7 +66,7 @@
 | 5 | pi 全家无权限系统、无工具沙箱 | 合规（结构性规避）：无工具面即无沙箱需求；模型无直写通道 | 同 §11-2 |
 | 6 | 0.x 小版本可破坏 | 合规：`package.json:25` 精确钉版 `"0.86.1"`；升级走 §7.4 流程 | package.json；本记录为升级检查点 |
 | 7 | MiniMax-M3 输出前附 `<think>...</think>` 思考标签 | 合规（M8 补齐）：接收完成后正则剥离再进下游解析 | `src/model/pi-transport.ts`（stream 汇聚后 replace 剥离） |
-| 8 | 流模块与 model.api 错配 → 404 | 合规：按 model.api 动态 import 对应流模块 | `src/model/pi-transport.ts:57-61` |
+| 8 | 流模块与 model.api 错配 → 404 | 合规：按 model.api 动态 import 对应流模块；适配层反向配置兜底（`resolveModelFor`：小米 model id 一律走 `token-plan-cn` 端点 + openai-completions，不依赖 pi 内置清单是否收录当前 id——pi 0.86.1 内置只有 v2.5 系，v2.6-flash 等新 id 经此兜底自动可用） | `src/model/pi-transport.ts:57-61`：`resolveModelFor` 小米分支 |
 | 9 | runAgentLoop 不传 convertToLlm | N/A-不适用：不用 runAgentLoop；单发 streamSimple 直接构造 messages（system 并入 user，即坑 3 规避） | pi-transport.ts:109-114 |
 | 10 | pi-ai 内部重试 × AbortSignal 叠加；工人超时 ≥300s | 合规：适配层 maxRetries:1 快失败（重试/熔断归主备链）；默认超时 300s（M8 按标准上调，env 可调） | `src/model/pi-transport.ts:119-121`；`src/model/client.ts:181` |
 | 11 | 模型不守 JSON 包装（double-encoded） | 合规（M8 补齐）：parseJsonLoose coerce 展开 ≤3 层 unwrap，zod 兜底 + 页级回退降级不炸管线 | `src/model/client.ts` parseJsonLoose/unwrapEncodedJson |
@@ -77,14 +77,14 @@
 - 默认主备链已按 §3.4 更新：`minimax-cn/MiniMax-M3`（主）+ `xiaomi-token-plan-cn/mimo-v2.6-flash`（备）（`src/model/client.ts:230`；原 M2.7 已 404 下线、mimo-v2.5-pro 非现网——v1.1 实测背书）。
 - 密钥本机发现与注入：`scripts/with-model-env.sh`（`~/.pi/agent/auth.json` / `~/.zcode/v2/config.json`），与 §3.4 凭证发现路径一致；密钥不进仓不进日志。
 - 全部 replay 夹具与 probe 脚本已随链更新（provider/modelId 键重算）。
-- **待办**：下次真实调用时以 `npm run probe:model` 实测 M3/mimo-v2.6-flash 连通性与 schema 遵从（离线环境本轮未真调）。
+- 已实测（M8 收尾）：MiniMax-M3 单轮 2/2 + 多轮 4/4 / schema 2/2（库表遵从）、refs 跨轮引用 2–3/3；mimo-v2.6-flash 单轮 2/2 + 多轮 4/4、refs 3/3。适配层 reverse config 让 v2.6-flash（pi 0.86.1 内置缺失）经 `token-plan-cn` 端点自动可用。
 
 ## 三、§9.2 偏差记账（已授权）
 
 | 偏差 | 内容 | 授权链 |
 |---|---|---|
 | D-1 | 标准 §3.1 批准栈为 pi-ai + pi-agent-core；本项目只用 pi-ai、不引入 pi-agent-core（无 agent 循环需求，七用点全为单发工人；确定性管线是编排不是 agent 循环，不落 §6「自研循环」红线） | M5 红队 K1 → 用户决议 R4（2026-09）；M7 红队 KA-5 延续；M8 提案否决备选再确认 |
-| D-3 | 一次性接入选型默认链调整（M2.7→M3 / mimo-v2.5-pro→v2.6-flash）依据标准 v1.1 §3.4 实测结论，非偏离；夹具/探针同步更新。上线真调连通性待 probe 复核（离线环境限制） | M8 REVIEW cycle1 M1 → 标准 §3.4 背书 |
+| D-3 | 默认链依据标准 v1.1 §3.4 升级（M2.7→M3 / mimo-v2.5-pro→v2.6-flash）；适配层 reverse config（`resolveModelFor`）让小米 model id 一律走 §3.4 端点，不依赖 pi 内置清单；测试 `tests/runtime-resolve.test.ts` 锁接线 | M8 收尾（产品配置对齐）→ 多轮 + 单轮探针已实测连通 |
 | D-2 | 领域字典注入形态与 deep-research 的 ModuleConfig/evidencePacks 不同（本项目：brief 边界 + 页绑定材料白名单装配） | 实质达标（§11-6），形态差异不构成偏离标准要求；M8 GRILL G2 裁决达标线 |
 
 ## 四、维持合规的运行纪律

@@ -64,7 +64,12 @@ async function streamFnFor(model: Model<Api>): Promise<StreamFn> {
   throw new Error(`不支持的 pi-ai api=${model.api}（当前支持 anthropic-messages / openai-completions）`);
 }
 
-function resolveModel(cfg: ProviderConfig): Model<Api> {
+export function resolveModelFor(cfg: ProviderConfig): Model<Api> {
+  return resolveModelImpl(cfg);
+}
+
+function resolveModelImpl(cfg: ProviderConfig): Model<Api> {
+  // 自定义 Model：调用方显式提供 baseUrl/api 时优先（§7.2 端点怪癖在适配层收敛）
   if (cfg.baseUrl && cfg.api) {
     return {
       id: cfg.modelId,
@@ -72,6 +77,22 @@ function resolveModel(cfg: ProviderConfig): Model<Api> {
       api: cfg.api,
       provider: cfg.provider,
       baseUrl: cfg.baseUrl,
+      reasoning: false,
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128_000,
+      maxTokens: 8_192,
+    } as Model<Api>;
+  }
+  // 标准 §3.4 反向配置（v1.1）：小米端点统一为 token-plan-cn.xiaomimimo.com/v1（openai-completions），
+  // 不依赖 pi 内置清单是否收录当前 model id（pi 0.86.1 内置只有 v2.5 系，v2.6-flash 等新 id 必须走本兜底）
+  if (cfg.provider === 'xiaomi-token-plan-cn') {
+    return {
+      id: cfg.modelId,
+      name: cfg.modelId,
+      api: 'openai-completions',
+      provider: 'xiaomi-token-plan-cn',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       reasoning: false,
       input: ['text'],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -97,7 +118,7 @@ export function stripThinkTags(text: string): string {
 export function piTransport(opts: PiTransportOptions = {}): ModelTransport {
   const apiKeyFor = opts.apiKeyFor ?? envApiKey;
   return async (cfg, req) => {
-    const model = resolveModel(cfg);
+    const model = resolveModelFor(cfg);
     const streamSimple = await streamFnFor(model);
     const apiKey = apiKeyFor(cfg.provider);
     // MIMO 等端点不遵循 system 通道（deep-research 实测），指令并入 user 消息，各 provider 兼容
