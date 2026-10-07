@@ -14,6 +14,7 @@ export function UnderstandView() {
   const { detail, refresh } = useProject();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const id = detail?.project.project_id;
   const sources = detail?.sources ?? [];
   const understanding = (detail as unknown as { understanding?: Record<string, UdEntry> } | null)?.understanding ?? {};
@@ -24,11 +25,14 @@ export function UnderstandView() {
   const runAll = async () => {
     if (!id) return;
     setRunning(true);
+    setError(null);
     try {
       await api(`/api/projects/${id}/understand`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),
       });
-    } catch { /* 失败以列表状态呈现 */ }
+    } catch (e) {
+      setError(`读取理解失败：${e instanceof Error ? e.message : '未知错误'}（可能超时或模型输出不合规，稍后重试）`);
+    }
     setRunning(false);
     await refresh();
   };

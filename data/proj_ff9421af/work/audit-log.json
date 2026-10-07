@@ -1,0 +1,22 @@
+[
+  {
+    "at": "2026-10-07T07:11:23.243Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "failed",
+    "detail": {
+      "source_id": "src_6160ab3e",
+      "reason": "error"
+    }
+  },
+  {
+    "at": "2026-10-07T07:13:03.934Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "failed",
+    "detail": {
+      "source_id": "src_6160ab3e",
+      "reason": "error"
+    }
+  }
+]

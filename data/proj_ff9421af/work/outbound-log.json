@@ -1,0 +1,55 @@
+[
+  {
+    "at": "2026-10-07T07:07:38.276Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:07:38.779Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:09:09.828Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:11:23.235Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T07:13:03.932Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  }
+]
