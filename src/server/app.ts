@@ -187,6 +187,44 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // 第 5 步 逐页编辑：手工直改（纯文字字段）/ agent 整页重写 / 删页
+  app.put('/api/projects/:id/pages/:pid', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string };
+    try {
+      const body = parseBody(z.object({
+        headline: z.string().min(1).optional(),
+        bullets: z.array(z.object({ text: z.string().min(1), source_hint: z.string().optional() })).max(6).optional(),
+        body: z.string().optional(),
+        table_note: z.string().optional(),
+      }), req.body);
+      const draft = await workbench.updatePageManual(id, pid, body);
+      return { ok: true, draft };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
+  app.post('/api/projects/:id/pages/:pid/rewrite', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string };
+    try {
+      const body = parseBody(z.object({ instruction: z.string().min(2).max(500) }), req.body);
+      const draft = await workbench.rewritePage(id, pid, body.instruction);
+      return { ok: true, draft };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+    }
+  });
+
+  app.delete('/api/projects/:id/pages/:pid', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string };
+    try {
+      await workbench.deletePage(id, pid);
+      return { ok: true };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
   // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };

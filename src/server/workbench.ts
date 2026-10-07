@@ -448,8 +448,9 @@ export class WorkbenchService {
         break;
       }
       states[fp.page_id] = 'running';
-      await this.writeWork(projectId, { ...work, page_states: { ...states }, generation: { status: 'running', stale_at: new Date().toISOString() } });
+      // 每次迭代先重读：上一页的成功写盘刚落了 draft，用陈旧快照写盘会抹掉它（pages 丢失根因）
       work = await this.readWork(projectId);
+      await this.writeWork(projectId, { ...work, page_states: { ...states }, generation: { status: 'running', stale_at: new Date().toISOString() } });
 
       const { materials, text: materialText } = this.projectMaterials(digest, fp);
       if (materials.length === 0) {
@@ -511,6 +512,124 @@ export class WorkbenchService {
     await this.writeWork(projectId, { ...finalWork, page_states: finalStates, generation: { status: allDone ? 'done' : anyFailed ? 'failed' : 'running', stale_at: new Date().toISOString(), note: allDone ? undefined : failedCount > 0 ? `${failedCount} 页失败，可单独重试` : undefined } });
     void doneCount;
     return { states: finalStates, done: doneCount, failed: failedCount };
+  }
+
+  // ---- 第 5 步：逐页编辑（S6）----
+
+  /** 手工直改（G8：仅纯文字字段；emoji 不过滤——用户意图优先，M-U6）；内容变更时间供发布批准失效判定 */
+  async updatePageManual(
+    projectId: string,
+    pageId: string,
+    patch: { headline?: string; bullets?: Array<{ text: string; source_hint?: string }>; body?: string; table_note?: string },
+  ): Promise<PageDraft> {
+    const work = await this.readWork(projectId);
+    const draft = work.pages?.[pageId];
+    if (!draft) throw Object.assign(new Error(`页不存在或未生成：${pageId}`), { statusCode: 404 });
+    const next: PageDraft = {
+      ...draft,
+      ...(patch.headline !== undefined ? { headline: patch.headline } : {}),
+      ...(patch.bullets !== undefined ? { bullets: patch.bullets } : {}),
+      ...(patch.body !== undefined ? { body: patch.body } : {}),
+      ...(patch.table_note !== undefined ? { table_note: patch.table_note } : {}),
+    };
+    await this.writeWork(projectId, { ...work, pages: { ...(work.pages ?? {}), [pageId]: next } });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'page_edit', stage: 'page-edit', status: 'manual_edit',
+      detail: { page_id: pageId, fields: Object.keys(patch) },
+    });
+    return next;
+  }
+
+  /** agent 整页重写（单发变换）：指令 + 当前页 + 语义投影材料 → 出站白名单（PageDraftSchema）fail-closed + 数字护栏 */
+  async rewritePage(
+    projectId: string,
+    pageId: string,
+    instruction: string,
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<PageDraft> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const work0 = await this.readWork(projectId);
+    const draft = work0.pages?.[pageId];
+    if (!draft) throw Object.assign(new Error(`页不存在或未生成：${pageId}`), { statusCode: 404 });
+    if (!work0.framework) throw Object.assign(new Error('框架不存在'), { statusCode: 400 });
+    const fp = work0.framework.pages.find((p) => p.page_id === pageId)!;
+    await this.gateOrThrow(projectId, 'authorized-summary', 'page-rewrite');
+    const digest = await this.materialDigest(projectId);
+    const { materials, text: materialText } = this.projectMaterials(digest, fp);
+    const req = await buildWorkerRequest({
+      skillName: 'ppt-report',
+      stageInstruction: PAGE_DRAFT_INSTRUCTION,
+      payload: {
+        page: { page_id: pageId, title: fp.title, intent: fp.intent, page_type: fp.page_type },
+        current_page: draft,
+        user_instruction: instruction.slice(0, 500),
+        materials,
+        boundaries: [],
+      },
+    });
+    const client = deps.client ?? (await this.modelClient());
+    let next: PageDraft | undefined;
+    try {
+      const outcome = await client.complete({
+        stage: 'page-rewrite',
+        callKey: `page-rewrite:${projectId}:${pageId}`,
+        system: req.system,
+        user: req.user,
+        schema: PageDraftSchema,
+      });
+      const candidate = outcome.output;
+      const violations = WorkbenchService.digitGuardViolations(candidate, materialText);
+      if (candidate.uncovered || candidate.bullets.length === 0) {
+        throw Object.assign(new Error('改写结果判定材料未覆盖该页主题，已拒绝应用'), { statusCode: 422 });
+      }
+      if (violations.length > 0) {
+        // 白名单/护栏 fail-closed：拒绝应用原页保持不变（N4：面板明示原因）
+        throw Object.assign(new Error(`改写被拒（数字护栏）：以下数字未见于材料——${violations.join(', ')}`), { statusCode: 422 });
+      }
+      next = candidate;
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(), stage: 'page-rewrite', provider: outcome.provider, modelId: outcome.modelId,
+        mode: 'authorized-summary', itemCount: 1, bytes: req.user.length, cost: outcome.cost,
+      });
+    } catch (e) {
+      if (!(e instanceof Error && e.message.startsWith('改写被拒'))) {
+        await this.recordOutboundCall(projectId, { at: new Date().toISOString(), stage: 'page-rewrite', provider: 'none', modelId: '', mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0 });
+      }
+      throw e;
+    }
+    const work = await this.readWork(projectId);
+    await this.writeWork(projectId, { ...work, pages: { ...(work.pages ?? {}), [pageId]: next } });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'page_edit', stage: 'page-edit', status: 'agent_rewrite',
+      detail: { page_id: pageId, instruction_len: instruction.length },
+    });
+    return next;
+  }
+
+  /** 删页（G8 沿用 M6 语义）：封面页与最后一页拒删；page_id 不重排；已批准外发的内容变更失效在发布门判定 */
+  async deletePage(projectId: string, pageId: string): Promise<void> {
+    const work = await this.readWork(projectId);
+    if (!work.framework) throw Object.assign(new Error('框架不存在'), { statusCode: 400 });
+    const pages = work.framework.pages;
+    const idx = pages.findIndex((p) => p.page_id === pageId);
+    if (idx < 0) throw Object.assign(new Error(`页不存在：${pageId}`), { statusCode: 404 });
+    if (idx === 0) throw Object.assign(new Error('封面页不可删除'), { statusCode: 422 });
+    if (pages.length <= 1) throw Object.assign(new Error('最后一页不可删除'), { statusCode: 422 });
+    const { [pageId]: _dp, ...restPages } = work.pages ?? {};
+    const { [pageId]: _ds, ...restStates } = work.page_states ?? {};
+    void _dp; void _ds;
+    await this.writeWork(projectId, {
+      ...work,
+      framework: { pages: pages.filter((p) => p.page_id !== pageId) },
+      pages: restPages,
+      page_states: restStates,
+      generation: { status: Object.values(restStates).every((s) => s === 'done') ? 'done' : 'failed', stale_at: new Date().toISOString() },
+    });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'page_edit', stage: 'page-edit', status: 'page_deleted',
+      detail: { page_id: pageId },
+    });
   }
 
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */
