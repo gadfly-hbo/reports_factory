@@ -85,7 +85,7 @@ export interface AgentBudget {
   maxWallMs: number;
   maxToolCalls: number;
 }
-export const DEFAULT_PAGE_BUDGET: AgentBudget = { maxTurns: 10, maxWallMs: 10 * 60_000, maxToolCalls: 20 };
+export const DEFAULT_PAGE_BUDGET: AgentBudget = { maxTurns: 15, maxWallMs: 12 * 60_000, maxToolCalls: 30 }; // mimo 实测需 ~15 轮（MiniMax ~8-11）
 
 interface BudgetState {
   turns: number;

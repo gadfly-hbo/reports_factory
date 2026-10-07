@@ -113,3 +113,13 @@
 2. **新接入必过 §7.5**：新供应商/新模型接入后单轮+多轮+vision 三类真调全绿方可判「接入成功」。
 3. **§10 坑新增必加测试**：新增坑必须有对应 `tests/runtime-pits.test.ts` 用例守护。
 4. **每切片提交前对照**：本文件 §11 八项过一遍，绿了再提交。
+
+### 12. B 方案工具 Agent 模式（v1.4 P2，2026-10-07 启用）
+
+- **模式**：工具 Agent（pi-agent-core `runAgentLoop` 有界循环），用于生成节点（第 4 步）——模型自主写 pptxgenjs 代码 → bash 渲染 → 自纠多轮。编辑节点保持 Worker 模式。
+- **§7.5 用途验证**：MiniMax-M3 page_01（11 turns / 8 tools / 70s / 91KB / 65 shapes）；mimo-v2.6-flash page_02（15 turns / 12 tools / 227s / 66KB）。双供应商均通过工具任务验证（实际工具结果消费：stderr 自纠）。
+- **预算**：每页 15 轮 / 12min / 30 次工具调用（mimo 实测需 ~15 轮）；按页独立账本；超额页级 fallback。
+- **工具白名单**：write_code（限 work/tmp/*.js）/ run_render（限 node work/tmp/*.js）/ read_file / list_dir；越界调用拒绝+审计。
+- **审计**：AgentEventSink 落盘 work/agent-audit/events.jsonl（零内容 hash）。
+- **适配层**：`src/model/agent-loop.ts` 单点承载 runAgentLoop（与 agent-kernel.ts 并列，白名单扫描已含）。
+- **D-1 补充**：B 方案不借用 pi-coding-agent（§3.3 合规），复用 pi-agent-core 批准栈。
