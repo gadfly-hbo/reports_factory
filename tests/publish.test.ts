@@ -28,7 +28,16 @@ async function setupReadyProject(app: FastifyInstance, store: WorkspaceStore, re
   await app.inject({ method: 'POST', url: `/api/projects/${id}/understand`, payload: {} });
   await app.inject({ method: 'POST', url: `/api/projects/${id}/framework/generate`, payload: {} });
   await app.inject({ method: 'POST', url: `/api/projects/${id}/framework/confirm`, payload: {} });
-  await app.inject({ method: 'POST', url: `/api/projects/${id}/pages/generate`, payload: {} });
+  const g = await app.inject({ method: 'POST', url: `/api/projects/${id}/pages/generate`, payload: {} });
+  // 容忍模型概率性失败：重试失败页最多 2 次
+  for (let i = 0; i < 2; i++) {
+    const detail = (await app.inject({ url: `/api/projects/${id}` })).json();
+    const failed = Object.entries(detail.page_states).filter(([, v]) => v === 'failed').map(([k]) => k);
+    if (failed.length === 0) break;
+    for (const pid of failed) {
+      await app.inject({ method: 'POST', url: `/api/projects/${id}/pages/generate`, payload: { page_id: pid } });
+    }
+  }
   return id;
 }
 

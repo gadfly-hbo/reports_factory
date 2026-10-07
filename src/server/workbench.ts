@@ -473,7 +473,7 @@ export class WorkbenchService {
         try {
           const outcome = await client.complete({
             stage: 'page-draft',
-            callKey: `page-draft:${projectId}:${fp.page_id}:${attempt}`,
+            callKey: `page-draft:${projectId}:${fp.page_id}`, // 不含 attempt：replay 命中该页任意已录响应
             system: req.system,
             user: req.user,
             schema: PageDraftSchema,

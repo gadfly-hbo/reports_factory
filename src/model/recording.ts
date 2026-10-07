@@ -46,15 +46,25 @@ export function recordingTransport(
 }
 
 export function replayTransport(recordings: RecordedCall[]): ModelTransport {
-  const byKey = new Map(recordings.map((c) => [c.key, c] as const));
+  // 同 key 可存多个响应（录制时多 attempt）：replay 循环取，模拟真实模型的概率性输出
+  const byKey = new Map<string, RecordedCall[]>();
+  for (const c of recordings) {
+    const arr = byKey.get(c.key) ?? [];
+    arr.push(c);
+    byKey.set(c.key, arr);
+  }
+  const callCounts = new Map<string, number>();
   return async (cfg, req) => {
-    const hit = byKey.get(transportKey(cfg, req));
-    if (!hit) {
+    const key = transportKey(cfg, req);
+    const hits = byKey.get(key);
+    if (!hits || hits.length === 0) {
       const err = new Error(`录制未命中（replay 只回放已录制的调用）：${cfg.provider}/${cfg.modelId}`);
       err.name = 'ReplayMissError';
       throw err;
     }
-    return hit.response;
+    const idx = (callCounts.get(key) ?? 0) % hits.length;
+    callCounts.set(key, idx + 1);
+    return hits[idx]!.response;
   };
 }
 
