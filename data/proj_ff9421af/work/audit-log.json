@@ -578,5 +578,253 @@
       "format": "pptx",
       "level": "internal"
     }
+  },
+  {
+    "at": "2026-10-07T08:33:35.429Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:33:38.219Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
+  },
+  {
+    "at": "2026-10-07T08:52:30.956Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_01",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T08:52:45.428Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_02",
+      "attempt": 1
+    }
+  },
+  {
+    "at": "2026-10-07T08:52:45.430Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_02",
+      "reason": "数字护栏拒绝：53.2"
+    }
+  },
+  {
+    "at": "2026-10-07T08:52:57.489Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_03"
+    }
+  },
+  {
+    "at": "2026-10-07T08:53:25.122Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_04",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T08:53:43.802Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_05",
+      "attempt": 1
+    }
+  },
+  {
+    "at": "2026-10-07T08:53:43.803Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_05",
+      "reason": "数字护栏拒绝：100"
+    }
+  },
+  {
+    "at": "2026-10-07T08:53:52.537Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_06"
+    }
+  },
+  {
+    "at": "2026-10-07T08:54:24.597Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_07",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T08:54:35.987Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_08"
+    }
+  },
+  {
+    "at": "2026-10-07T08:55:07.636Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_09",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T08:56:50.114Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_01"
+    }
+  },
+  {
+    "at": "2026-10-07T08:56:55.061Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_02"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:00.406Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_03"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:08.080Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_04"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:16.610Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_05",
+      "attempt": 0
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:31.642Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_05"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:41.758Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_06"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:48.131Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_07"
+    }
+  },
+  {
+    "at": "2026-10-07T08:57:57.422Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_08",
+      "attempt": 0
+    }
+  },
+  {
+    "at": "2026-10-07T08:58:11.765Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_08",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T08:58:16.244Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_09"
+    }
+  },
+  {
+    "at": "2026-10-07T09:02:43.180Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_08"
+    }
+  },
+  {
+    "at": "2026-10-07T09:03:27.384Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
   }
 ]

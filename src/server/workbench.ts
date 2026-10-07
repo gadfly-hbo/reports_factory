@@ -380,6 +380,12 @@ export class WorkbenchService {
         body: draft?.body,
         bullets: draft?.bullets.map((b) => ({ text: b.text, status: 'confirmed' as const })),
         chart,
+        // A+C 融合：透传版式意图与封面元数据
+        ...(draft?.layout ? { layout: draft.layout } : {}),
+        ...(draft?.subtitle ? { subtitle: draft.subtitle } : {}),
+        ...(draft?.author ? { author: draft.author } : {}),
+        ...(draft?.date ? { date: draft.date } : {}),
+        ...(draft?.highlight ? { highlight: draft.highlight } : {}),
         claim_refs: [] as string[],
         metric_refs: [] as string[],
         evidence_refs: [] as string[],

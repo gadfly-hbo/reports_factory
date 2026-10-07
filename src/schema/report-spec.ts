@@ -106,7 +106,12 @@ export const PageSchema = z.object({
   page_id: z.string().min(1),
   type: PageTypeSchema,
   headline: z.string().min(1),
+  /** A+C 融合：版式意图（render 按此选模板） */
+  layout: z.enum(['cover', 'title_bullets', 'two_column', 'chart_focus', 'big_number', 'timeline', 'comparison']).optional(),
   subtitle: z.string().optional(),
+  author: z.string().optional(),
+  date: z.string().optional(),
+  highlight: z.string().optional(),
   meta: z
     .object({
       period: z.string().optional(),

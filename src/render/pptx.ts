@@ -138,6 +138,154 @@ function addCover(pptx: PptxGenJS, page: Page, brand?: { logo_data_url?: string 
   if (page.required_note) addFooter(s, page, p);
 }
 
+/** 版式分发器：按 page.layout 意图选模板（A+C 融合） */
+function addPageByLayout(pptx: PptxGenJS, page: Page & { layout?: string; subtitle?: string; author?: string; date?: string; highlight?: string }, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
+  switch (page.layout) {
+    case 'cover':
+      return addCoverEnhanced(pptx, page, p, f);
+    case 'two_column':
+      return addTwoColumn(pptx, page, chartPngCache, p, f);
+    case 'chart_focus':
+      return addChartFocus(pptx, page, chartPngCache, p, f);
+    case 'big_number':
+      return addBigNumber(pptx, page, p, f);
+    case 'timeline':
+      return addTimeline(pptx, page, p, f);
+    case 'comparison':
+      return addComparison(pptx, page, chartPngCache, p, f);
+    case 'title_bullets':
+    default:
+      return addContentPage(pptx, page, chartPngCache, p, f);
+  }
+}
+
+/** 封面增强版：大标题+副标题+作者/日期+品牌条 */
+function addCoverEnhanced(pptx: PptxGenJS, page: Page & { subtitle?: string; author?: string; date?: string }, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  // 背景色块（顶部 1/3 深藏青）
+  s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 2.8, fill: { color: '263442' } });
+  // 品牌条（铁锈橘）
+  s.addShape('rect', { x: 0, y: 2.8, w: 13.33, h: 0.15, fill: { color: 'b44626' } });
+  // 页型标签（白色，在藏青背景上）
+  s.addText('封面', { x: 0.9, y: 0.6, w: 3, h: 0.4, fontSize: 14, bold: true, color: 'd6dde4', fontFace: f });
+  // 主标题（白色，在藏青背景上）
+  s.addText(page.headline, { x: 0.9, y: 1.1, w: 11.5, h: 1.5, fontSize: 28, bold: true, color: 'ffffff', fontFace: f, lineSpacing: 32 });
+  // 副标题（灰色，在白底上）
+  if (page.subtitle) {
+    s.addText(page.subtitle, { x: 0.9, y: 3.2, w: 11.5, h: 0.8, fontSize: 16, color: '626773', fontFace: f, lineSpacing: 20 });
+  }
+  // 作者/日期（底部）
+  const meta = [page.author, page.date].filter(Boolean).join(' · ');
+  if (meta) {
+    s.addText(meta, { x: 0.9, y: 6.5, w: 11.5, h: 0.4, fontSize: 12, color: '626773', fontFace: f });
+  }
+  // 底部品牌条
+  s.addShape('rect', { x: 0, y: 7.35, w: 13.33, h: 0.15, fill: { color: 'b44626' } });
+  if (page.required_note) addFooter(s, page, p);
+}
+
+/** 两栏布局：左 60% 文字，右 40% 图表/数据 */
+function addTwoColumn(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  // 页眉
+  s.addText(pageTypeLabels[page.type] ?? page.type, { x: 0.6, y: 0.32, w: 6, h: 0.3, fontSize: 11, bold: true, color: p.primary.replace('#', ''), fontFace: f });
+  s.addShape('rect', { x: 0.6, y: 0.68, w: 0.8, h: 0.08, fill: { color: 'b44626' } });
+  // 左栏：标题+要点
+  s.addText(page.headline, { x: 0.6, y: 0.95, w: 7, h: 1.0, fontSize: 20, bold: true, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 24 });
+  const bullets = page.bullets ?? [];
+  bullets.forEach((b, i) => {
+    s.addText(b.text, { x: 0.6, y: 2.1 + i * 0.75, w: 7, h: 0.65, fontSize: 13, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 16, bullet: { code: '2014', indent: 10 } });
+  });
+  // 右栏：图表或高亮数字
+  if (page.chart) {
+    addChart(pptx, s, page.chart, { x: 8.0, y: 1.2, w: 4.8, h: 4.5 }, f);
+  } else if (page.table) {
+    // 简化表格展示
+    s.addText('数据见附录', { x: 8.0, y: 2.5, w: 4.8, h: 1, fontSize: 14, color: '626773', align: 'center' });
+  }
+  // 底部来源
+  addFooter(s, page, p);
+}
+
+/** 图表为主：大图+顶部标题+底部说明 */
+function addChartFocus(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  // 顶部标题条
+  s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: 'f0efeb' } });
+  s.addText(page.headline, { x: 0.6, y: 0.25, w: 12, h: 0.6, fontSize: 18, bold: true, color: p.text.replace('#', ''), fontFace: f });
+  // 大图表（居中，占 70% 高度）
+  if (page.chart) {
+    addChart(pptx, s, page.chart, { x: 1.5, y: 1.3, w: 10.3, h: 4.8 }, f);
+  }
+  // 底部说明
+  if (page.body) {
+    s.addText(page.body, { x: 0.6, y: 6.3, w: 12, h: 0.8, fontSize: 12, color: '626773', fontFace: f, lineSpacing: 14 });
+  }
+  addFooter(s, page, p);
+}
+
+/** 大数字强调：一个关键数字占视觉中心 */
+function addBigNumber(pptx: PptxGenJS, page: Page & { highlight?: string }, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  // 背景色块（左侧 1/3 铁锈橘）
+  s.addShape('rect', { x: 0, y: 0, w: 4.5, h: 7.5, fill: { color: 'b44626' } });
+  // 大数字（白色，在橘色背景上）
+  const num = page.highlight ?? page.bullets?.[0]?.text?.match(/\d+\.?\d*%?/)?.[0] ?? 'N/A';
+  s.addText(num, { x: 0.5, y: 2.5, w: 3.5, h: 2, fontSize: 60, bold: true, color: 'ffffff', align: 'center', fontFace: f });
+  // 右侧：标题+要点
+  s.addText(page.headline, { x: 5.0, y: 0.8, w: 7.8, h: 1.2, fontSize: 22, bold: true, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 26 });
+  const bullets = page.bullets ?? [];
+  bullets.forEach((b, i) => {
+    s.addText(b.text, { x: 5.0, y: 2.2 + i * 0.85, w: 7.8, h: 0.75, fontSize: 14, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 17, bullet: { code: '2014', indent: 10 } });
+  });
+  addFooter(s, page, p);
+}
+
+/** 时间线/步骤：横向步骤条 */
+function addTimeline(pptx: PptxGenJS, page: Page, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  s.addText(page.headline, { x: 0.6, y: 0.5, w: 12, h: 0.8, fontSize: 20, bold: true, color: p.text.replace('#', ''), fontFace: f });
+  const bullets = page.bullets ?? [];
+  const n = bullets.length;
+  if (n === 0) { addFooter(s, page, p); return; }
+  // 步骤条（横向等分）
+  const stepW = 12 / n;
+  bullets.forEach((b, i) => {
+    const x = 0.6 + i * stepW;
+    // 步骤圆点
+    s.addShape('ellipse', { x: x + stepW / 2 - 0.3, y: 2.0, w: 0.6, h: 0.6, fill: { color: 'b44626' } });
+    s.addText(String(i + 1), { x: x + stepW / 2 - 0.3, y: 2.0, w: 0.6, h: 0.6, fontSize: 16, bold: true, color: 'ffffff', align: 'center' });
+    // 步骤文字
+    s.addText(b.text, { x: x + 0.1, y: 2.8, w: stepW - 0.2, h: 2.5, fontSize: 12, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 14, align: 'center' });
+    // 连接线
+    if (i < n - 1) {
+      s.addShape('line', { x: x + stepW / 2 + 0.3, y: 2.3, w: stepW - 0.6, h: 0, line: { color: 'dedcd6', width: 2 } });
+    }
+  });
+  addFooter(s, page, p);
+}
+
+/** 对比布局：左右两列对比 */
+function addComparison(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
+  const s = pptx.addSlide();
+  s.addText(page.headline, { x: 0.6, y: 0.4, w: 12, h: 0.7, fontSize: 20, bold: true, color: p.text.replace('#', ''), fontFace: f });
+  const bullets = page.bullets ?? [];
+  const mid = Math.ceil(bullets.length / 2);
+  // 左列
+  s.addShape('rect', { x: 0.6, y: 1.3, w: 6, h: 0.5, fill: { color: 'f0efeb' } });
+  s.addText('现状', { x: 0.6, y: 1.3, w: 6, h: 0.5, fontSize: 14, bold: true, color: p.text.replace('#', ''), align: 'center', fontFace: f });
+  bullets.slice(0, mid).forEach((b, i) => {
+    s.addText(b.text, { x: 0.6, y: 2.0 + i * 0.8, w: 6, h: 0.7, fontSize: 12, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 14 });
+  });
+  // 右列
+  s.addShape('rect', { x: 6.8, y: 1.3, w: 6, h: 0.5, fill: { color: 'fcf0e9' } });
+  s.addText('目标/建议', { x: 6.8, y: 1.3, w: 6, h: 0.5, fontSize: 14, bold: true, color: 'b44626', align: 'center', fontFace: f });
+  bullets.slice(mid).forEach((b, i) => {
+    s.addText(b.text, { x: 6.8, y: 2.0 + i * 0.8, w: 6, h: 0.7, fontSize: 12, color: p.text.replace('#', ''), fontFace: f, lineSpacing: 14 });
+  });
+  addFooter(s, page, p);
+}
+
 function addContentPage(pptx: PptxGenJS, page: Page, chartPngCache: Map<string, Buffer> | null = null, p = palette, f = defaultPptxFont) {
   const s = pptx.addSlide();
   s.addText(pageTypeLabels[page.type] ?? page.type, {
@@ -268,8 +416,15 @@ export async function renderReportPptx(spec: ReportSpec, opts: PptxRenderOptions
   const p = withBrand(brand);
   const f = resolveFonts(brand).pptx;
   for (const page of spec.pages) {
-    if (page.type === 'cover') addCover(pptx, page, brand, p, f);
-    else addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p, f);
+    // A+C 融合：优先用 page.layout 意图选版式，fallback 按 type
+    const pageWithLayout = page as Page & { layout?: string; subtitle?: string; author?: string; date?: string; highlight?: string };
+    if (pageWithLayout.layout) {
+      addPageByLayout(pptx, pageWithLayout, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p, f);
+    } else if (page.type === 'cover') {
+      addCover(pptx, page, brand, p, f);
+    } else {
+      addContentPage(pptx, page, opts.chartDataMode === 'aggregate_only' ? chartPngCache : null, p, f);
+    }
   }
   const out = await pptx.write({ outputType: 'nodebuffer' });
   return out as Buffer;

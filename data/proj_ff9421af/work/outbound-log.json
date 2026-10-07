@@ -630,5 +630,275 @@
     "itemCount": 1,
     "bytes": 1433,
     "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:52:11.354Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:52:30.953Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:52:41.232Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:52:45.427Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1394,
+    "cost": 0.0005690999999999999
+  },
+  {
+    "at": "2026-10-07T08:52:57.488Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1407,
+    "cost": 0.0009467999999999999
+  },
+  {
+    "at": "2026-10-07T08:53:15.910Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:53:25.120Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:53:38.133Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:53:43.801Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1438,
+    "cost": 0.00049404
+  },
+  {
+    "at": "2026-10-07T08:53:52.536Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1444,
+    "cost": 0.0012226799999999999
+  },
+  {
+    "at": "2026-10-07T08:54:15.082Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:54:24.594Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:54:35.986Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1436,
+    "cost": 0.00098808
+  },
+  {
+    "at": "2026-10-07T08:54:54.707Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:55:07.634Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:56:50.113Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1392,
+    "cost": 0.0006039
+  },
+  {
+    "at": "2026-10-07T08:56:55.060Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1394,
+    "cost": 0.0005895
+  },
+  {
+    "at": "2026-10-07T08:57:00.405Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1407,
+    "cost": 0.0007428
+  },
+  {
+    "at": "2026-10-07T08:57:08.079Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1365,
+    "cost": 0.0007168799999999999
+  },
+  {
+    "at": "2026-10-07T08:57:16.609Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1438,
+    "cost": 0.0006176399999999999
+  },
+  {
+    "at": "2026-10-07T08:57:31.641Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1438,
+    "cost": 0.0006320399999999999
+  },
+  {
+    "at": "2026-10-07T08:57:41.757Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1444,
+    "cost": 0.0008168399999999999
+  },
+  {
+    "at": "2026-10-07T08:57:48.130Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1398,
+    "cost": 0.0005365799999999999
+  },
+  {
+    "at": "2026-10-07T08:57:57.421Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1436,
+    "cost": 0.0007154399999999999
+  },
+  {
+    "at": "2026-10-07T08:58:11.761Z",
+    "stage": "page-draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  },
+  {
+    "at": "2026-10-07T08:58:16.243Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1433,
+    "cost": 0.00055338
+  },
+  {
+    "at": "2026-10-07T09:02:43.179Z",
+    "stage": "page-draft",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 1436,
+    "cost": 0.00055488
   }
 ]
