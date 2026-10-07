@@ -96,7 +96,7 @@ describe('S5 逐页生成（录制回放）', () => {
   });
 
   it('预算超帽 → 403 且门决策写审计（负例）', async () => {
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
       await store.appendOutboundLog(projectId, { at: new Date().toISOString(), stage: 'page-draft', provider: 'none', modelId: '', mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0 });
     }
     const gen = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });

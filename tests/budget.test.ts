@@ -72,9 +72,9 @@ describe('预算三线封顶（S5 / 红队 KA-3）', () => {
 
   it('resolveBudget：env 与项目级配置覆盖默认值', () => {
     const def = resolveBudget({}, {});
-    expect(def.maxCalls).toBe(50);
-    expect(def.maxWallMs).toBe(30 * 60_000);
-    expect(def.maxTurns).toBe(20);
+    expect(def.maxCalls).toBe(200);
+    expect(def.maxWallMs).toBe(4 * 60 * 60_000);
+    expect(def.maxTurns).toBe(100);
     const env = resolveBudget({}, { REPORT_STUDIO_BUDGET_CALLS: '5', REPORT_STUDIO_BUDGET_TURNS: '2' });
     expect(env.maxCalls).toBe(5);
     expect(env.maxTurns).toBe(2);
@@ -114,7 +114,7 @@ describe('出站批准持久化与预算门挂点（S5）', () => {
     const project = await store.createProject({ title: '预算拦截' });
     const pid = project.project_id;
     // 预置历史调用触顶（次数线）
-    for (let i = 0; i < 50; i++) await store.appendOutboundLog(pid, logEntry());
+    for (let i = 0; i < 200; i++) await store.appendOutboundLog(pid, logEntry());
     const wb = new WorkbenchService(store);
     await store.updateProject(pid, { privacy_policy: 'allow_external' });
     const res = await wb.gateOrThrow(pid, 'authorized-summary', 'draft').catch((e: Error & { statusCode?: number }) => e);
@@ -129,7 +129,7 @@ describe('出站批准持久化与预算门挂点（S5）', () => {
   it('门决策写独立审计流（零内容，P5/P6；六步管线阶段审计随 S5 回归）', async () => {
     const project = await store.createProject({ title: '门审计' });
     const pid = project.project_id;
-    for (let i = 0; i < 50; i++) await store.appendOutboundLog(pid, logEntry());
+    for (let i = 0; i < 200; i++) await store.appendOutboundLog(pid, logEntry());
     const wb = new WorkbenchService(store);
     await wb.gateOrThrow(pid, 'authorized-summary', 'draft').catch(() => undefined);
     const audit = await store.readAuditLog(pid);
