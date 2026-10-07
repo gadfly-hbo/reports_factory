@@ -10,6 +10,8 @@ import { LlmStageClient, chainFromEnv, DEFAULT_TIMEOUT_MS } from '../model/clien
 import { replayTransport, loadRecordings } from '../model/recording.js';
 import { resolveBudget, checkBudget, type BudgetEntry } from '../model/budget.js';
 import { PptStepSchema, type PptStep, type Project, type SourceAsset } from '../schema/project.js';
+import { UnderstandingSchema, UNDERSTAND_INSTRUCTION, type Understanding } from '../schema/understanding.js';
+import { buildWorkerRequest } from '../model/agent-kernel.js';
 
 /**
  * 工作台服务（M10 六步）：上传资料 → 读取理解 → 确认框架 → 生成 → 逐页编辑 → 审核发布。
@@ -19,8 +21,8 @@ import { PptStepSchema, type PptStep, type Project, type SourceAsset } from '../
 
 /** 六步项目 work 态：逐段落盘 work/state.json，重启可恢复（checkpoint 基础） */
 export interface PptWorkState {
-  /** S3 读取理解：source_id → 理解摘要（要点/数据要点/主题标签） */
-  understanding?: Record<string, unknown>;
+  /** S3 读取理解：source_id → 理解摘要（要点/数据要点/主题标签）；G11 逐文件 checkpoint */
+  understanding?: Record<string, Understanding>;
   /** S4 框架：页序列（{page_id,title,page_type,intent,source_hint?}[]）；确认后不可变 */
   framework?: Array<{ page_id: string; title: string; page_type: string; intent?: string; source_hint?: string }>;
   framework_confirmed?: boolean;
@@ -180,6 +182,138 @@ export class WorkbenchService {
     await this.store.writeWorkState(projectId, work);
   }
 
+  // ---- 第 2 步：读取理解（S3）----
+
+  /** 理解请求载荷（§4.6 上下文装配单点）：文本材料带确定性提炼；图片走 vision（M-U4） */
+  private async understandingPayload(projectId: string, asset: SourceAsset): Promise<{
+    payload: Record<string, unknown>;
+    images?: Array<{ data: string; mimeType: string }>;
+  }> {
+    const content = await this.store.readSourceContent(projectId, asset.source_id);
+    if (asset.kind === 'image') {
+      return {
+        payload: {
+          filename: asset.filename,
+          kind: asset.kind,
+          media_type: asset.media_type,
+          note: '图片材料：请基于图片内容提炼要点（图表请读数据，文字请读结论）',
+        },
+        images: [{ data: content.toString('base64'), mimeType: asset.media_type }],
+      };
+    }
+    const derived = await this.store.readDerivedAssets(projectId, asset.source_id);
+    const text = content.toString('utf-8');
+    // 长文档分段摘要（map）留待页级增强；当前单发上限 60k 字符，超出截断并明示
+    const truncated = text.length > 60_000;
+    return {
+      payload: {
+        filename: asset.filename,
+        kind: asset.kind,
+        text: truncated ? `${text.slice(0, 60_000)}\n【材料超长，已截断】` : text,
+        deterministic_extraction: derived
+          ? {
+              claims: (derived['claims'] as unknown[] | undefined)?.length ?? 0,
+              tables: (derived['tables'] as unknown[] | undefined)?.length ?? 0,
+              notes: (derived['notes'] as unknown[] | undefined)?.length ?? 0,
+            }
+          : null,
+        truncated,
+      },
+    };
+  }
+
+  /** 单文件理解（G11 checkpoint：已完成文件由调用方跳过）；失败上抛由路由转译 */
+  async understandSource(
+    projectId: string,
+    sourceId: string,
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<Understanding> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const asset = (await this.store.listSourceAssets(projectId)).find((a) => a.source_id === sourceId);
+    if (!asset) throw Object.assign(new Error(`资料不存在：${sourceId}`), { statusCode: 404 });
+    await this.gateOrThrow(projectId, 'authorized-summary', 'understand');
+
+    const { payload, images } = await this.understandingPayload(projectId, asset);
+    const req = await buildWorkerRequest({ skillName: 'ppt-report', stageInstruction: UNDERSTAND_INSTRUCTION, payload });
+    const client = deps.client ?? (await this.modelClient());
+    let understanding: Understanding;
+    try {
+      const outcome = await client.complete({
+        stage: 'understand',
+        callKey: `understand:${projectId}:${asset.source_id}:${asset.version}`,
+        system: req.system,
+        user: req.user,
+        images,
+        schema: UnderstandingSchema,
+      });
+      understanding = outcome.output;
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(), stage: 'understand', provider: outcome.provider, modelId: outcome.modelId,
+        mode: 'authorized-summary', itemCount: understanding.points.length, bytes: req.user.length, cost: outcome.cost,
+      });
+    } catch (e) {
+      // 失败的真实调用也计量（预算不失真）
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(), stage: 'understand', provider: 'none', modelId: '',
+        mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0,
+      });
+      await this.store.appendAuditLog(projectId, {
+        at: new Date().toISOString(), kind: 'understand', stage: 'understand', status: 'failed',
+        detail: { source_id: sourceId, reason: 'error' },
+      });
+      throw e;
+    }
+    const work = await this.readWork(projectId);
+    await this.writeWork(projectId, {
+      ...work,
+      understanding: { ...(work.understanding ?? {}), [sourceId]: understanding },
+    });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'understand', stage: 'understand', status: 'done',
+      detail: { source_id: sourceId, points: understanding.points.length },
+    });
+    return understanding;
+  }
+
+  /** 全部待理解文件（checkpoint：已有摘要的跳过）；逐文件独立成败，不因单文件中断整批 */
+  async understandAllPending(
+    projectId: string,
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<{ done: string[]; failed: Array<{ source_id: string; reason: string }> }> {
+    const sources = await this.store.listSourceAssets(projectId);
+    const work = await this.readWork(projectId);
+    const done: string[] = [];
+    const failed: Array<{ source_id: string; reason: string }> = [];
+    for (const asset of sources) {
+      if (work.understanding?.[asset.source_id]) { done.push(asset.source_id); continue; }
+      try {
+        await this.understandSource(projectId, asset.source_id, deps);
+        done.push(asset.source_id);
+      } catch (e) {
+        failed.push({ source_id: asset.source_id, reason: e instanceof Error ? e.message.slice(0, 120) : String(e) });
+      }
+    }
+    return { done, failed };
+  }
+
+  /** 资料移除（M-U1）：原件/派生/理解摘要一并清除；失败文件移除后不再阻塞框架解锁 */
+  async removeSource(projectId: string, sourceId: string): Promise<void> {
+    const asset = (await this.store.listSourceAssets(projectId)).find((a) => a.source_id === sourceId);
+    if (!asset) throw Object.assign(new Error(`资料不存在：${sourceId}`), { statusCode: 404 });
+    await this.store.deleteSourceAsset(projectId, sourceId);
+    const work = await this.readWork(projectId);
+    if (work.understanding?.[sourceId]) {
+      const { [sourceId]: _removed, ...rest } = work.understanding;
+      void _removed;
+      await this.writeWork(projectId, { ...work, understanding: rest });
+    }
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'source_removed', stage: 'upload', status: 'done',
+      detail: { source_id: sourceId },
+    });
+  }
+
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */
   async projectDetail(projectId: string) {
     const project = await this.store.getProject(projectId);
@@ -197,6 +331,9 @@ export class WorkbenchService {
       exports,
       capabilities,
       steps: PPT_STEPS.map((key) => ({ key, unlocked: unlocked[key] })),
+      understanding: work.understanding ?? {},
+      framework: work.framework ?? null,
+      framework_confirmed: work.framework_confirmed === true,
     };
   }
 }

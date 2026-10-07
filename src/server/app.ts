@@ -103,6 +103,40 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined, available_sheets: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations, available_sheets };
   });
 
+  // 第 2 步 读取理解：{source_id?} 缺省=全部待理解文件（G11 checkpoint 跳过已完成）
+  app.post('/api/projects/:id/understand', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { source_id?: string };
+    try {
+      if (body.source_id) {
+        const understanding = await workbench.understandSource(id, body.source_id);
+        return { ok: true, understanding };
+      }
+      const result = await workbench.understandAllPending(id);
+      return { ok: result.failed.length === 0, ...result };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+    }
+  });
+
+  // 理解摘要读取（S4 框架生成 / S5 语义投影消费）
+  app.get('/api/projects/:id/understanding', async (req) => {
+    const { id } = req.params as { id: string };
+    const work = await workbench.readWork(id);
+    return { understanding: work.understanding ?? {} };
+  });
+
+  // 资料移除（M-U1）：原件+派生+摘要一并删；失败文件移除后解锁框架确认
+  app.delete('/api/projects/:id/sources/:sid', async (req, reply) => {
+    const { id, sid } = req.params as { id: string; sid: string };
+    try {
+      await workbench.removeSource(id, sid);
+      return { ok: true };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
   // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };

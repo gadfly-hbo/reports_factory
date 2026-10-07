@@ -1,0 +1,17 @@
+{
+  "calls": [
+    {
+      "key": "0465b3bb85e7a9e2",
+      "request": {
+        "provider": "minimax-cn",
+        "modelId": "MiniMax-M3",
+        "system": "The following skills provide specialized instructions for specific tasks.\nRead the full skill file when the task matches its description.\nWhen a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.\n\n<available_skills>\n  <skill>\n    <name>ppt-report</name>\n    <description>PPT 报告生成守则——理解资料、搭框架、起草页面、改写单页时的统一内容与版式规则。凡为 PPT 生成或修改内容的环节一律遵循本守则。</description>\n    <location>/Users/bendandebaba/DevWorkSpace/Projects/reports-factory/assets/skills/ppt/SKILL.md</location>\n  </skill>\n</available_skills>\n\n任务：读取并理解一份材料，产出结构化理解摘要。\n只输出 JSON：{\"points\":[{\"text\":\"要点提炼\",\"topic_tag\":\"主题标签\",\"kind\":\"point|data\",\"value\":数值或省略,\"unit\":\"单位或省略\",\"locator\":\"页码/章节定位或省略\"}],\"uncovered\":boolean,\"gist\":\"一句话概述\"}。\n要求：\n- 每条要点都必须带 topic_tag（简短名词短语，同类材料保持一致）；数据要点 kind=data 并给 value/unit\n- 数字逐字取自材料，不做换算；材料没有的内容不要写\n- points 最多 40 条，按重要性排序；材料确实无可提炼内容时 points=[] 且 uncovered=true",
+        "user": "{\n \"filename\": \"m10-understand-fixture.md\",\n \"kind\": \"markdown\",\n \"text\": \"# 合成材料：某零售门店季度运营情况（演示数据，非真实经营结论）\\n\\n## 一、客流与转化\\n\\n本季度进店客流 12,400 人次，环比上升 8.2%。试穿率 34%，成交转化率 21.5%。\\n客单价 328 元，环比基本持平。\\n\\n## 二、库存\\n\\n季末库存周转天数 46 天，较上季度的 52 天有所改善。\\n滞销 SKU 占比 18%，主要集中在配饰类目。\\n\\n## 三、会员\\n\\n会员复购率 41%，会员贡献销售额占比 57%。\\n新会员注册 1,860 人，环比下降 4%。\\n\\n## 四、下一步\\n\\n下季度重点：配饰类目清仓、会员日运营、周末客流高峰时段排班优化。\\n\",\n \"deterministic_extraction\": {\n  \"claims\": 0,\n  \"tables\": 0,\n  \"notes\": 4\n },\n \"truncated\": false\n}"
+      },
+      "response": {
+        "text": "{\"points\":[{\"text\":\"本季度进店客流 12,400 人次，环比上升 8.2%\",\"topic_tag\":\"客流与转化\",\"kind\":\"data\",\"value\":12400,\"unit\":\"人次\",\"locator\":\"一、客流与转化\"},{\"text\":\"试穿率 34%\",\"topic_tag\":\"客流与转化\",\"kind\":\"data\",\"value\":34,\"unit\":\"%\",\"locator\":\"一、客流与转化\"},{\"text\":\"成交转化率 21.5%\",\"topic_tag\":\"客流与转化\",\"kind\":\"data\",\"value\":21.5,\"unit\":\"%\",\"locator\":\"一、客流与转化\"},{\"text\":\"客单价 328 元，环比基本持平\",\"topic_tag\":\"客流与转化\",\"kind\":\"data\",\"value\":328,\"unit\":\"元\",\"locator\":\"一、客流与转化\"},{\"text\":\"季末库存周转天数 46 天，较上季度 52 天有所改善\",\"topic_tag\":\"库存\",\"kind\":\"data\",\"value\":46,\"unit\":\"天\",\"locator\":\"二、库存\"},{\"text\":\"上季度库存周转天数 52 天\",\"topic_tag\":\"库存\",\"kind\":\"data\",\"value\":52,\"unit\":\"天\",\"locator\":\"二、库存\"},{\"text\":\"滞销 SKU 占比 18%，主要集中在配饰类目\",\"topic_tag\":\"库存\",\"kind\":\"data\",\"value\":18,\"unit\":\"%\",\"locator\":\"二、库存\"},{\"text\":\"会员复购率 41%\",\"topic_tag\":\"会员\",\"kind\":\"data\",\"value\":41,\"unit\":\"%\",\"locator\":\"三、会员\"},{\"text\":\"会员贡献销售额占比 57%\",\"topic_tag\":\"会员\",\"kind\":\"data\",\"value\":57,\"unit\":\"%\",\"locator\":\"三、会员\"},{\"text\":\"新会员注册 1,860 人，环比下降 4%\",\"topic_tag\":\"会员\",\"kind\":\"data\",\"value\":1860,\"unit\":\"人\",\"locator\":\"三、会员\"},{\"text\":\"下季度重点：配饰类目清仓、会员日运营、周末客流高峰时段排班优化\",\"topic_tag\":\"下一步\",\"kind\":\"point\",\"locator\":\"四、下一步\"}],\"uncovered\":false,\"gist\":\"演示用零售门店季度运营摘要：客流 1.24 万人次（环比 +8.2%）、转化 21.5%、客单价 328 元，库存周转由 52 天改善至 46 天，会员销售贡献 57%，下季度聚焦配饰清仓与会员日运营。\"}",
+        "cost": 0.0006626399999999999
+      }
+    }
+  ]
+}

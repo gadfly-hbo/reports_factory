@@ -436,6 +436,18 @@ export class WorkspaceStore {
     await writeFile(path, JSON.stringify(asset, null, 2));
   }
 
+  /** M10 M-U1 资料移除：元数据 + 原件 + 派生资产一并删除（理解摘要由 work 层调用方同步清除） */
+  async deleteSourceAsset(projectId: string, sourceId: string): Promise<void> {
+    const dir = join(this.projectDir(projectId), 'sources');
+    const files = await readdir(dir).catch(() => [] as string[]);
+    for (const f of files) {
+      if (f.startsWith(`${sourceId}.json`) || f.startsWith(`${sourceId}__`) || f.startsWith(`${sourceId}.assets.json`)) {
+        await rm(join(dir, f), { force: true });
+      }
+    }
+    await this.touch(projectId);
+  }
+
   async saveRevision(projectId: string, spec: ReportSpec, note?: string): Promise<ReportRevisionMeta> {
     ReportSpecSchema.parse(spec); // 写入前校验，坏 spec 不落盘
     const existing = await this.listRevisions(projectId);
@@ -547,3 +559,4 @@ export class WorkspaceStore {
     }
   }
 }
+  // 追加在 markSourceParse 之后

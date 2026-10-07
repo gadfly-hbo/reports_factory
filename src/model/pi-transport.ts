@@ -121,13 +121,18 @@ export function piTransport(opts: PiTransportOptions = {}): ModelTransport {
     const model = resolveModelFor(cfg);
     const streamSimple = await streamFnFor(model);
     const apiKey = apiKeyFor(cfg.provider);
-    // MIMO 等端点不遵循 system 通道（deep-research 实测），指令并入 user 消息，各 provider 兼容
+    // MIMO 等端点不遵循 system 通道（deep-research 实测），指令并入 user 消息，各 provider 兼容；
+    // 图片输入（M-U4）：文本块在前 + image 块（base64），anthropic-messages 与 openai-completions 两协议均接受
+    const blocks: Array<Record<string, string>> = [{ type: 'text', text: `${req.system}\n\n${req.user}` }];
+    for (const img of req.images ?? []) {
+      blocks.push({ type: 'image', data: img.data, mimeType: img.mimeType });
+    }
     const context = {
       messages: [
         {
           role: 'user',
           timestamp: Date.now(),
-          content: [{ type: 'text', text: `${req.system}\n\n${req.user}` }],
+          content: blocks,
         },
       ],
     };

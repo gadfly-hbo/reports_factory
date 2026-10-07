@@ -17,12 +17,14 @@ export interface ProviderConfig {
 }
 
 export interface StageRequest<T> {
-  /** 用点标识（outline/recommend/proposal-draft/semantic-checks/evidence-gaps） */
+  /** 用点标识（M10：understand/framework/page-draft/page-rewrite） */
   stage: string;
   /** 录制/重放键：同内容的重复调用共享录制 */
   callKey: string;
   system: string;
   user: string;
+  /** 图片输入（M-U4，可选） */
+  images?: Array<{ data: string; mimeType: string }>;
   schema: z.ZodType<T>;
 }
 
@@ -36,6 +38,8 @@ export interface StageOutcome<T> {
 export interface TransportRequest {
   system: string;
   user: string;
+  /** M10 图片输入（M-U4）：base64 数据（不带 data: 前缀）+ MIME；transport 层拼多模态 content 块 */
+  images?: Array<{ data: string; mimeType: string }>;
 }
 
 export type ModelTransport = (
@@ -208,7 +212,7 @@ export class LlmStageClient {
         continue;
       }
       try {
-        const { text, cost } = await withTimeout(this.opts.transport(cfg, { system: req.system, user: req.user }), this.timeoutMs);
+        const { text, cost } = await withTimeout(this.opts.transport(cfg, { system: req.system, user: req.user, images: req.images }), this.timeoutMs);
         const output = req.schema.parse(parseJsonLoose(text));
         this.breaker.recordSuccess(cfg.provider);
         return { output, provider: cfg.provider, modelId: cfg.modelId, cost };

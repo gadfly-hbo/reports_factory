@@ -5,6 +5,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { ingestCsv } from './csv.js';
 import { ingestXlsx } from './xlsx.js';
 import { ingestDocx } from './docx.js';
+import { ingestPdf } from './pdf.js';
 import { ingestMarkdown } from './markdown.js';
 
 export interface IngestInput {
@@ -78,6 +79,8 @@ export async function ingestAndSave(
       await store.markSourceParse(projectId, asset.source_id, 'pending');
       return { ...asset, parse_status: 'pending', ...result };
     }
+  } else if (input.kind === 'pdf') {
+    result = await ingestPdf(input.content, asset.source_id, asset.version);
   } else if (input.kind === 'image') {
     result = emptyIngestResult(asset.source_id, {
       notes: ['图片材料：无底层数据，作为图片保留；修改数值需补充原始表格'],
