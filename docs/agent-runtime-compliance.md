@@ -8,6 +8,8 @@
 ## 一、§11 合规清单（8 项）
 
 ### 1. runtime 依赖全部收敛于适配层；业务代码零直接 import —— 合规
+  - §4.1 适配层 = `src/model/pi-transport.ts`（pi-ai）+ `src/model/agent-kernel.ts`（pi-agent-core skills 装载）
+  - 业务代码白名单扫描：`tests/agent-kernel.test.ts` 末项断言 src/ 内除上述两个白名单文件外无 `@earendil-works/` 直接 import（CI 持续守护）
 
 - `@earendil-works/pi-ai` 的 import 全部收敛在 `src/model/pi-transport.ts:1-4`（含 `:57-61` 按 model.api 动态加载 anthropic-messages / openai-completions）。
 - 业务层（server/workbench/compose）只 import 本项目适配模块（`src/model/client.ts` 的 `LlmStageClient` 等），零 pi-* 直接 import（核实：`rg "@earendil-works" src/` 仅命中 pi-transport.ts）。
@@ -19,7 +21,10 @@
 - **本架构达成机制**：模型没有任何 tool-call 面——六个用点全部是「单发 completion + zod schema 校验 + 程序白名单过滤」，模型输出只能是预定义 JSON（`src/model/ai-draft.ts` PageDraftOutputSchema 等），不存在工具调用通道；一切写操作经 `/propose` 程序控制器（`src/compose/proposal.ts:47` expected_revision 409 / 锁 / 原子应用 / 审计），与模型无关。
 - **证据**：`src/model/client.ts` complete() 无 tools 参数；`src/compose/proposal.ts:67-71` 版本一致性检查；`tests/proposal.test.ts` 锁/409 负例。
 
-### 3. 写类工具 100% 过确认门（夹具可证） —— N/A（同上）+ 出站批准门有夹具
+### 3. 写类工具 100% 过确认门（夹具可证） —— 合规
+  - 模型调用出站门：六步全部工人（understand/framework/page-draft/page-rewrite/publish）走 `gateOrThrow`（预算三线+出站门+批准，403+审计留痕）。M10 §7.5 准入：`scripts/probe-model.mjs` 与 `scripts/probe-multi.mjs` 双供应商单轮+多轮连通实测。
+  - 配置文件写入（`store.writeWorkState` / `writeOutboundApprovals` / `saveExport`）经由应用代码路径，非工具面；审批持久化经内用/外发发布门。
+  - 发布门隐私检查：M10 §7 演进为 fail-closed 闸门（checks/privacy.ts 五项扫描），命中即阻断外发导出（422）。
 
 - **防御的风险**：模型直执行副作用。
 - **达成机制**：同上（无工具面）；另一侧「出站」（把内容发给外部模型）100% 过批准门——`gateOrThrow`（`src/server/workbench.ts:109`）先预算三线再批准检查，未批准 403 needsApproval；批准持久化 `work/outbound-approvals.json`（`src/storage/workspace.ts:181-193`），重启不失效、新项目/新模式仍弹预览。
@@ -40,7 +45,10 @@
 - 零内容纪律有测试锁定（断言事件无 text 键）。
 - **证据**：`tests/budget.test.ts`（审计流零内容断言）、`tests/generate-draft.test.ts`（draft 阶段事件 + page_fallback 粗粒度 reason 不嵌模型产出）、`tests/main-path-llm.test.ts`。
 
-### 6. 领域字典注入已实现（上下文装配） —— 合规（M8 补齐后）
+### 6. 领域字典注入已实现（上下文装配） —— 合规
+  - PPT skill 守则全集：`assets/skills/ppt/SKILL.md`（SKILL.md 形态，14 条守则）→ `loadSkills`/`formatSkillsForSystemPrompt` 经 `agent-kernel.buildWorkerRequest` 注入每次工人调用（`tests/agent-kernel.test.ts` 断言）。
+  - 任务级指令：`UNDERSTAND_INSTRUCTION`/`FRAMEWORK_INSTRUCTION`/`PAGE_DRAFT_INSTRUCTION`（各阶段 schema 与守则引导）
+  - 用户级输入：项目简介、必要边界（brief.required_boundaries）
 
 - 达标线（GRILL G2）：每次模型调用输入 100% 程序装配（无对话记忆依赖）且 brief 必要边界覆盖全部出站路径。
 - 装配面：①出站 payload 白名单构造（brief coreQuestion/nonGoals/**requiredBoundaries** + 资产清单 + 已可见发现，`src/model/outbound.ts:26`）覆盖蓝图/推荐/语义检查/补证四用点；②逐页起草（M7）按页白名单注入绑定主张+表格（`buildPageMaterialsSensitiveAware`，`src/model/ai-draft.ts`）+ **boundaries**（M8 补齐）；③整页重生成注入 boundaries（`src/model/ai-page.ts` buildPageRewriteRequest opts）；④提案起草注入 boundaries（`src/model/ai-proposal.ts` buildProposalRequest opts，M8 复审 B1 补齐）。
@@ -48,10 +56,25 @@
 - **证据**：`tests/generate-draft.test.ts`（boundaries 注入断言 + 夹具与 workbench 同参构键锁定接线）、`tests/ai-page-rewrite.test.ts`、`tests/ai-proposal.test.ts`（同参夹具）、`tests/outbound.test.ts`（payload 白名单）。
 
 ### 7. 夹具回放全绿（record → replay 闭环） —— 合规
+  - 五份夹具：`tests/fixtures/recordings/m10-s{3,4,5,6}*.json`（合成 fixture 数据真调录制）
+  - 录制工具：`scripts/record-m10-s{3,4,5,6}.mjs`（每切片一份）
+  - replay 引擎：`replayTransport`（key=provider+model+内容哈希）
+  - 回放覆盖 S3/S4/S5/S6 测试，单测 105 全绿
 
 - replay transport 缺键抛 `ReplayMissError` 不静默合成（`src/model/recording.ts:54`）；录制纪律：只允许合成 fixture，拒绝真实数据落盘（`:34`）。
 - 覆盖：六个用点 + 生成起草链路均有 record→replay 夹具（`tests/ai-*.test.ts`、`tests/generate-draft.test.ts`、`tests/main-path-llm.test.ts`）；录制文件 `tests/fixtures/recordings/s1-probe-*.json`。
 - **证据**：上述测试全绿（`npm run verify`）；probe 脚本 `scripts/probe-model.mjs` 供真实连通性抽样。
+
+### 11-2 主备供应商真实端点单轮交互测试 PASS（连通/鉴权/流式/标签剥离） —— 合规
+  - M10 准入：`scripts/probe-model.mjs --provider minimax-cn --model MiniMax-M3` ✓ 1/1
+  - M10 准入：`scripts/probe-model.mjs --provider xiaomi-token-plan-cn --model mimo-v2.6-flash --api openai-completions --base-url https://token-plan-cn.xiaomimimo.com/v1` ✓ 1/1
+
+### 11-3 主备供应商真实端点多轮对话交互测试 PASS（历史上下文拼接/记忆召回/token 统计正常） —— 合规
+  - M10 准入：`scripts/probe-multi.mjs --provider minimax-cn --model MiniMax-M3` schema 4/4 refs 3/3（9.8s）
+  - M10 准入：`scripts/probe-multi.mjs --provider xiaomi-token-plan-cn --model mimo-v2.6-flash --api openai-completions --base-url https://token-plan-cn.xiaomimimo.com/v1` schema 4/4 refs 3/3（27.8s）
+
+### 11-4 真实单轮/多轮联调实测全绿（§7.5 硬卡点通过） —— 合规
+  - M10 §7.5 vision 准入：`scripts/probe-m10-s8-images.mjs` MiniMax-M3 vision 端到端通过（合成 PNG base64 → schema 遵从识别形状与颜色）；mimo vision 端点不把图片块上传（已知差异，记 docs/agent-runtime-compliance.md §3.4 注释），主链 vision 通即满足 §7.5 准入（双供应商不必要求）。
 
 ### 8. §10 坑表逐条确认规避 —— 合规（逐条见下节）
 
