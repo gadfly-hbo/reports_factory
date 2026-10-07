@@ -488,5 +488,95 @@
     "detail": {
       "page_id": "page_09"
     }
+  },
+  {
+    "at": "2026-10-07T08:24:06.816Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:24:11.329Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:24:19.202Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
+  },
+  {
+    "at": "2026-10-07T08:25:07.954Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:25:58.675Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:27:02.812Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:27:31.326Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
+  },
+  {
+    "at": "2026-10-07T08:28:46.079Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "11d55424fc852872"
+    }
+  },
+  {
+    "at": "2026-10-07T08:28:55.135Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
   }
 ]

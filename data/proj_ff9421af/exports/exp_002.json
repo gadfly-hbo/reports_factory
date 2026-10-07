@@ -1,0 +1,45 @@
+{
+  "export_id": "exp_002",
+  "revision_id": "rev_001",
+  "format": "pptx",
+  "artifact_path": "exports/exp_002.pptx",
+  "artifact_hash": "1d2188778dcd5d02cf83fe21d3ad23f39eeb0a3e2a58a6ff7757495f9f2311c2",
+  "checks": {
+    "privacy": {
+      "items": [
+        {
+          "item": "chart_underlying_data",
+          "status": "pass",
+          "detail": "已聚合降级（不可编辑）"
+        },
+        {
+          "item": "claim_source_unbound",
+          "status": "not_checked",
+          "detail": "未配 claim_refs（无外部主张可直接验证）"
+        },
+        {
+          "item": "sensitive_sources",
+          "status": "pass",
+          "detail": "无敏感标记材料"
+        },
+        {
+          "item": "metadata_risk",
+          "status": "pass",
+          "detail": "修订号 rev_001（含元数据）"
+        },
+        {
+          "item": "speculative_content",
+          "status": "pass",
+          "detail": "无可疑推断"
+        }
+      ],
+      "checked_count": 4,
+      "not_checked_count": 1,
+      "flag_count": 0,
+      "has_flags": false
+    }
+  },
+  "is_draft": true,
+  "created_at": "2026-10-07T08:27:31.325Z",
+  "export_scope": "internal"
+}

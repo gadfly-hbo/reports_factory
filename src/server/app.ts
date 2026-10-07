@@ -273,7 +273,9 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     try {
       const data = await readFile(join(store.root, id, rec.artifact_path));
       const mime = rec.format === 'html' ? 'text/html' : rec.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml';
+      const ext = rec.format === 'html' ? 'html' : rec.format === 'pdf' ? 'pdf' : 'pptx';
       reply.type(mime);
+      reply.header('content-disposition', `attachment; filename="report-${rec.export_id}.${ext}"`);
       return reply.send(data);
     } catch (e) {
       throw httpError(404, `导出文件丢失：${(e as Error).message}`);

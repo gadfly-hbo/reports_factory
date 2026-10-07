@@ -886,6 +886,7 @@ export class WorkbenchService {
       this.store.listExports(projectId),
     ]);
     const unlocked = stepsFor(project, sources, work);
+    const approval_state = await this.approvalState(projectId);
     return {
       project,
       sources,
@@ -897,6 +898,7 @@ export class WorkbenchService {
       framework_confirmed: work.framework_confirmed === true,
       pages: work.pages ?? {},
       page_states: work.page_states ?? {},
+      approval_state,
       generation: work.generation ?? null,
     };
   }
