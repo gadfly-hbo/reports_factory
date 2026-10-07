@@ -3,13 +3,10 @@
 /** 六步主流程（proposal D2，顺序不可变）：解锁规则由后端 steps 推导下发 */
 export type StageKey = 'upload' | 'understand' | 'framework' | 'generate' | 'page-edit' | 'publish';
 
+/** 两屏制：准备（建/传/理解/框架）+ 产出（生成/编辑/下载） */
 export const STAGES: { key: StageKey; title: string; n: number }[] = [
-  { key: 'upload', title: '上传资料', n: 1 },
-  { key: 'understand', title: '读取理解', n: 2 },
-  { key: 'framework', title: '确认框架', n: 3 },
-  { key: 'generate', title: '生成', n: 4 },
-  { key: 'page-edit', title: '逐页编辑', n: 5 },
-  { key: 'publish', title: '审核发布', n: 6 },
+  { key: 'framework', title: '准备', n: 1 },
+  { key: 'generate', title: '生成与编辑', n: 2 },
 ];
 
 export const STAGE_TITLE: Record<StageKey, string> = Object.fromEntries(

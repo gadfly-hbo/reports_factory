@@ -1,0 +1,51 @@
+[
+  {
+    "at": "2026-10-07T14:18:54.878Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "failed",
+    "detail": {
+      "source_id": "src_11ef88c6",
+      "reason": "error"
+    }
+  },
+  {
+    "at": "2026-10-07T14:24:40.139Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "failed",
+    "detail": {
+      "source_id": "src_11ef88c6",
+      "reason": "error"
+    }
+  },
+  {
+    "at": "2026-10-07T14:31:25.015Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "failed",
+    "detail": {
+      "source_id": "src_11ef88c6",
+      "reason": "error"
+    }
+  },
+  {
+    "at": "2026-10-07T14:34:01.474Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "done",
+    "detail": {
+      "source_id": "src_11ef88c6",
+      "points": 40
+    }
+  },
+  {
+    "at": "2026-10-07T14:34:29.547Z",
+    "kind": "framework",
+    "stage": "framework",
+    "status": "generated",
+    "detail": {
+      "pages": 12
+    }
+  }
+]

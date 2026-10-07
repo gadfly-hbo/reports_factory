@@ -4,12 +4,8 @@ import { useEffect } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ProjectShell } from '../shell/ProjectShell';
 import { isStageKey, type StageKey } from '../state/types';
-import { UploadView } from './UploadView';
-import { UnderstandView } from './UnderstandView';
-import { FrameworkView } from './FrameworkView';
-import { GenerateView } from './GenerateView';
-import { PageEditView } from './PageEditView';
-import { PublishView } from './PublishView';
+import { SetupView } from './SetupView';
+import { BuildView } from './BuildView';
 
 const LEGACY: Record<string, true> = { materials: true, outline: true, compose: true, check: true, export: true, ppt: true };
 
@@ -42,12 +38,11 @@ export function StageRoute() {
   if (!stage || !isStageKey(stage)) return <StageRedirect />;
   return (
     <ProjectShell stage={stage}>
-      {stage === 'upload' && <UploadView />}
-      {stage === 'understand' && <UnderstandView />}
-      {stage === 'framework' && <FrameworkView />}
-      {stage === 'generate' && <GenerateView />}
-      {stage === 'page-edit' && <PageEditView />}
-      {stage === 'publish' && <PublishView />}
+      {/* 两屏制：prepare = 准备（建/传/理解/框架），build = 产出（生成/编辑/下载） */}
+      {(stage === 'upload' || stage === 'understand' || stage === 'framework') && <SetupView />}
+      {stage === 'generate' && <BuildView />}
+      {stage === 'page-edit' && <BuildView />}
+      {stage === 'publish' && <BuildView />}
     </ProjectShell>
   );
 }

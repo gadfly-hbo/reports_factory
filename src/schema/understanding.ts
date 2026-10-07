@@ -11,15 +11,22 @@ export const UnderstandingPointSchema = z.object({
   /** 主题标签：简短、稳定、可聚合（如「流失原因」「价格敏感」「转化效率」） */
   topic_tag: z.string().min(1),
   kind: z.enum(['point', 'data']).default('point'),
-  /** kind=data 时的数值（逐字取自材料，不做心算；模型可能给字符串形式数字，coerce 兼容） */
-  value: z.coerce.number().optional(),
+  /** kind=data 时的数值（逐字取自材料；模型可能给 "3.9亿元" 带单位字符串 → 提取数字部分，提取不到置 undefined） */
+  value: z.preprocess((v) => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+    if (typeof v === 'string') {
+      const m = v.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+      return m ? parseFloat(m[0]) : undefined;
+    }
+    return undefined;
+  }, z.number().optional()),
   unit: z.string().optional(),
   /** 材料内定位（页码/章节/工作表），供追溯 */
   locator: z.string().optional(),
 });
 
 export const UnderstandingSchema = z.object({
-  points: z.array(UnderstandingPointSchema).max(40),
+  points: z.array(UnderstandingPointSchema).max(80), // 长材料 mimo 可能产出 40+ 条
   /** 材料无可提炼内容时 true（明示，不编造） */
   uncovered: z.boolean().default(false),
   /** 一句话整体概述（给框架生成的材料索引用） */

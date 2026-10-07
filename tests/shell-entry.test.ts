@@ -19,18 +19,17 @@ describe('M10 壳层入口（S1）', () => {
     expect(sidebar).not.toContain('制作主路径');
   });
 
-  it('types 常量为六步且顺序不可变（D2）', () => {
+  it('types 常量为两屏制（准备/生成与编辑；旧六步键保留路由兼容）', () => {
     const types = readFileSync(join(WEB, 'state', 'types.ts'), 'utf-8');
-    const keys = [...types.matchAll(/key: '([\w-]+)', title/g)].map((m) => m[1]);
-    expect(keys).toEqual(['upload', 'understand', 'framework', 'generate', 'page-edit', 'publish']);
+    expect(types).toMatch(/key: 'framework', title: '准备'/);
+    expect(types).toMatch(/key: 'generate', title: '生成与编辑'/);
     expect(types).not.toContain('materials');
   });
 
-  it('六步路由与视图接线;旧报告路由重定向（N5）', () => {
+  it('两屏路由接线（SetupView/BuildView）;旧报告路由重定向（N5）', () => {
     const route = readFileSync(join(WEB, 'views', 'StageRoute.tsx'), 'utf-8');
-    for (const v of ['UploadView', 'UnderstandView', 'FrameworkView', 'GenerateView', 'PageEditView', 'PublishView']) {
-      expect(route).toContain(v);
-    }
+    expect(route).toContain('SetupView');
+    expect(route).toContain('BuildView');
     expect(route).toContain('LEGACY');
     expect(route).not.toContain('ComposeView');
     expect(route).not.toContain('ExportView');
