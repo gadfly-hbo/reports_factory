@@ -41,6 +41,6 @@ const before = (await wb.readWork(p0.project_id)).pages['page_02'];
 const next = await wb.rewritePage(p0.project_id, 'page_02', '这页强调环比变化而不是绝对值，语气更克制', { client: clientLive });
 console.log('before headline:', before.headline);
 console.log('after  headline:', next.headline);
-const prior = await loadRecordings(OUT).catch(() => []);
+import { unlinkSync } from 'node:fs'; try { unlinkSync(OUT); } catch {}; const prior = [];
 await saveRecordings(OUT, [...prior, ...calls]);
 console.log('saved:', OUT, 'total:', prior.length + calls.length);

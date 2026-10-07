@@ -43,7 +43,12 @@ export async function loadPptSkills(): Promise<PptSkillSet> {
     const env = new NodeExecutionEnv({ cwd: process.cwd() });
     const { skills, diagnostics } = await loadSkills(env, skillsDir(), TODO_CONTEXT);
     const byName = new Map(skills.map((s) => [s.name, s]));
-    const systemPromptBlock = skills.length > 0 ? formatSkillsForSystemPrompt(skills) : '';
+    // 标准化 location 字段为仓库内相对路径：避免不同部署机器的绝对路径污染 replay 键
+      const normalizedSkills = skills.map((sk) => {
+        const rel = sk.filePath.split('assets/skills/').pop() ?? sk.filePath.split(/[/\\]/).pop() ?? 'SKILL.md';
+        return { ...sk, filePath: 'assets/skills/' + rel };
+      });
+      const systemPromptBlock = normalizedSkills.length > 0 ? formatSkillsForSystemPrompt(normalizedSkills) : '';
     return { byName, systemPromptBlock, diagnostics: diagnostics.map((d) => `${d.code}: ${d.message}`) };
   })();
   return cached;

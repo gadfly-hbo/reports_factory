@@ -52,6 +52,6 @@ const spec = wb.pagesToReportSpec(p0, work.framework, work.pages ?? {});
 const buf = await renderReportPptx(spec);
 writeFileSync('/tmp/m10-sample-deck.pptx', buf);
 console.log('sample deck written: /tmp/m10-sample-deck.pptx bytes=', buf.length);
-const prior = await loadRecordings(OUT).catch(() => []);
+import { unlinkSync } from 'node:fs'; try { unlinkSync(OUT); } catch {}; const prior = [];
 await saveRecordings(OUT, [...prior, ...calls]);
 console.log('saved to', OUT, 'total:', prior.length + calls.length);
