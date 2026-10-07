@@ -205,6 +205,21 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // B3 编辑节点预览：单页渲染为 PNG（近似，工具 Agent 页用其产物文本，其余用 deck-html）
+  app.get('/api/projects/:id/pages/:pid/preview.png', async (req, reply) => {
+    const { id, pid } = req.params as { id: string; pid: string };
+    try {
+      const { renderPagePreviewPng } = await import('../render/page-preview.js');
+      const png = await renderPagePreviewPng(store, id, pid);
+      reply.type('image/png');
+      reply.header('cache-control', 'no-store');
+      return reply.send(png);
+    } catch (e) {
+      reply.code(404);
+      return { ok: false, error: (e as Error).message };
+    }
+  });
+
   // 第 5 步 逐页编辑：手工直改（纯文字字段）/ agent 整页重写 / 删页
   app.put('/api/projects/:id/pages/:pid', async (req, reply) => {
     const { id, pid } = req.params as { id: string; pid: string };

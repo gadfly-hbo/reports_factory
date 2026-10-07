@@ -67,7 +67,7 @@ export function PageEditView() {
   const isLast = framework[framework.length - 1]?.page_id === activeId;
 
   return (
-    <div className="view" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16, alignItems: 'flex-start' }}>
+    <div className="view" style={{ display: 'grid', gridTemplateColumns: '220px minmax(0,1fr) 340px', gap: 16, alignItems: 'flex-start' }}>
       <aside className="card" style={{ padding: 12 }}>
         <div className="card-h" style={{ fontSize: '.875rem' }}>页面</div>
         <ul className="sb-list" role="list" style={{ marginTop: 6 }}>
@@ -127,6 +127,19 @@ export function PageEditView() {
           </div>
         </div>
       </div>
+
+      <aside className="card" style={{ padding: 12 }}>
+        <div className="card-h" style={{ fontSize: '.875rem' }}>页预览<span className="hint mono" style={{ marginLeft: 6 }}>近似</span></div>
+        {activeId ? (
+          <img
+            src={`/api/projects/${id}/pages/${activeId}/preview.png?t=${Date.now()}`}
+            alt="页预览"
+            style={{ width: '100%', borderRadius: 8, border: '1px solid var(--line)', marginTop: 8 }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : <p className="fine" style={{ marginTop: 8 }}>选择左侧页查看预览。</p>}
+        <p className="fine" style={{ marginTop: 6, color: 'var(--muted)' }}>近似渲染，实际以导出 PPTX 为准。</p>
+      </aside>
 
       <div className="actions" style={{ display: 'flex', justifyContent: 'flex-end', gridColumn: '1 / -1' }}>
         <button className="btn btn-primary" type="button" onClick={() => navigate(`/project/${id}/publish`)}>进入审核发布 →</button>
