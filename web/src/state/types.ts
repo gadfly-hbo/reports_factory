@@ -69,6 +69,8 @@ export interface ExportRec {
 
 export interface StepState { key: StageKey; unlocked: boolean }
 
+export interface FrameworkPage { page_id: string; title: string; page_type: string; intent?: string; source_hint?: string[] }
+
 export interface ProjectDetail {
   project: Project;
   sources: SourceAsset[];
@@ -77,6 +79,11 @@ export interface ProjectDetail {
   capabilities?: {
     ai: { enabled: boolean; needsApproval: boolean; modelAvailable: boolean; approvedModes: string[] };
   };
+  /** S3 理解摘要（source_id → 摘要） */
+  understanding?: Record<string, { points: { text: string; topic_tag: string; kind: string; value?: number; unit?: string; locator?: string }[]; uncovered: boolean; gist: string }>;
+  /** S4 框架（确认后不可变） */
+  framework?: { pages: FrameworkPage[] } | null;
+  framework_confirmed?: boolean;
 }
 
 /** 发布状态徽（ui-contract S0.3；S7 接真实语义） */

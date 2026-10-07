@@ -11,7 +11,9 @@ import { replayTransport, loadRecordings } from '../model/recording.js';
 import { resolveBudget, checkBudget, type BudgetEntry } from '../model/budget.js';
 import { PptStepSchema, type PptStep, type Project, type SourceAsset } from '../schema/project.js';
 import { UnderstandingSchema, UNDERSTAND_INSTRUCTION, type Understanding } from '../schema/understanding.js';
+import { FrameworkGenSchema, FrameworkSchema, FRAMEWORK_INSTRUCTION, type Framework, type FrameworkPage } from '../schema/framework.js';
 import { buildWorkerRequest } from '../model/agent-kernel.js';
+import { getTemplate } from '../schema/template.js';
 
 /**
  * 工作台服务（M10 六步）：上传资料 → 读取理解 → 确认框架 → 生成 → 逐页编辑 → 审核发布。
@@ -23,8 +25,8 @@ import { buildWorkerRequest } from '../model/agent-kernel.js';
 export interface PptWorkState {
   /** S3 读取理解：source_id → 理解摘要（要点/数据要点/主题标签）；G11 逐文件 checkpoint */
   understanding?: Record<string, Understanding>;
-  /** S4 框架：页序列（{page_id,title,page_type,intent,source_hint?}[]）；确认后不可变 */
-  framework?: Array<{ page_id: string; title: string; page_type: string; intent?: string; source_hint?: string }>;
+  /** S4 框架：页序列；确认后不可变（framework_confirmed） */
+  framework?: Framework;
   framework_confirmed?: boolean;
   /** S5/S6 页内容与逐页 checkpoint */
   pages?: Record<string, unknown>;
@@ -71,7 +73,9 @@ export class WorkbenchService {
       this._modelClient = (async () => {
         const replayPath = process.env['REPORT_STUDIO_MODEL_REPLAY'];
         const timeoutMs = Number(process.env['REPORT_STUDIO_MODEL_TIMEOUT_MS'] ?? DEFAULT_TIMEOUT_MS);
-        const transport = replayPath ? replayTransport(await loadRecordings(replayPath)) : piTransport({ timeoutMs });
+        // 多录制文件用逗号分隔（如 S3 理解 + S4 框架两份夹具）
+        const recordings = replayPath ? (await Promise.all(replayPath.split(',').filter(Boolean).map((p) => loadRecordings(p.trim())))).flat() : [];
+        const transport = replayPath ? replayTransport(recordings) : piTransport({ timeoutMs });
         return new LlmStageClient({ transport, chain: chainFromEnv(), timeoutMs });
       })();
       // 初始化失败（如模型链配置非法）不缓存拒绝——下次调用重试
@@ -182,7 +186,112 @@ export class WorkbenchService {
     await this.store.writeWorkState(projectId, work);
   }
 
-  // ---- 第 2 步：读取理解（S3）----
+  // ---- 第 3 步：确认框架（S4）----
+
+  /** 材料摘要合集（语义投影第 1 层产物，供框架与页级生成消费） */
+  private async materialDigest(projectId: string): Promise<Array<{ filename: string; gist: string; points: Understanding['points'] }>> {
+    const sources = await this.store.listSourceAssets(projectId);
+    const work = await this.readWork(projectId);
+    return sources
+      .filter((s) => work.understanding?.[s.source_id])
+      .map((s) => ({
+        filename: s.filename,
+        gist: work.understanding![s.source_id]!.gist,
+        points: work.understanding![s.source_id]!.points,
+      }));
+  }
+
+  /** 生成框架（单发工人）：理解摘要合集 + 简介 + 模板页型倾向 → 框架（未确认态） */
+  async generateFramework(
+    projectId: string,
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<Framework> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const work0 = await this.readWork(projectId);
+    if (work0.framework_confirmed) {
+      throw Object.assign(new Error('框架已确认锁定：如需重新生成请新建项目'), { statusCode: 422 });
+    }
+    const digest = await this.materialDigest(projectId);
+    if (digest.length === 0) throw Object.assign(new Error('尚无资料理解摘要：先完成读取理解'), { statusCode: 400 });
+    await this.gateOrThrow(projectId, 'authorized-summary', 'framework');
+
+    const template = getTemplate(project.template_id);
+    const req = await buildWorkerRequest({
+      skillName: 'ppt-report',
+      stageInstruction: FRAMEWORK_INSTRUCTION,
+      payload: {
+        title: project.title,
+        purpose: project.purpose ?? '',
+        template_page_plan: template?.page_plan ?? [],
+        sources: digest,
+      },
+    });
+    const client = deps.client ?? (await this.modelClient());
+    let framework: Framework;
+    try {
+      const outcome = await client.complete({
+        stage: 'framework',
+        callKey: `framework:${projectId}:${(await this.readWork(projectId)).framework ? 'regen' : 'gen'}:${digest.length}`,
+        system: req.system,
+        user: req.user,
+        schema: FrameworkGenSchema,
+      });
+      framework = outcome.output as Framework;
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(), stage: 'framework', provider: outcome.provider, modelId: outcome.modelId,
+        mode: 'authorized-summary', itemCount: framework.pages.length, bytes: req.user.length, cost: outcome.cost,
+      });
+    } catch (e) {
+      await this.recordOutboundCall(projectId, {
+        at: new Date().toISOString(), stage: 'framework', provider: 'none', modelId: '',
+        mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0,
+      });
+      throw e;
+    }
+    // page_id 补齐（01…序）；确认前可编辑
+    const pages = framework.pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` }));
+    const work = await this.readWork(projectId);
+    await this.writeWork(projectId, { ...work, framework: { pages }, framework_confirmed: false });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'framework', stage: 'framework', status: 'generated',
+      detail: { pages: pages.length },
+    });
+    return { pages };
+  }
+
+  /** 框架编辑（确认前）：整体替换页序列（改题/删页/调序/加页均为前端组装后的整表提交）；确认后拒绝（422） */
+  async updateFramework(projectId: string, pages: Array<Omit<FrameworkPage, 'page_id'> & { page_id?: string }>): Promise<Framework> {
+    const work = await this.readWork(projectId);
+    if (work.framework_confirmed) {
+      throw Object.assign(new Error('框架已确认锁定，不可修改'), { statusCode: 422 });
+    }
+    if (!work.framework) {
+      throw Object.assign(new Error('尚未生成框架'), { statusCode: 400 });
+    }
+    const framework = FrameworkGenSchema.parse({ pages });
+    const withIds = framework.pages.map((p, i) => ({ ...p, page_id: `page_${String(i + 1).padStart(2, '0')}` }));
+    await this.writeWork(projectId, { ...work, framework: { pages: withIds } });
+    return { pages: withIds };
+  }
+
+  /** 确认框架（人决策点 1）：锁定；未生成框架时 400 */
+  async confirmFramework(projectId: string): Promise<Framework> {
+    const work = await this.readWork(projectId);
+    if (!work.framework || work.framework.pages.length === 0) {
+      throw Object.assign(new Error('尚未生成框架'), { statusCode: 400 });
+    }
+    if (!work.framework_confirmed) {
+      await this.writeWork(projectId, { ...work, framework_confirmed: true });
+      await this.store.appendAuditLog(projectId, {
+        at: new Date().toISOString(), kind: 'framework', stage: 'framework', status: 'confirmed',
+        detail: { pages: work.framework.pages.length },
+      });
+    }
+    return work.framework;
+  }
+
+  /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */
 
   /** 理解请求载荷（§4.6 上下文装配单点）：文本材料带确定性提炼；图片走 vision（M-U4） */
   private async understandingPayload(projectId: string, asset: SourceAsset): Promise<{

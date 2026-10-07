@@ -6,7 +6,7 @@
 - [x] S1. 清场与壳层六步化（删除报告工厂 + PPT 项目骨架）
 - [x] S2. pi-agent-core 适配层 + PPT skill 骨架
 - [ ] S3. 上传资料与读取理解（pdf/图片 + checkpoint）
-- [ ] S4. 框架生成与确认锁定
+- [x] S4. 框架生成与确认锁定
 - [ ] S5. 逐页生成（护栏/checkpoint/预算）+ 样张盲评检查点
 - [ ] S6. 逐页编辑（手工直改 + agent 改写 + 删页）
 - [ ] S7. 审核发布与三格式导出（PPTX/HTML/PDF）

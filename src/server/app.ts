@@ -137,6 +137,44 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // 第 3 步 框架：生成（单发工人）/ 编辑（确认前）/ 确认（人决策点 1，锁定）
+  app.post('/api/projects/:id/framework/generate', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const framework = await workbench.generateFramework(id);
+      return { ok: true, framework };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+    }
+  });
+
+  app.put('/api/projects/:id/framework', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const body = parseBody(z.object({ pages: z.array(z.object({
+        page_id: z.string().optional(),
+        title: z.string().min(1),
+        page_type: z.string().min(1),
+        intent: z.string().optional(),
+        source_hint: z.array(z.string()).optional(),
+      })).min(2).max(24) }), req.body);
+      const framework = await workbench.updateFramework(id, body.pages);
+      return { ok: true, framework };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+    }
+  });
+
+  app.post('/api/projects/:id/framework/confirm', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const framework = await workbench.confirmFramework(id);
+      return { ok: true, framework };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
   // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };
