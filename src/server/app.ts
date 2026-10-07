@@ -189,8 +189,10 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
         const r = await workbench.generatePageAgent(id, body.page_id);
         return { ok: r.ok, page_id: body.page_id, agent: { turns: r.agent.turns, toolCalls: r.agent.toolCalls, stopReason: r.agent.stopReason } };
       }
-      // 整套：逐页 Agent（串行）
-      const detail = await workbench.projectDetail(id);
+      // 整套：逐页 Agent（串行）——未确认框架即拒（N1）
+      const pre = await workbench.projectDetail(id);
+      if (!pre.framework_confirmed) throw Object.assign(new Error('框架未确认：不可生成'), { statusCode: 422 });
+      const detail = pre;
       const states = (detail as { page_states?: Record<string, string> }).page_states ?? {};
       const results: Array<{ page_id: string; ok: boolean }> = [];
       for (const p of detail.framework?.pages ?? []) {

@@ -38,7 +38,7 @@ describe('S6 逐页编辑（录制回放）', () => {
     await app.inject({ method: 'POST', url: `/api/projects/${projectId}/understand`, payload: {} });
     await app.inject({ method: 'POST', url: `/api/projects/${projectId}/framework/generate`, payload: {} });
     await app.inject({ method: 'POST', url: `/api/projects/${projectId}/framework/confirm`, payload: {} });
-    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
   });
   afterEach(() => {
     process.env['REPORT_STUDIO_MODEL_REPLAY'] = saved;

@@ -46,7 +46,7 @@ describe('S5 逐页生成（录制回放）', () => {
   });
 
   it('整套生成：全部页 done、内容带数据、0 emoji、数字护栏通过', async () => {
-    const gen = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    const gen = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
     expect(gen.statusCode).toBe(200);
     expect(gen.json().failed).toBeLessThanOrEqual(1); // 允许 ≤1 页失败（模型概率性 tool_call 幻觉）
     const detail = (await app.inject({ url: `/api/projects/${projectId}` })).json();
@@ -63,16 +63,16 @@ describe('S5 逐页生成（录制回放）', () => {
   });
 
   it('checkpoint：生成完成后重跑不触发任何调用（摘掉 replay 也全 done）', async () => {
-    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
     delete process.env['REPORT_STUDIO_MODEL_REPLAY'];
-    const again = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    const again = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
     expect(again.statusCode).toBe(200);
     expect(again.json().done).toBe(again.json().done + again.json().failed - again.json().failed); // 全部 done（无需硬编码页数）
     expect(again.json().failed).toBeLessThanOrEqual(1);
   });
 
   it('页级重试：单页失败后指定 page_id 重跑，其余页不动', async () => {
-    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
     // 人为把一页置败（模拟超时）
     const wb = new WorkbenchService(store);
     const work = await wb.readWork(projectId);
@@ -99,7 +99,7 @@ describe('S5 逐页生成（录制回放）', () => {
     for (let i = 0; i < 200; i++) {
       await store.appendOutboundLog(projectId, { at: new Date().toISOString(), stage: 'page-draft', provider: 'none', modelId: '', mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0 });
     }
-    const gen = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
+    const gen = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker' } });
     expect(gen.statusCode).toBe(403);
     const audit = await store.readAuditLog(projectId);
     expect(audit.some((e) => e.status === 'budget_blocked')).toBe(true);

@@ -37,7 +37,7 @@ describe('S6 N4 改写 fail-closed 负例', () => {
     await app.inject({ method: 'POST', url: `/api/projects/${pid}/understand`, payload: {} });
     await app.inject({ method: 'POST', url: `/api/projects/${pid}/framework/generate`, payload: {} });
     await app.inject({ method: 'POST', url: `/api/projects/${pid}/framework/confirm`, payload: {} });
-    await app.inject({ method: 'POST', url: `/api/projects/${pid}/pages/generate`, payload: {} });
+    await app.inject({ method: 'POST', url: `/api/projects/${pid}/pages/generate`, payload: { mode: 'worker' } });
   });
   afterEach(() => {
     process.env['REPORT_STUDIO_MODEL_REPLAY'] = saved;

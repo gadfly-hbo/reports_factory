@@ -33,14 +33,14 @@ describe('agent kernel：pi-agent-core skills 装载（M10 S2）', () => {
     await expect(buildWorkerRequest({ skillName: 'nope', stageInstruction: 'x', payload: {} })).rejects.toMatchObject({ code: 'UnknownSkill' });
   });
 
-  it('业务代码零直接 @earendil-works import（§4.1：适配层=agent-kernel+pi-transport 白名单）', () => {
+  it('业务代码零直接 @earendil-works import（§4.1：适配层=agent-kernel+pi-transport+agent-loop 白名单）', () => {
     const SRC = join(import.meta.dirname, '..', 'src');
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const f of readdirSync(dir, { withFileTypes: true })) {
         const p = join(dir, f.name);
         if (f.isDirectory()) walk(p);
-        else if (f.name.endsWith('.ts') && !/agent-kernel|pi-transport/.test(f.name)) {
+        else if (f.name.endsWith('.ts') && !/agent-kernel|pi-transport|agent-loop/.test(f.name)) {
           const text = readFileSync(p, 'utf-8');
           if (text.includes('@earendil-works/')) offenders.push(p);
         }
