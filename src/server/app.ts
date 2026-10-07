@@ -175,6 +175,18 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // 第 4 步 生成：{page_id?} 缺省=整套（checkpoint 跳过已完成页；指定页=页级重试）
+  app.post('/api/projects/:id/pages/generate', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { page_id?: string };
+    try {
+      const result = await workbench.generatePages(id, { page_id: body.page_id });
+      return { ok: result.failed === 0, ...result };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+    }
+  });
+
   // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };

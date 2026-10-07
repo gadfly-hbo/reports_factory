@@ -84,6 +84,19 @@ export interface ProjectDetail {
   /** S4 框架（确认后不可变） */
   framework?: { pages: FrameworkPage[] } | null;
   framework_confirmed?: boolean;
+  /** S5 页内容与逐页 checkpoint */
+  pages?: Record<string, PageDraftT>;
+  page_states?: Record<string, 'pending' | 'running' | 'done' | 'failed'>;
+  generation?: { status: 'running' | 'done' | 'failed'; stale_at?: string; note?: string } | null;
+}
+
+export interface PageDraftT {
+  headline: string;
+  bullets: { text: string; source_hint?: string }[];
+  body?: string;
+  chart?: { title: string; type: string; categories: string[]; series: { name: string; values: number[] }[] };
+  table_note?: string;
+  uncovered: boolean;
 }
 
 /** 发布状态徽（ui-contract S0.3；S7 接真实语义） */

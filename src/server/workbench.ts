@@ -12,6 +12,7 @@ import { resolveBudget, checkBudget, type BudgetEntry } from '../model/budget.js
 import { PptStepSchema, type PptStep, type Project, type SourceAsset } from '../schema/project.js';
 import { UnderstandingSchema, UNDERSTAND_INSTRUCTION, type Understanding } from '../schema/understanding.js';
 import { FrameworkGenSchema, FrameworkSchema, FRAMEWORK_INSTRUCTION, type Framework, type FrameworkPage } from '../schema/framework.js';
+import { PageDraftSchema, PAGE_DRAFT_INSTRUCTION, type PageDraft } from '../schema/page-draft.js';
 import { buildWorkerRequest } from '../model/agent-kernel.js';
 import { getTemplate } from '../schema/template.js';
 
@@ -28,8 +29,8 @@ export interface PptWorkState {
   /** S4 框架：页序列；确认后不可变（framework_confirmed） */
   framework?: Framework;
   framework_confirmed?: boolean;
-  /** S5/S6 页内容与逐页 checkpoint */
-  pages?: Record<string, unknown>;
+  /** S5/S6 页内容（page_id → 草稿）与逐页 checkpoint */
+  pages?: Record<string, PageDraft>;
   page_states?: Record<string, 'pending' | 'running' | 'done' | 'failed'>;
   /** 生成任务态（S5）：running 僵尸按 stale_at 回收 */
   generation?: { status: 'running' | 'done' | 'failed'; stale_at?: string; note?: string };
@@ -291,6 +292,227 @@ export class WorkbenchService {
     return work.framework;
   }
 
+  // ---- 第 4 步：生成（S5）----
+
+  /** 投影不足时的 Top-K 兜底宽度（检索单发兜底为样张盲评后的增强，M-U 披露过阶梯） */
+  static readonly PROJECTION_TOP_K = 14;
+
+  /**
+   * 语义投影（材料投影三层机制第 2 层，PRD 动工审批门决议）：
+   * 页意图（title+intent+source_hint）× 理解要点主题标签评分，Top-K 装配材料上下文。
+   * 评分不足时扩大到全量 Top-K 兜底（保证模型拿到足够材料）。
+   */
+  projectMaterials(
+    digest: Array<{ filename: string; gist: string; points: Array<{ text: string; topic_tag: string; kind: string; value?: number; unit?: string }> }>,
+    page: { title: string; intent?: string; source_hint?: string[] },
+  ): { materials: string[]; text: string } {
+    const hints = new Set((page.source_hint ?? []).map((h) => h.toLowerCase()));
+    const intentWords = `${page.title} ${page.intent ?? ''}`;
+    const scored = digest.flatMap((src) =>
+      src.points.map((pt) => {
+        let score = 0;
+        if (hints.has(pt.topic_tag.toLowerCase())) score += 3;
+        for (const w of pt.topic_tag.split(/、|\s+/)) {
+          if (w.length >= 2 && intentWords.includes(w)) score += 2;
+        }
+        return { src, pt, score };
+      }),
+    );
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, WorkbenchService.PROJECTION_TOP_K);
+    const materials = top.map(({ src, pt }) =>
+      `「${pt.topic_tag}」${pt.text}${pt.value != null ? `（${pt.value}${pt.unit ?? ''}）` : ''} —— 来源 ${src.filename}`,
+    );
+    const text = materials.join('\n');
+    return { materials, text };
+  }
+
+  /**
+   * 数字护栏（后校验，M7 范式）：输出中的数字必须能在投影材料文本中找到。
+   * 豁免：年份（19xx/20xx）、页数结构数字。违规列表非空 = 护栏拒绝。
+   */
+  static digitGuardViolations(draft: PageDraft, materialText: string): string[] {
+    const out = JSON.stringify(draft);
+    const violations: string[] = [];
+    for (const m of out.matchAll(/(?<![\d.])(\d{1,9}(?:\.\d+)?)(?![\d])/g)) {
+      const n = m[1]!;
+      if (/^(19|20)\d\d$/.test(n)) continue; // 年份
+      if (!materialText.includes(n.replace(/^0+(?=\d)/, ''))) violations.push(n);
+    }
+    return violations;
+  }
+
+  /** 框架页型 → ReportSpec 页型（渲染层封闭枚举；未知映射按位置语义兜底） */
+  private static toReportPageType(pageType: string, index: number, total: number): 'cover' | 'summary' | 'metrics_overview' | 'trend' | 'issue_breakdown' | 'option_comparison' | 'action_items' | 'evidence_appendix' {
+    const t = pageType.toLowerCase();
+    if (/cover|封面/.test(pageType) || (index === 0 && /title|标题/.test(pageType))) return 'cover';
+    if (/summary|摘要|exec/.test(t)) return 'summary';
+    if (/metric|指标|kpi|data|数据/.test(t)) return 'metrics_overview';
+    if (/trend|chart|图表|趋势/.test(t)) return 'trend';
+    if (/issue|problem|洞察|原因|限制/.test(t)) return 'issue_breakdown';
+    if (/option|comparison|方案|比较/.test(t)) return 'option_comparison';
+    if (/action|next|行动|收尾|下一步/.test(t)) return 'action_items';
+    if (/appendix|附录|evidence|证据/.test(t)) return 'evidence_appendix';
+    return index === total - 1 ? 'action_items' : 'summary';
+  }
+
+  /** 页草稿 → ReportSpec（渲染/导出适配层；draftToReportSpec 单一实现） */
+  pagesToReportSpec(project: Project, framework: Framework, pages: Record<string, PageDraft>): import('../schema/report-spec.js').ReportSpec {
+    const specPages = framework.pages.map((fp, i) => {
+      const draft = pages[fp.page_id];
+      const chart = draft?.chart
+        ? {
+            chart_id: `chart_${fp.page_id}`,
+            type: draft.chart.type,
+            title: draft.chart.title,
+            series: draft.chart.series.map((s) => ({
+              name: s.name,
+              data: draft.chart!.categories.map((label, vi) => ({ label, value: s.values[vi] ?? 0 })),
+            })),
+            source_ref: undefined,
+          }
+        : undefined;
+      return {
+        page_id: fp.page_id,
+        type: WorkbenchService.toReportPageType(fp.page_type, i, framework.pages.length),
+        headline: draft?.headline ?? fp.title,
+        body: draft?.body,
+        bullets: draft?.bullets.map((b) => ({ text: b.text, status: 'confirmed' as const })),
+        chart,
+        claim_refs: [] as string[],
+        metric_refs: [] as string[],
+        evidence_refs: [] as string[],
+        locked: false,
+      };
+    });
+    return {
+      schema_version: '1.0',
+      report_id: `deck_${project.project_id}`,
+      revision_id: 'rev_001',
+      brief: {
+        audience: project.purpose ?? '阅读者',
+        purpose: project.title,
+        page_budget: framework.pages.length,
+        language: 'zh-CN',
+      },
+      source_snapshot: [],
+      metrics: [],
+      claims: [],
+      pages: specPages,
+      theme: { brand: project.brand },
+    } as import('../schema/report-spec.js').ReportSpec;
+  }
+
+  /** 逐页生成（M5 核心）：确认框架 → 语义投影 → 逐页单发（checkpoint/预算逐页复查/数字护栏/页级重试） */
+  async generatePages(
+    projectId: string,
+    opts: { page_id?: string } = {},
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<{ states: NonNullable<PptWorkState['page_states']>; done: number; failed: number }> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const work0 = await this.readWork(projectId);
+    if (!work0.framework || !work0.framework_confirmed) {
+      throw Object.assign(new Error('框架未确认：不可生成'), { statusCode: 422 });
+    }
+    // 并发守卫：running 且 10 分钟内有 checkpoint → 返回当前态（僵尸自愈由 stale_at 判定）
+    const gen = work0.generation;
+    if (gen?.status === 'running' && gen.stale_at && Date.now() - Date.parse(gen.stale_at) < 10 * 60_000 && !opts.page_id) {
+      const states = work0.page_states ?? {};
+      return { states, done: Object.values(states).filter((s) => s === 'done').length, failed: Object.values(states).filter((s) => s === 'failed').length };
+    }
+    await this.gateOrThrow(projectId, 'authorized-summary', 'page-draft');
+    const client = deps.client ?? (await this.modelClient());
+    const digest = await this.materialDigest(projectId);
+    if (digest.length === 0) throw Object.assign(new Error('尚无资料理解摘要'), { statusCode: 400 });
+
+    const targets = opts.page_id
+      ? work0.framework.pages.filter((p) => p.page_id === opts.page_id)
+      : work0.framework.pages;
+    if (targets.length === 0) throw Object.assign(new Error(`页不存在：${opts.page_id}`), { statusCode: 404 });
+
+    const budget = resolveBudget(project, process.env);
+    let work = work0;
+    const states: NonNullable<PptWorkState['page_states']> = { ...(work.page_states ?? {}) };
+    for (const t of targets) if (states[t.page_id] !== 'done') states[t.page_id] = 'pending';
+    const audit = (status: string, detail: Record<string, unknown>) =>
+      this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'page_generation', stage: 'page-draft', status, detail });
+
+    for (const fp of targets) {
+      if (states[fp.page_id] === 'done' && work.pages?.[fp.page_id]) continue; // checkpoint：已完成页不重跑
+      // 预算逐页复查（超帽停止，剩余页保持 pending 明示）
+      const log = await this.store.readOutboundLog(projectId);
+      const verdict = checkBudget(log as BudgetEntry[], budget, 'page-draft', Date.now());
+      if (!verdict.allowed) {
+        await audit('budget_stop', { page_id: fp.page_id, line: verdict.line });
+        break;
+      }
+      states[fp.page_id] = 'running';
+      await this.writeWork(projectId, { ...work, page_states: { ...states }, generation: { status: 'running', stale_at: new Date().toISOString() } });
+      work = await this.readWork(projectId);
+
+      const { materials, text: materialText } = this.projectMaterials(digest, fp);
+      if (materials.length === 0) {
+        states[fp.page_id] = 'failed';
+        await this.writeWork(projectId, { ...work, page_states: { ...states } });
+        await audit('page_failed', { page_id: fp.page_id, reason: 'no_materials' });
+        continue;
+      }
+      const req = await buildWorkerRequest({ skillName: 'ppt-report', stageInstruction: PAGE_DRAFT_INSTRUCTION, payload: { page: { page_id: fp.page_id, title: fp.title, intent: fp.intent, page_type: fp.page_type }, materials, boundaries: [] } });
+      let done = false;
+      let lastReason = '';
+      for (let attempt = 0; attempt < 2 && !done; attempt++) {
+        try {
+          const outcome = await client.complete({
+            stage: 'page-draft',
+            callKey: `page-draft:${projectId}:${fp.page_id}:${attempt}`,
+            system: req.system,
+            user: req.user,
+            schema: PageDraftSchema,
+          });
+          const draft = outcome.output;
+          const violations = WorkbenchService.digitGuardViolations(draft, materialText);
+          if (draft.uncovered || draft.bullets.length === 0) {
+            // uncovered = 材料未覆盖该页主题：明示失败（不产「待补充」占位，契约红线）
+            lastReason = '材料未覆盖该页主题';
+            await audit('page_failed', { page_id: fp.page_id, reason: 'uncovered' });
+            break;
+          }
+          if (violations.length > 0) {
+            lastReason = `数字护栏拒绝：${violations.join(', ')}`;
+            await this.recordOutboundCall(projectId, { at: new Date().toISOString(), stage: 'page-draft', provider: outcome.provider, modelId: outcome.modelId, mode: 'authorized-summary', itemCount: 1, bytes: req.user.length, cost: outcome.cost });
+            await audit('digit_guard', { page_id: fp.page_id, attempt });
+            continue; // 重试一次
+          }
+          const w = await this.readWork(projectId);
+          await this.writeWork(projectId, { ...w, pages: { ...(w.pages ?? {}), [fp.page_id]: draft }, page_states: { ...states, [fp.page_id]: 'done' }, generation: { status: 'running', stale_at: new Date().toISOString() } });
+          states[fp.page_id] = 'done';
+          done = true;
+          await this.recordOutboundCall(projectId, { at: new Date().toISOString(), stage: 'page-draft', provider: outcome.provider, modelId: outcome.modelId, mode: 'authorized-summary', itemCount: 1, bytes: req.user.length, cost: outcome.cost });
+          await audit('page_done', { page_id: fp.page_id });
+        } catch (e) {
+          lastReason = e instanceof Error ? e.message.slice(0, 120) : String(e);
+          // 失败的真实调用也计量（次数/轮次不失真）
+          await this.recordOutboundCall(projectId, { at: new Date().toISOString(), stage: 'page-draft', provider: 'none', modelId: '', mode: 'authorized-summary', itemCount: 1, bytes: 0, cost: 0 });
+        }
+      }
+      if (!done && states[fp.page_id] !== 'done') {
+        states[fp.page_id] = 'failed';
+        await this.writeWork(projectId, { ...(await this.readWork(projectId)), page_states: { ...states } });
+        await audit('page_failed', { page_id: fp.page_id, reason: lastReason.slice(0, 60) || 'error' });
+      }
+    }
+    const finalWork = await this.readWork(projectId);
+    const finalStates = finalWork.page_states ?? states;
+    const allDone = finalWork.framework!.pages.every((p) => finalStates[p.page_id] === 'done');
+    const anyFailed = Object.values(finalStates).some((s) => s === 'failed');
+    const doneCount = Object.values(finalStates).filter((s) => s === 'done').length;
+    const failedCount = Object.values(finalStates).filter((s) => s === 'failed').length;
+    await this.writeWork(projectId, { ...finalWork, page_states: finalStates, generation: { status: allDone ? 'done' : anyFailed ? 'failed' : 'running', stale_at: new Date().toISOString(), note: allDone ? undefined : failedCount > 0 ? `${failedCount} 页失败，可单独重试` : undefined } });
+    void doneCount;
+    return { states: finalStates, done: doneCount, failed: failedCount };
+  }
+
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */
 
   /** 理解请求载荷（§4.6 上下文装配单点）：文本材料带确定性提炼；图片走 vision（M-U4） */
@@ -443,6 +665,9 @@ export class WorkbenchService {
       understanding: work.understanding ?? {},
       framework: work.framework ?? null,
       framework_confirmed: work.framework_confirmed === true,
+      pages: work.pages ?? {},
+      page_states: work.page_states ?? {},
+      generation: work.generation ?? null,
     };
   }
 }

@@ -217,10 +217,15 @@ export class LlmStageClient {
         this.breaker.recordSuccess(cfg.provider);
         return { output, provider: cfg.provider, modelId: cfg.modelId, cost };
       } catch (error) {
-        if (error instanceof ZodError || isTransientProviderError(error)) {
+        if (error instanceof ZodError) {
+          // schema 失配是任务性问题（非供应商故障）：不计熔断，跨页调用不应被连坐；
+          // 换下一个 provider 再试（不同模型可能更守 schema），页级重试兜底
+          errors.push(`${cfg.provider}: 输出不符合 schema`);
+          continue;
+        }
+        if (isTransientProviderError(error)) {
           this.breaker.recordFailure(cfg.provider);
-          const detail = error instanceof ZodError ? '输出不符合 schema' : String(error instanceof Error ? error.message : error).slice(0, 160);
-          errors.push(`${cfg.provider}: ${detail}`);
+          errors.push(`${cfg.provider}: ${String(error instanceof Error ? error.message : error).slice(0, 160)}`);
           continue;
         }
         throw error; // 配置/参数类错误不掩盖
