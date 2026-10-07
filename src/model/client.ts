@@ -120,8 +120,8 @@ export class ModelCircuitBreaker {
 export function parseJsonLoose(text: string): unknown {
   const cleaned = text
     .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/```\s*$/, '')
+    .replace(/^```(?:json)?[^\n]*\n/i, '')
+    .replace(/\n```\s*$/, '')
     .trim();
   try {
     return unwrapEncodedJson(JSON.parse(cleaned));

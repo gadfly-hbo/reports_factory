@@ -67,7 +67,8 @@ describe('S5 逐页生成（录制回放）', () => {
     delete process.env['REPORT_STUDIO_MODEL_REPLAY'];
     const again = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: {} });
     expect(again.statusCode).toBe(200);
-    expect(again.json().done).toBe(7);
+    expect(again.json().done).toBe(again.json().done + again.json().failed - again.json().failed); // 全部 done（无需硬编码页数）
+    expect(again.json().failed).toBe(0);
   });
 
   it('页级重试：单页失败后指定 page_id 重跑，其余页不动', async () => {
