@@ -4,7 +4,7 @@
 > 依赖基本沿主流程线性：S1 清场 → S2 地基 → S3–S7 沿六步 → S8 收口。每片端到端可验证。
 
 - [x] S1. 清场与壳层六步化（删除报告工厂 + PPT 项目骨架）
-- [ ] S2. pi-agent-core 适配层 + PPT skill 骨架
+- [x] S2. pi-agent-core 适配层 + PPT skill 骨架
 - [ ] S3. 上传资料与读取理解（pdf/图片 + checkpoint）
 - [ ] S4. 框架生成与确认锁定
 - [ ] S5. 逐页生成（护栏/checkpoint/预算）+ 样张盲评检查点

@@ -83,7 +83,8 @@
 
 | 偏差 | 内容 | 授权链 |
 |---|---|---|
-| D-1 | 标准 §3.1 批准栈为 pi-ai + pi-agent-core；本项目只用 pi-ai、不引入 pi-agent-core（无 agent 循环需求，七用点全为单发工人；确定性管线是编排不是 agent 循环，不落 §6「自研循环」红线） | M5 红队 K1 → 用户决议 R4（2026-09）；M7 红队 KA-5 延续；M8 提案否决备选再确认 |
+| ~~D-1~~ | ~~本项目只用 pi-ai、不引入 pi-agent-core~~ **已撤销（2026-10-07 M10）**：用户裁定第二次重构「全程用 pi-agent-core 及 skill」，引入 `@earendil-works/pi-agent-core@0.86.1`（钉版），承载 skills 机制（assets/skills/ppt/SKILL.md 经 loadSkills/formatSkillsForSystemPrompt 注入）；装配形态见 D-4 | M10 提案 D3（用户指令）→ `src/model/agent-kernel.ts` 单点适配（§4.1），`tests/agent-kernel.test.ts` 白名单断言 |
+| D-4 | AgentHarness 全量装配（lane/session/operation）评估后不启用：六步工人单发必须保留 LlmStageClient 主备熔断 + 录制回放 + §10 坑规避（transport 层），AgentHarness 自有 streamFn/session 接入即需重造三样，零收益；pi-agent-core 承载面 = skills 机制。对话式形态（如立项）走 §8 闸门后重评 | M10 PRD G3 降级阶梯（动工审批门已披露）→ 用户裁决维持工人模式 + 禁多轮 tool-call 循环 |
 | D-3 | 默认链依据标准 v1.1 §3.4 升级（M2.7→M3 / mimo-v2.5-pro→v2.6-flash）；适配层 reverse config（`resolveModelFor`）让小米 model id 一律走 §3.4 端点，不依赖 pi 内置清单；测试 `tests/runtime-resolve.test.ts` 锁接线 | M8 收尾（产品配置对齐）→ 多轮 + 单轮探针已实测连通 |
 | D-2 | 领域字典注入形态与 deep-research 的 ModuleConfig/evidencePacks 不同（本项目：brief 边界 + 页绑定材料白名单装配） | 实质达标（§11-6），形态差异不构成偏离标准要求；M8 GRILL G2 裁决达标线 |
 
