@@ -38,7 +38,7 @@ const live = piTransport({ timeoutMs: 300_000 });
 const transport = recordingTransport(live, { push: (c) => calls.push(c) }, { synthetic: true });
 const clientLive = new LlmStageClient({ transport, chain: chainFromEnv(), timeoutMs: DEFAULT_TIMEOUT_MS });
 const before = (await wb.readWork(p0.project_id)).pages['page_02'];
-const next = await wb.rewritePage(p0.project_id, 'page_02', '这页强调环比变化而不是绝对值，语气更克制', { client: clientLive });
+const next = await wb.rewritePage(p0.project_id, 'page_02', '把标题改成：客流回升、转化平稳、库存改善（环比口径）', { client: clientLive });
 console.log('before headline:', before.headline);
 console.log('after  headline:', next.headline);
 import { unlinkSync } from 'node:fs'; try { unlinkSync(OUT); } catch {}; const prior = [];

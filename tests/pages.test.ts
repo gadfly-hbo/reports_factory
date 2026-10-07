@@ -79,7 +79,7 @@ describe('S5 逐页生成（录制回放）', () => {
     await wb.writeWork(projectId, { ...work, page_states: { ...work.page_states, page_02: 'failed' } });
     delete process.env['REPORT_STUDIO_MODEL_REPLAY'];
     // 摘掉 replay 后：只有 page_02 会被重跑（会真调失败→failed），其余页保持 done 不动
-    const retry = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { page_id: 'page_02' } });
+    const retry = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/pages/generate`, payload: { mode: 'worker', page_id: 'page_02' } });
     expect(retry.statusCode).toBe(200);
     const detail = (await app.inject({ url: `/api/projects/${projectId}` })).json();
     expect(detail.page_states.page_01).toBe('done'); // 其他页不受影响
@@ -91,7 +91,7 @@ describe('S5 逐页生成（录制回放）', () => {
     const create = await app.inject({ method: 'POST', url: '/api/projects', payload: { title: '未确认项目' } });
     const pid = create.json().project.project_id;
     await store.updateProject(pid, { privacy_policy: 'allow_external' });
-    const gen = await app.inject({ method: 'POST', url: `/api/projects/${pid}/pages/generate`, payload: {} });
+    const gen = await app.inject({ method: 'POST', url: `/api/projects/${pid}/pages/generate`, payload: { mode: 'worker' } });
     expect(gen.statusCode).toBe(422);
   });
 

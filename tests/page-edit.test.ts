@@ -62,14 +62,19 @@ describe('S6 逐页编辑（录制回放）', () => {
   });
 
   it('agent 改写：成功路径更新页内容；写审计', async () => {
-    const before = (await app.inject({ url: `/api/projects/${projectId}` })).json().pages.page_02.headline;
+    const beforeDetail = (await app.inject({ url: `/api/projects/${projectId}` })).json().pages.page_02;
+    const before = beforeDetail.headline;
     const rw = await app.inject({
       method: 'POST', url: `/api/projects/${projectId}/pages/page_02/rewrite`,
-      payload: { instruction: '这页强调环比变化而不是绝对值，语气更克制' },
+      payload: { instruction: '把标题改成：客流回升、转化平稳、库存改善（环比口径）' },
     });
     expect(rw.statusCode).toBe(200);
-    const after = rw.json().draft.headline;
-    expect(after).not.toBe(before);
+    const after = rw.json().draft;
+    // 改写生效：headline/bullets/body 任一变化即可（模型可能只改正文）
+    const changed = after.headline !== before
+      || JSON.stringify(after.bullets) !== JSON.stringify((beforeDetail as any).bullets ?? null)
+      || after.body !== (beforeDetail as any).body;
+    expect(changed).toBe(true);
     const audit = await store.readAuditLog(projectId);
     expect(audit.some((e) => e.status === 'agent_rewrite' && e.detail.page_id === 'page_02')).toBe(true);
   });

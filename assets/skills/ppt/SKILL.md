@@ -119,7 +119,94 @@ await pptx.writeFile({ fileName: 'page_XX.pptx' });  // 与代码文件同名
 - **文本**：`addText` 必须带 `fontFace`（中文字体栈）+ `color`（无前缀 hex）+ `fontSize`。
 - **禁**：emoji、外部图片 URL（用纯色/形状代替）、require、绝对输出路径。
 
-## 三、输出纪律
+## 三、高质量参考案例（照此水准输出）
+
+### 案例 A：封面页（深藏青满版 + 铁锈橘点睛）
+
+```js
+import pptxgen from 'pptxgenjs';
+const pptx = new pptxgen();
+pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
+pptx.layout = 'W';
+const s = pptx.addSlide();
+s.background = { color: '263442' };
+// 顶部 eyebrow
+s.addText('01 / 项目定位', { x: 0.9, y: 0.7, w: 5, h: 0.35, fontSize: 12, color: 'd6dde4', fontFace: 'PingFang SC', charSpacing: 3 });
+// accent 短条
+s.addShape('rect', { x: 0.9, y: 1.15, w: 0.7, h: 0.07, fill: { color: 'b44626' } });
+// 主标题（两行）
+s.addText('天津河东万达广场：\n津滨大道双MALL枢纽，硬件高配', { x: 0.9, y: 1.6, w: 11.5, h: 1.8, fontSize: 30, bold: true, color: 'ffffff', fontFace: 'PingFang SC', lineSpacing: 38 });
+// 副标题
+s.addText('深度研究 · 项目定位与现状', { x: 0.9, y: 3.6, w: 11.5, h: 0.5, fontSize: 16, color: 'd6dde4', fontFace: 'PingFang SC' });
+// 底部 accent 条 + 日期
+s.addShape('rect', { x: 0, y: 7.3, w: 13.33, h: 0.12, fill: { color: 'b44626' } });
+s.addText('2026.10 · 会员运营深度研究', { x: 0.9, y: 6.8, w: 6, h: 0.35, fontSize: 11, color: '758290', fontFace: 'PingFang SC' });
+await pptx.writeFile({ fileName: 'page_01.pptx' });
+```
+
+### 案例 B：内容页（暖灰底 + 左侧文字 + 右侧数据卡片）
+
+```js
+import pptxgen from 'pptxgenjs';
+const pptx = new pptxgen();
+pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
+pptx.layout = 'W';
+const s = pptx.addSlide();
+s.background = { color: 'f7f6f3' };
+// 页眉
+s.addText('指标总览', { x: 0.6, y: 0.35, w: 4, h: 0.3, fontSize: 11, bold: true, color: 'b44626', fontFace: 'PingFang SC' });
+s.addShape('rect', { x: 0.6, y: 0.72, w: 0.6, h: 0.06, fill: { color: '263442' } });
+// 标题
+s.addText('2023年销售 40 亿、客流 5320 万创历史新高', { x: 0.6, y: 0.95, w: 11, h: 0.8, fontSize: 22, bold: true, color: '242830', fontFace: 'PingFang SC' });
+// 左栏要点（accent 短横条引导）
+const bullets = ['销售额同比 +58.7%，区域锚点地位确立', '客流同比 +67.1%，节假日峰值同步验证', '品牌升级落地，首店与创新业态集聚'];
+bullets.forEach((t, i) => {
+  s.addShape('rect', { x: 0.6, y: 2.2 + i * 0.85, w: 0.28, h: 0.05, fill: { color: 'b44626' } });
+  s.addText(t, { x: 1.05, y: 2.05 + i * 0.85, w: 6.8, h: 0.6, fontSize: 14, color: '242830', fontFace: 'PingFang SC', lineSpacing: 18 });
+});
+// 右栏数据卡片（白底 panel + 边框）
+s.addShape('rect', { x: 8.2, y: 2.0, w: 4.5, h: 3.6, fill: { color: 'ffffff' }, line: { color: 'dedcd6', width: 1 }, rectRadius: 0.08 });
+s.addText('关键数据', { x: 8.5, y: 2.2, w: 3.9, h: 0.35, fontSize: 12, bold: true, color: '626773', fontFace: 'PingFang SC' });
+s.addText('40 亿', { x: 8.5, y: 2.7, w: 3.9, h: 0.9, fontSize: 36, bold: true, color: 'b44626', fontFace: 'PingFang SC' });
+s.addText('年销售额（+58.7%）', { x: 8.5, y: 3.6, w: 3.9, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
+s.addText('5320 万', { x: 8.5, y: 4.1, w: 3.9, h: 0.9, fontSize: 36, bold: true, color: '263442', fontFace: 'PingFang SC' });
+s.addText('年客流（+67.1%）', { x: 8.5, y: 5.0, w: 3.9, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
+// 页脚
+s.addText('来源：河东区商务局公开数据', { x: 0.6, y: 7.0, w: 6, h: 0.3, fontSize: 10, color: '626773', fontFace: 'PingFang SC' });
+await pptx.writeFile({ fileName: 'page_02.pptx' });
+```
+
+### 案例 C：数据图表页（原生 addChart + 白底大图）
+
+```js
+import pptxgen from 'pptxgenjs';
+const pptx = new pptxgen();
+pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
+pptx.layout = 'W';
+const s = pptx.addSlide();
+s.background = { color: 'ffffff' };
+// 顶部标题条（暖灰）
+s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: 'f0efeb' } });
+s.addText('客流与转化漏斗', { x: 0.6, y: 0.28, w: 12, h: 0.5, fontSize: 18, bold: true, color: '242830', fontFace: 'PingFang SC' });
+// 原生柱状图
+s.addChart(pptx.ChartType.bar, [
+  { name: '进店', labels: ['Q1', 'Q2', 'Q3'], values: [10500, 11200, 12400] },
+  { name: '成交', labels: ['Q1', 'Q2', 'Q3'], values: [2100, 2300, 2670] },
+], {
+  x: 1.0, y: 1.4, w: 11.3, h: 4.6,
+  barDir: 'col', chartColors: ['b44626', '263442'],
+  dataLabelColor: '242830', dataLabelFontSize: 11, dataLabelFontFace: 'PingFang SC',
+  catAxisLabelColor: '626773', catAxisLabelFontSize: 11,
+  valAxisLabelColor: '626773', valAxisLabelFontSize: 10,
+  showLegend: true, legendColor: '626773', legendFontSize: 11, legendPos: 'b',
+  showValue: true,
+});
+// 底部口径注释
+s.addText('口径：进店客流与成交转化率，季度均值；数据来源：运营底稿', { x: 0.6, y: 6.4, w: 12, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
+await pptx.writeFile({ fileName: 'page_04.pptx' });
+```
+
+## 四、输出纪律
 
 - 结构化任务只输出请求的 JSON / 代码，不附加解释或 markdown 围栏（除非工具说明要求）。
 - 字段完整：schema 里每个字段都给出（不确定的用空串/空数组/uncovered 标注，不省略键）。
