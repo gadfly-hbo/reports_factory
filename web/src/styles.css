@@ -193,6 +193,8 @@ body {
 }
 .sb-toggle:hover { color: var(--text); }
 .sb-collapsed .sidebar { display: none; }
+/* 侧栏收起后中间栏大小不变：主区内容定宽居中 */
+.sb-collapsed .main { max-width: 1100px; margin: 0 auto; }
 .sb-collapsed .sb-toggle { left: 0; transform: translate(0, -50%); border-radius: 0 999px 999px 0; }
 
 /* ---------- 中央主工作区 ---------- */

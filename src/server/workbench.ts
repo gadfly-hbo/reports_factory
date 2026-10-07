@@ -678,28 +678,38 @@ export class WorkbenchService {
     await setProgress('运行中');
 
     const agentDir = join(process.cwd(), 'data', projectId, 'work');
-    const result = await runPptxAgent({
-      page_id: pageId,
-      title: fp.title,
-      intent: fp.intent,
-      materials,
-      projectTitle: project.title,
-      nodeProjectDir: process.cwd(),
-      workDir: agentDir,
-    });
+    // 自动重试：失败后自动再试，最多 2 次（用户裁决：重试 2 次失败后停住人工介入）
+    let result: PptxAgentResult | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      result = await runPptxAgent({
+        page_id: pageId,
+        title: fp.title,
+        intent: fp.intent,
+        materials,
+        projectTitle: project.title,
+        nodeProjectDir: process.cwd(),
+        workDir: agentDir,
+      });
+      if (result.ok) break;
+      await this.store.appendAuditLog(projectId, {
+        at: new Date().toISOString(), kind: 'page_agent', stage: 'page-agent', status: 'auto_retry',
+        detail: { page_id: pageId, attempt: attempt + 1, stop: result.stopReason },
+      });
+    }
+    const finalResult = result!;
 
     const w = await this.readWork(projectId);
     await this.writeWork(projectId, {
       ...w,
-      pptx_buffers: { ...(w.pptx_buffers ?? {}), ...(result.pptxBuffer ? { [pageId]: result.pptxBuffer.toString('base64') } : {}) },
-      page_states: { ...(w.page_states ?? {}), [pageId]: result.ok ? 'done' : 'failed' },
-      agent_progress: { ...(w.agent_progress ?? {}), [pageId]: { turns: result.turns, toolCalls: result.toolCalls, wallMs: result.wallMs, status: result.ok ? '渲染成功' : `失败（${result.stopReason}）` } },
+      pptx_buffers: { ...(w.pptx_buffers ?? {}), ...(finalResult.pptxBuffer ? { [pageId]: finalResult.pptxBuffer.toString('base64') } : {}) },
+      page_states: { ...(w.page_states ?? {}), [pageId]: finalResult.ok ? 'done' : 'failed' },
+      agent_progress: { ...(w.agent_progress ?? {}), [pageId]: { turns: finalResult.turns, toolCalls: finalResult.toolCalls, wallMs: finalResult.wallMs, status: finalResult.ok ? '渲染成功' : `失败（${finalResult.stopReason}，已自动重试 2 次）` } },
     });
     await this.store.appendAuditLog(projectId, {
-      at: new Date().toISOString(), kind: 'page_agent', stage: 'page-agent', status: result.ok ? 'done' : 'failed',
-      detail: { page_id: pageId, turns: result.turns, toolCalls: result.toolCalls, stop: result.stopReason },
+      at: new Date().toISOString(), kind: 'page_agent', stage: 'page-agent', status: finalResult.ok ? 'done' : 'failed',
+      detail: { page_id: pageId, turns: finalResult.turns, toolCalls: finalResult.toolCalls, stop: finalResult.stopReason },
     });
-    return { ok: result.ok, pptxBase64: result.pptxBuffer?.toString('base64'), agent: result };
+    return { ok: finalResult.ok, pptxBase64: finalResult.pptxBuffer?.toString('base64'), agent: finalResult };
   }
 
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */

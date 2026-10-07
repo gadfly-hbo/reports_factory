@@ -114,53 +114,29 @@ export function BuildView() {
         </div>
       )}
 
-      {/* ===== 区块 1：生成 ===== */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-h">
-          生成 <span className="num">{done} / {total} 页</span>
-          <button className="btn btn-primary btn-sm" type="button" style={{ marginLeft: 12 }}
+      {/* ===== 区块 1：生成（紧凑摘要） ===== */}
+      <div className="card" style={{ marginBottom: 16, padding: '14px 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: '1.05rem' }}>生成</strong>
+          <span className="num">{done} / {total} 页完成</span>
+          {Object.values(states).some((v) => v === 'failed') && (
+            <span className="chip chip-fail">{Object.values(states).filter((v) => v === 'failed').length} 页失败（已自动重试 2 次）</span>
+          )}
+          <button className="btn btn-primary btn-sm" type="button" style={{ marginLeft: 'auto' }}
                   disabled={running !== null || allDone || detail?.generation?.status === 'running'}
                   onClick={() => void genAll()}>
             {running === 'all' ? '生成中…' : started ? '继续生成' : '开始生成'}
           </button>
           {detail?.generation?.status === 'running' && running === null && (
-            <span className="fine" style={{ marginLeft: 10 }}>服务端工具 Agent 推进中，稍后刷新查看</span>
+            <span className="fine">服务端工具 Agent 推进中，稍后刷新查看</span>
           )}
         </div>
-        <table className="tbl">
-          <thead><tr><th style={{ width: 40 }}>#</th><th>页题</th><th style={{ width: 220 }}>状态</th></tr></thead>
-          <tbody>
-            {framework.map((p, i) => {
-              const st = states[p.page_id] ?? 'pending';
-              const d = pages[p.page_id];
-              const ap = detail?.agent_progress?.[p.page_id];
-              return (
-                <tr key={p.page_id}>
-                  <td className="num">{String(i + 1).padStart(2, '0')}</td>
-                  <td>{d?.headline ?? p.title}</td>
-                  <td>
-                    {st === 'done' ? <span className="chip chip-ok">已完成</span>
-                      : st === 'failed' ? <span className="chip chip-fail">失败</span>
-                      : st === 'running' ? <span className="chip">生成中…</span> : <span className="chip">排队中</span>}
-                    {st === 'failed' && (
-                      <button className="btn btn-ghost btn-sm" type="button" style={{ marginLeft: 8 }} disabled={running !== null}
-                              onClick={() => void retryPage(p.page_id)}>{running === p.page_id ? '重试中…' : '重试该页'}</button>
-                    )}
-                    {ap && st !== 'done' && (
-                      <span className="chip" style={{ marginLeft: 6 }} title="工具 Agent 过程">{ap.status} · {ap.turns}轮</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
       </div>
 
       {/* ===== 区块 2：逐页编辑（含预览） ===== */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h">逐页编辑</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(0,1fr) 300px', gap: 14, alignItems: 'start', marginTop: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(0,1fr)', gap: 14, alignItems: 'start', marginTop: 8 }}>
           {/* 页列表 */}
           <ul className="sb-list" role="list">
             {framework.map((p, i) => (
@@ -207,18 +183,16 @@ export function BuildView() {
               </>
             ) : <p className="fine">该页尚未生成内容。</p>}
           </div>
-          {/* 预览 */}
-          <div>
-            {activeIdResolved ? (
-              <>
-                <img src={`/api/projects/${id}/pages/${activeIdResolved}/preview.png?t=${Date.now()}`}
-                     alt="页预览" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--line)' }}
-                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                <p className="fine" style={{ marginTop: 6 }}>近似渲染，实际以导出 PPTX 为准。</p>
-              </>
-            ) : null}
-          </div>
         </div>
+        {/* 预览：编辑器下方，随选中页刷新 */}
+        {activeIdResolved && (
+          <div style={{ marginTop: 14 }}>
+            <img src={`/api/projects/${id}/pages/${activeIdResolved}/preview.png?t=${Date.now()}`}
+                 alt="页预览" style={{ maxWidth: '100%', width: 640, borderRadius: 8, border: '1px solid var(--line)' }}
+                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <p className="fine" style={{ marginTop: 4 }}>近似渲染，实际以导出 PPTX 为准。</p>
+          </div>
+        )}
       </div>
 
       {/* ===== 区块 3：下载 ===== */}

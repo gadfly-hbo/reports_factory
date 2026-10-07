@@ -88,10 +88,6 @@ export function Sidebar() {
         >
           <span aria-hidden="true">⚙</span> 设置
         </button>
-        <div className="sb-note">
-          <strong>AI 组织内容，人把关两道门</strong>
-          框架由你确认，发布由你批准;隐私检查与出站白名单由系统强制。
-        </div>
       </div>
     </nav>
   );

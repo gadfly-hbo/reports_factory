@@ -2,13 +2,11 @@
 import { Outlet } from 'react-router-dom';
 import { useProject } from '../state/projectDetail';
 import { useUI } from '../state/ui';
-import { Inspector } from './Inspector';
 import { STAGES, STAGE_TITLE } from '../state/types';
 import type { StageKey } from '../state/types';
 
 export function ProjectShell({ stage, children }: { stage: StageKey; children?: React.ReactNode }) {
   const p = useProject();
-  const ui = useUI();
   const step = STAGES.find((s) => s.key === stage);
 
   if (p.loadFailed) {
@@ -34,7 +32,6 @@ export function ProjectShell({ stage, children }: { stage: StageKey; children?: 
         </div>
         {children ?? <Outlet />}
       </div>
-      {!ui.inspCollapsed && <Inspector />}
     </div>
   );
 }
