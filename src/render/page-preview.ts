@@ -1,10 +1,12 @@
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
 
 /**
- * B3 编辑节点预览：单页渲染为 PNG（近似）。
- * 无 LibreOffice，用纯 JS：把该页内容渲染为单页 HTML（内联样式 16:9）→ Playwright 截图。
- * 工具 Agent 页（有 pptx_buffer）用其文字内容近似；数据页用 deck-html 的版式语义。
- * 预览为近似渲染，实际以导出 PPTX 为准（GB5）。
+ * B3 编辑节点预览：单页渲染为 PNG。
+ * 优先级：工具 Agent 产物的同布局 HTML 预览（work/tmp/page_XX.html，像素级）→ 文字近似渲染（fallback）。
+ * 统一走 Playwright 截图（1280x720）。
  */
 
 function escapeHtml(s: string): string {
@@ -22,26 +24,36 @@ export async function renderPagePreviewPng(store: WorkspaceStore, projectId: str
   if (!work?.framework) throw new Error('框架不存在');
   const fp = work.framework.pages.find((p) => p.page_id === pageId);
   if (!fp) throw new Error(`页不存在：${pageId}`);
-  const draft = work.pages?.[page_id_key(pageId)];
-  const hasAgent = !!work.pptx_buffers?.[page_id_key(pageId)];
 
+  // 1) 优先：工具 Agent 写的同布局 HTML 预览（像素级）
+  const agentHtmlPath = join(process.cwd(), 'data', projectId, 'work', 'tmp', `${pageId}.html`);
+  if (existsSync(agentHtmlPath)) {
+    try {
+      const agentHtml = await readFile(agentHtmlPath, 'utf-8');
+      const png = await shoot(agentHtml);
+      if (png) return png;
+    } catch { /* fallback */ }
+  }
+
+  // 2) fallback：文字近似渲染
+  const draft = work.pages?.[pageId];
   const headline = draft?.headline ?? fp.title;
   const bullets = (draft?.bullets ?? []).map((b) => b.text);
   const subtitle = draft?.subtitle ?? fp.intent ?? '';
   const body = draft?.body ?? '';
   const layout = draft?.layout ?? 'title_bullets';
+  const hasAgent = !!work.pptx_buffers?.[pageId];
 
-  // 单页 16:9 HTML（近似版式）
   const bulletsHtml = bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { width: 1280px; height: 720px; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #fff; color: #242830; display: flex; flex-direction: column; padding: 48px 56px; position: relative; overflow: hidden; }
     .eyebrow { font-size: 13px; letter-spacing: .12em; color: #b44626; font-weight: 700; }
     .band { width: 56px; height: 5px; background: #263442; margin: 10px 0 18px; border-radius: 2px; }
-    h1 { font-size: 34px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; margin-bottom: 10px; }
+    h1 { font-size: 34px; font-weight: 650; letter-spacing: -.01em; line-height: 1.25; margin-bottom: 10px; }
     .sub { font-size: 17px; color: #626773; margin-bottom: 22px; }
-    ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-    li { display: flex; gap: 10px; font-size: 16px; line-height: 1.5; }
+    ul { list-style: none; display: flex; flex-direction: column; gap: 12px; padding-left: 0; }
+    li { display: flex; gap: 8px; align-items: flex-start; font-size: 16px; line-height: 1.5; }
     li::before { content: ""; width: 20px; height: 4px; background: #b44626; border-radius: 2px; flex: none; margin-top: 10px; }
     .body { margin-top: auto; font-size: 14px; color: #626773; line-height: 1.6; }
     .agent-tag { position: absolute; top: 48px; right: 56px; font-size: 12px; color: #626773; border: 1px solid #dedcd6; padding: 4px 10px; border-radius: 4px; }
@@ -60,13 +72,23 @@ export async function renderPagePreviewPng(store: WorkspaceStore, projectId: str
     ${body ? `<div class="body">${escapeHtml(body)}</div>` : ''}
   </body></html>`;
 
-  const { chromium } = await import('playwright');
-  const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  await page.setContent(html, { waitUntil: 'domcontentloaded' });
-  const png = await page.screenshot({ type: 'png', fullPage: false });
-  await browser.close();
+  const png = await shoot(html);
+  if (!png) throw new Error('预览截图失败');
   return png;
+}
+
+async function shoot(html: string): Promise<Buffer | null> {
+  try {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch();
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+    const png = await page.screenshot({ type: 'png', fullPage: false });
+    await browser.close();
+    return png;
+  } catch {
+    return null;
+  }
 }
 
 function page_id_key(pageId: string): string {
