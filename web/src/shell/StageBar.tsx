@@ -16,6 +16,7 @@ export function StageBar({ stage }: { stage: StageKey }) {
   const hasSpec = d?.hasSpec ?? false;
   // 阶段解锁:编审需材料;组装/检查/导出需已组装 spec
   const unlocked: Record<StageKey, boolean> = {
+    ppt: true,
     generate: true,
     materials: true,
     outline: hasMaterials,

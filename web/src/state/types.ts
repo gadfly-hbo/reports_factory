@@ -1,6 +1,6 @@
 /* 领域类型:与后端 schema 对齐的最小集(前端只声明用到的字段)。 */
 
-export type StageKey = 'generate' | 'materials' | 'outline' | 'compose' | 'check' | 'export';
+export type StageKey = 'generate' | 'materials' | 'outline' | 'compose' | 'check' | 'export' | 'ppt';
 export type ProjectStage = 'materials' | 'outline' | 'draft' | 'checked' | 'exported';
 export type DeliverableType = 'meeting_deck' | 'research_report' | 'executive_summary';
 
@@ -20,6 +20,7 @@ export const MAIN_STAGES: { key: StageKey; title: string; n: number }[] = [
 ];
 
 export const STAGE_TITLE: Record<StageKey, string> = {
+  ppt: '快速 PPT',
   generate: '生成',
   materials: '材料',
   outline: '编审',
@@ -29,7 +30,7 @@ export const STAGE_TITLE: Record<StageKey, string> = {
 };
 
 export const isStageKey = (v: string): v is StageKey =>
-  v === 'generate' || v === 'materials' || v === 'outline' || v === 'compose' || v === 'check' || v === 'export';
+  v === 'generate' || v === 'materials' || v === 'outline' || v === 'compose' || v === 'check' || v === 'export' || v === 'ppt';
 
 export interface GenerationStage {
   name: 'outline' | 'draft' | 'assemble' | 'checks';

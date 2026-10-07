@@ -1,54 +1,53 @@
-# Red-Team: M8 Agent Runtime 合规收敛
+# Red-Team: M9 PPT 一站式生成
 
 > 对象：`.flow/proposal.md`（2026-10-06）｜方法：strategy-red-team
-> 裁决：**go**（无 kill 标准触发；KA-1/KA-3 为执行纪律硬条件）
+> 裁决：**go**（无 kill 标准触发；KA-1/3 为执行纪律硬条件）
 
 ## 承重主张
 
 | # | 主张 | 性质 |
 |---|---|---|
-| C1 | 现有接入大体合规，缺口为加固级（非重构级） | 承重 |
-| C2 | §11 清单可用于 N/A 论证（无 tool-call 架构） | 承重 |
-| C3 | deep-research 模式可选择性迁移而不引入形态化重构 | 承重 |
-| C4 | 合规文档能长期维护（不随代码漂移成废纸） | 承重 |
+| C1 | 复用现有 `render/pptx.ts` + zod + pi-ai 一周内可端到端 | 承重 |
+| C2 | LLM 出结构 JSON + 程序渲染是国产产品共识路径（Kimi/WPS/Gamma） | 承重 |
+| C3 | Z.AI pptx skill 内容可作 prompt 守则注入（仅约束文本，不商用其代码） | 承重 |
+| C4 | 「一页一句提示词 + md」入口体验可追平 Kimi 观感 | 承重 |
 
 ## Top Kill-Assumptions
 
-### KA-1｜审计流于纸面
-- **Claim**：逐项审计有证据支撑。
-- **Fails if**：checklist 打勾无 file:line/测试锚点，或 N/A 论证是套话——合规文档本身成了「靠提示词求模型别越界」的文档版。
-- **Kill criterion**：REVIEW 轴把「无证据合规项」列为 blocking（自然发生，无需预设）。
-- **Cheapest test**：文档每项三态 + 证据链接，REVIEW 专查。
+### KA-1｜效果仍追不上 Kimi
+- **Claim**：自研+现有渲染器可拉满成品感。
+- **Fails if**：实际跑出来「AI 风」重（emoji 满天飞、大字 bullet、accent 泛滥）→ 用户弃用。
+- **应对**：system prompt 严格守则（抄 Z.AI pptx skill 的「去 AI 风」「字体克制」「accent 单点」「避免 overflow」）；few-shot 示例 1-2 份好样张；先做 1 个模板固定设计系统（拒绝模板任意选）。
+- **Kill criterion**：交付即真调 3 个不同主题样张；若仍 AI 风→回归走 F 方案（Playwright 调 Kimi 网页）。
 
-### KA-2｜为合规而重构
-- **Claim**：substance over form 约束可执行。
-- **Fails if**：审计过程中以「对齐 deep-research 形态」为由重命名目录/改接口形态，引入回归。
-- **应对**：提案已明令禁止形态化重构；REVIEW 轴核查 diff 无超范围重构。
-- **Kill criterion**：不适用（约束已内建）。
+### KA-2｜LLM 配 MD 时的素材抽取抽不出
+- **Claim**：模型能正确把 md 的章节/数据点抽到 page/bullets。
+- **Fails if**：模型把 md 整段贴到 body、bullets 仅是标题重写——信息密度低。
+- **应对**：system prompt 给显式抽取规则（标题→page headline；列表→bullets；数据点→chart；段落→body 摘要）；结构化重试（首版不满意，接口层面允许「再生成」单页）。
 
-### KA-3｜标准与架构错配硬凑
-- **Claim**：无 tool-call 架构下 §4.2/4.3/4.7 可 N/A 论证。
-- **Fails if**：论证站不住——例如审计后认为领域字典注入（§4.6）实质缺失却记 N/A。
-- **应对**：N/A 必须「该要求的目的在本架构下由何种机制达成」的正面论证，不是「没有工具所以不适用」的消极论证。
-- **Cheapest test**：GRILL 对 §4.6 达标线自证（开放问题已列）。
+### KA-3｜零新依赖但成品感被渲染管线天花板封顶
+- **Claim**：现有 `render/pptx.ts` 已能出可编辑 PPTX，模板设计空间够。
+- **Fails if**：pptxgenjs 形状 API 对复杂版式（双栏图文、引用块、彩色分割）表现平庸。
+- **应对**：首版限定 6 种页型（cover/summary/bullets/quote/chart/divider），克制复杂度；后续按需要扩或接入 dom-to-pptx（方案 B）。
 
-### KA-4｜deep-research 模式照搬过度
-- **Claim**：选择性迁移（快失败/分账/缺键报错已就位，其余不搬）。
-- **Fails if**：把 runAgentLoop/端口层形态搬进来。
-- **应对**：提案否决备选已明令。
-- **Kill criterion**：不适用。
+### KA-4｜M9 独立切片成永久孤儿
+- **Claim**：M9 是「先验证」性质，与 M7 主流程可后续拼合。
+- **Fails if**：独立做完后发现拼不回去（与现有数据模型冲突）。
+- **应对**：接口设计「output=ReportSpec 子集」而非自家格式，未来拼回只要适配 M7；新视图不侵入现有侧栏主路径（单独入口）。
 
 ## What's Well-Reasoned
 
-- 自查先行：import 单点/钉版/快失败/三账分立/stream error 重抛已逐项核实，提案范围落在实证缺口上，不是想象缺口。
-- deep-research 的反面教材（pi-ai: "latest" 未钉版）被明确识别为不应复制。
-- 偏差记账（§9.2）延续 M5 R4 授权链，无静默不合规。
+- 自研选型被 license 风险驱动 + 现有栈 80% 复用，工程账清晰
+- 不引 AGPL/闭源 = 不污染 reports-factory 仓库许可面
+- 范围克制（独立切片、不重构）符合 gated dev-flow「substance over form」精神
+- 「M9 先做，再考虑与 M7 拼合」的递进路径是 M7 用户反馈的真接续
 
 ## What I Couldn't Assess
 
-- §4.6 领域字典注入的达标线（GRILL 裁决）。
-- 审计将挖出的实质缺口清单（这正是本流程的价值所在）。
+- M3 在「长 md 一次性吃入、出 16 页整报告」的实测成品感（要交付即真调）
+- 是否真有人用 Kimi web 服务做 license 合规接入（不必采纳，但用户可能想问）
+- 模板设计审美是否用户认可（1 天内可出，但需用户评审）
 
 ## Verdict
 
-**go**。条件：KA-1 证据纪律由 REVIEW 轴强制；KA-3 N/A 须正面论证；缺口修复深度分级由 GRILL 定。
+**go**。条件：KA-1/2 成品感硬约束（首版交付含 3 主题样张与对比 Kimi 截图）、KA-3 形状克制（首版 ≤6 页型）。

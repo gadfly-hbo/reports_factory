@@ -8,6 +8,7 @@ import { EditorialView } from './EditorialView';
 import { ComposeView } from './ComposeView';
 import { CheckView } from './CheckView';
 import { ExportView } from './ExportView';
+import { PptGeneratorView } from './PptGeneratorView';
 
 export function StageRedirect() {
   const { id } = useParams();
@@ -25,6 +26,7 @@ export function StageRoute() {
       {stage === 'compose' && <ComposeView />}
       {stage === 'check' && <CheckView />}
       {stage === 'export' && <ExportView />}
+      {stage === 'ppt' && <PptGeneratorView />}
     </ProjectShell>
   );
 }

@@ -88,6 +88,17 @@ export function Sidebar() {
           </button>
           {advancedOpen && (
             <ul className="sb-list" role="list" data-testid="advanced-nav">
+              <li>
+                <button
+                  className={`sb-item${location.pathname === `/project/${currentId}/ppt` ? ' active' : ''}`}
+                  type="button"
+                  data-testid="ppt-quick-entry"
+                  onClick={() => navigate(`/project/${currentId}/ppt`)}
+                >
+                  <span aria-hidden="true">⚡</span>
+                  <span className="sb-label">快速 PPT</span>
+                </button>
+              </li>
               {STAGES.map((s) => {
                 const isCurrent = currentStage === s.key;
                 return (

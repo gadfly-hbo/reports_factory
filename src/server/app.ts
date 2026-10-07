@@ -46,6 +46,31 @@ function httpError(statusCode: number, message: string): Error & { statusCode: n
   return Object.assign(new Error(message), { statusCode });
 }
 
+function replyGateError(reply: import('fastify').FastifyReply, err: Error & { statusCode?: number; needsApproval?: boolean }) {
+  if (err.statusCode === 403 && err.needsApproval) { reply.code(403); return { ok: false, error: err.message, needsApproval: true }; }
+  if (err.statusCode === 403) { reply.code(403); return { ok: false, error: err.message, needsApproval: false }; }
+  reply.code(err.statusCode ?? 500);
+  return { ok: false, error: err.message };
+}
+
+async function runPptFromInput(
+  req: import('fastify').FastifyRequest,
+  reply: import('fastify').FastifyReply,
+  wb: import('./workbench.js').WorkbenchService,
+  input: { markdown: string },
+) {
+  const id = (req.params as { id: string }).id;
+  const body = (req.body ?? {}) as { audience?: string; pageBudget?: number; briefPrompt?: string; themeId?: string };
+  try {
+    const buf = await wb.pptFromInput(id, { markdown: input.markdown, audience: body.audience, pageBudget: body.pageBudget, briefPrompt: body.briefPrompt, themeId: body.themeId });
+    reply.header('content-type', 'application/vnd.openxmlformats-officedocument.presentationml');
+    reply.header('content-disposition', `attachment; filename="ppt-${id}.pptx"`);
+    return reply.send(buf);
+  } catch (e) {
+    return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
+  }
+}
+
 /** 本地服务（F 界面）：API + 静态托管构建后的 UI（web-dist） */
 export function buildServer(store: WorkspaceStore, webDist?: string): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -306,7 +331,15 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
-  // 生成状态查询（进度轮询：POST 同步执行期间读 checkpoint）
+  // M9 PPT-only 一站式生成：MD 或纯文本 → LLM 出结构 → 现有渲染器出 Buffer
+  app.post('/api/projects/:id/ppt/from-md', async (req, reply) => {
+    return runPptFromInput(req, reply, workbench, { markdown: ((req.body ?? {}) as { markdown?: string }).markdown ?? '' });
+  });
+  app.post('/api/projects/:id/ppt/from-text', async (req, reply) => {
+    return runPptFromInput(req, reply, workbench, { markdown: ((req.body ?? {}) as { text?: string }).text ?? '' });
+  });
+
+  
   app.get('/api/projects/:id/generation', async (req) => {
     const { id } = req.params as { id: string };
     return { generation: await workbench.getGeneration(id) };

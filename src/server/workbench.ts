@@ -22,7 +22,8 @@ import type { Project } from '../schema/project.js';
 import { getTemplate } from '../schema/template.js';
 import { DEFAULT_BRAND } from '../schema/brand.js';
 import { checkBudget, resolveBudget, type BudgetEntry } from '../model/budget.js';
-import { aiDraftPage, buildPageMaterialsSensitiveAware, type PageDraft, type PageTask } from '../model/ai-draft.js';
+import { aiDraftPage, buildPageMaterialsSensitiveAware, buildPageMaterials, type PageDraft, type PageTask } from '../model/ai-draft.js';
+import { aiPptPageDraft } from '../model/ai-ppt-from-md.js';
 import type { PlacementRecommendation } from '../schema/editorial.js';
 import { PrivacyGate } from '../model/privacy-gate.js';
 import { assembleReportSpec, type AssembleContext } from '../compose/assemble.js';
@@ -578,22 +579,6 @@ export class WorkbenchService {
     }
   }
 
-  /** 生成状态查询（进度轮询）；待确认大纲附页结构摘要；携带调用计数（story 11 预算可见） */
-  async getGeneration(projectId: string): Promise<(GenerationState & { outline?: { page_id: string; type: string; headline: string }[]; calls?: number }) | null> {
-    const work = await this.readWork(projectId);
-    const generation = work.generation;
-    if (!generation) return null;
-    const log = await this.store.readOutboundLog(projectId);
-    const calls = log.filter((e) => !e.blocked).length;
-    if (generation.status === 'awaiting_confirmation' && work.outline) {
-      return {
-        ...generation,
-        outline: work.outline.pages.map((p) => ({ page_id: p.page_id, type: p.type, headline: p.headline })),
-        calls,
-      };
-    }
-    return { ...generation, calls };
-  }
 
   /** 大纲确认后续跑（PRD D7）：应用 headline 修改，从 draft 阶段继续 */
   async confirmGenerate(projectId: string, headlines?: Record<string, string>): Promise<GenerationState> {
@@ -612,6 +597,133 @@ export class WorkbenchService {
       audience: work.brief?.audience ?? '未指定',
       purpose: work.brief?.purpose ?? '未指定',
     }, { fromConfirm: true });
+  }
+
+  /** 生成状态查询（进度轮询）；待确认大纲附页结构摘要；携带调用计数（story 11 预算可见） */
+  async getGeneration(projectId: string): Promise<(GenerationState & { outline?: { page_id: string; type: string; headline: string }[]; calls?: number }) | null> {
+    const work = await this.readWork(projectId);
+    const generation = work.generation;
+    if (!generation) return null;
+    const log = await this.store.readOutboundLog(projectId);
+    const calls = log.filter((e) => !e.blocked).length;
+    if (generation.status === 'awaiting_confirmation' && work.outline) {
+      return {
+        ...generation,
+        outline: work.outline.pages.map((p) => ({ page_id: p.page_id, type: p.type, headline: p.headline })),
+        calls,
+      };
+    }
+    return { ...generation, calls };
+  }
+
+  /** M9 草案方法（公开便于 future 注入）；调用者负责已过 gateOrThrow + 已算 budget */
+  async pptFromInput(projectId: string, input: { markdown: string; audience?: string; pageBudget?: number; briefPrompt?: string; themeId?: string }): Promise<Buffer> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error(`project not found: ${projectId}`), { statusCode: 404 });
+    if (!input.markdown?.trim()) throw Object.assign(new Error('markdown 不能为空'), { statusCode: 400 });
+
+    await this.gateOrThrow(projectId, 'authorized-summary', 'ppt-page');
+
+    const { all } = await this.loadDerived(projectId);
+    // M9 pageSeq 由模板 page_plan 投影（非材料绑定），pageBlocked 恒 false（诚实留空）；
+    // 后续材料绑定 PR 时按 draftStage 同链（evidence→source）计算敏感集合即可（范式在 draftStage）。
+
+    const client = await this.modelClient();
+    const state = await this.readEditorialState(projectId);
+    const brief = state.brief as ReportBrief | undefined;
+    const boundaries = brief?.required_boundaries ?? [];
+    const template = getTemplate(project.template_id);
+    const pageBudgetRaw = input.pageBudget ?? 6;
+    if (!Number.isInteger(pageBudgetRaw) || pageBudgetRaw < 1 || pageBudgetRaw > 16) {
+      // PRD G3：out of range → 422（不静默钳制）
+      throw Object.assign(new Error(`pageBudget 越界：${pageBudgetRaw}（合法 1–16）`), { statusCode: 422 });
+    }
+    const pageBudget = pageBudgetRaw;
+    const themeId = input.themeId ?? project.template_id;
+    const audience = (input.audience ?? brief?.audience ?? '阅读者').trim();
+    const purposeText = (input.briefPrompt ?? brief?.purpose ?? 'PPT 一站式').trim();
+    if (!audience) throw Object.assign(new Error('audience 不能为空'), { statusCode: 422 });
+    if (!purposeText) throw Object.assign(new Error('briefPrompt/purpose 不能为空'), { statusCode: 422 });
+
+    // M2：按模板 pagePlan 派生 pageSeq（不再"要点 N"），让模板内置序直接驱动结构
+    const basePagePlan = template?.page_plan ?? ['cover', 'summary', 'action_items', 'evidence_appendix'];
+    const pageSeq: { type: string; page_id: string; headline: string; claim_refs: string[]; table_ids: string[]; gap_notes: string[] }[] = basePagePlan.slice(0, pageBudget).map((type, i) => ({
+      type, page_id: `page_${String(i + 1).padStart(2, '0')}`,
+      headline: '', // LLM 起草时填；fallback 用 type
+      claim_refs: [], table_ids: [], gap_notes: [],
+    }));
+
+    const drafts: import('../model/ai-ppt-from-md.js').PptPageDraft[] = [];
+    for (let i = 0; i < pageSeq.length; i++) {
+      const page = pageSeq[i]!;
+      // M3：sensitive 判定走 evidence→source 链；pageSeq 由模板 pagePlan 投影（非材料绑定），
+      // 当前不携带 claim_refs/table_ids 故 pageBlocked=false（诚实留空）；后续材料绑定增强时，
+      // 直接把 page.claim_refs/table_ids 填入下方判定函数，无需改路由
+      const pageBlocked = false;
+      if (pageBlocked) {
+        drafts.push({ type: page.type, headline: page.headline || page.type, purpose: '受敏感来源绑定，整页不出站', body: '', bullets: [{ text: '受敏感来源绑定，整页不出站' }], uncovered: true });
+        continue;
+      }
+      const materials = buildPageMaterials({ claim_refs: [], table_ids: [] }, all.claims, all.tables);
+      // 预算逐页复查（M7 draftStage 同语义）：次数/墙钟/轮次超帽停在当前页，剩余页回退
+      const projectBudget = project ?? {};
+      const budgetCfg = resolveBudget(projectBudget, process.env);
+      const budgetLog = await this.store.readOutboundLog(projectId);
+      const verdict = checkBudget(budgetLog as BudgetEntry[], budgetCfg, 'ppt-page', Date.now());
+      if (!verdict.allowed) {
+        drafts.push({ type: page.type, headline: page.headline || page.type, purpose: '预算超帽，本页回退', body: '', bullets: [{ text: '预算超帽' }], uncovered: true });
+        await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'ppt_generation', stage: 'ppt-page', status: 'budget_stop', detail: { page_id: page.page_id, line: verdict.line } });
+        continue;
+      }
+      try {
+        const r = await aiPptPageDraft(client, {
+          themeId, audience, pageBudget,
+          briefPrompt: input.briefPrompt,
+          page, materials: [...materials, ...input.markdown.split(/\n+/).filter((l) => l.trim().length > 0).slice(0, 16)],
+          boundaries,
+        });
+        drafts.push(r.draft);
+        // H3：记录成功出站（M7 同语义——失败/通过均记），让预算轮次/次数真实累加
+        await this.recordOutboundCall(projectId, {
+          at: new Date().toISOString(),
+          stage: 'ppt-page',
+          provider: r.provider,
+          modelId: r.modelId,
+          mode: 'authorized-summary',
+          itemCount: 1,
+          bytes: r.bytes,
+          cost: r.cost,
+        });
+      } catch (e) {
+        // 失败的真实调用也计量（M7 同语义）：护栏拒绝/LLM 失败仍消耗出站
+        await this.recordOutboundCall(projectId, {
+          at: new Date().toISOString(),
+          stage: 'ppt-page',
+          provider: 'none',
+          modelId: '',
+          mode: 'authorized-summary',
+          itemCount: 1,
+          bytes: 0,
+          cost: 0,
+        });
+        const msg = e instanceof Error ? e.message : String(e);
+        const code = /数字/.test(msg) ? 'digit_guard' : /预算超帽/.test(msg) ? 'budget' : /录制未命中|ReplayMiss/.test(msg) ? 'replay_miss' : /熔断/.test(msg) ? 'circuit_open' : 'error';
+        await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'ppt_generation', stage: 'ppt-page', status: 'page_fallback', detail: { page_id: page.page_id, reason: code } });
+        drafts.push({ type: page.type, headline: page.headline || page.type, purpose: '本页未通过护栏，已用规则版骨架', body: '', bullets: [{ text: '材料未覆盖' }], uncovered: true });
+      }
+    }
+
+    // MED2：统一走 buildReportSpec 适配器（经 ReportSpecSchema.parse，单一实现）
+    const { buildReportSpec } = await import('../model/ai-ppt-from-md.js');
+    const spec = buildReportSpec(drafts, {
+      title: project.title, audience, pageBudget,
+      briefPrompt: purposeText,
+    });
+
+    const { renderReportPptx } = await import('../render/pptx.js');
+    const buf = await renderReportPptx(spec);
+    await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'ppt_generation', stage: 'ppt-page', status: 'done', detail: { pages: drafts.length, bytes: buf.length } });
+    return buf;
   }
 
   /**
