@@ -826,5 +826,25 @@
       "format": "pptx",
       "level": "internal"
     }
+  },
+  {
+    "at": "2026-10-07T10:25:35.283Z",
+    "kind": "outbound_approval",
+    "stage": "publish",
+    "status": "approved",
+    "detail": {
+      "mode": "formal-export",
+      "content_hash": "e3be22cfa798f737"
+    }
+  },
+  {
+    "at": "2026-10-07T10:25:36.838Z",
+    "kind": "export",
+    "stage": "publish",
+    "status": "done",
+    "detail": {
+      "format": "pptx",
+      "level": "internal"
+    }
   }
 ]
