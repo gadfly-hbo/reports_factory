@@ -12,17 +12,18 @@ build/
 
 # 项目数据随仓库双机同步（对齐 deep-research research-data 全量入库）：
 # 工作区/材料/修订/编审状态/导出记录都入库，换机可续作。
-# 可再生工件不入库：pptx/pdf 已全局忽略，此处补齐 docx/html。
+# 数据目录（仓库内随双机同步；可再生工件 pptx/pdf 不入库）：
 data/*
 !data/.keep
 !data/*/
-data/*/exports/*.docx
-data/*/exports/*.html
-*.pptx
-*.pdf
+# 夹具 PDF/PPTX/SAMPLES golden 必须入库——把豁免放在全局忽略之前（gitignore last-match 语义）
 !fixtures/**/*.pptx
 !fixtures/**/*.pdf
 !samples/**/golden/*.txt
+*.pptx
+*.pdf
+data/*/exports/*.docx
+data/*/exports/*.html
 
 # env & logs
 .env
