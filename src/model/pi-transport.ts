@@ -2,6 +2,50 @@ import { type Api, type Model } from '@earendil-works/pi-ai';
 import { getBuiltinModel } from '@earendil-works/pi-ai/providers/all';
 import { DEFAULT_TIMEOUT_MS, chainFromEnv } from './client.js';
 import type { ModelTransport, ProviderConfig } from './client.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
+/**
+ * 启动时自动从本机凭据文件加载模型密钥（macmini / MacBook 双端通用）：
+ *   - MiniMax: ~/.pi/agent/auth.json  →  providers["minimax-cn"].key
+ *   - Xiaomi MIMO: ~/.zcode/v2/config.json  →  providers[?].options.baseURL 含 xiaomimimo → apiKey
+ * 仅在进程环境变量未设置时注入，不覆盖显式值。
+ */
+function loadKeysFromDisk(): void {
+  const home = homedir();
+  // MiniMax
+  if (!process.env['MINIMAX_CN_API_KEY'] && !process.env['MINIMAX_API_KEY']) {
+    const p = join(home, '.pi', 'agent', 'auth.json');
+    if (existsSync(p)) {
+      try {
+        const a = JSON.parse(readFileSync(p, 'utf-8')) as Record<string, { key?: string }>;
+        const k = a['minimax-cn']?.key ?? a['minimax']?.key;
+        if (k) {
+          process.env['MINIMAX_CN_API_KEY'] = k;
+          process.env['MINIMAX_API_KEY'] = k;
+        }
+      } catch { /* 静默：文件不可读不阻塞启动 */ }
+    }
+  }
+  // Xiaomi MIMO token-plan
+  if (!process.env['XIAOMI_TOKEN_PLAN_CN_API_KEY']) {
+    const p = join(home, '.zcode', 'v2', 'config.json');
+    if (existsSync(p)) {
+      try {
+        const cfg = JSON.parse(readFileSync(p, 'utf-8')) as { provider?: Record<string, { options?: { baseURL?: string; apiKey?: string } }> };
+        for (const v of Object.values(cfg.provider ?? {})) {
+          const base = v?.options?.baseURL ?? '';
+          if (typeof base === 'string' && base.includes('xiaomimimo')) {
+            const k = v?.options?.apiKey;
+            if (k) { process.env['XIAOMI_TOKEN_PLAN_CN_API_KEY'] = k; break; }
+          }
+        }
+      } catch { /* 静默 */ }
+    }
+  }
+}
+loadKeysFromDisk();
 
 /**
  * pi-ai 真实 transport（M5 D1）：模型调用的唯一出站点。
