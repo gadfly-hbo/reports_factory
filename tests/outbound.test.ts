@@ -78,13 +78,8 @@ describe('S2 出站治理', () => {
     expect(resolveOutboundPolicy('allow_external')).toEqual({ disabled: false, needsApproval: false });
   });
 
-  it('L2：预览可见；未批准调用被拒；按 projectId|mode 批准；批准持久化跨重启生效（PRD D6）', async () => {
+  it('L2：未批准调用被拒；按 projectId|mode 批准；批准持久化跨重启生效（PRD D6）', async () => {
     await store.updateProject(projectId, { privacy_policy: 'allow_external_with_approval' });
-
-    // 预览：未批准也可查看（知情是批准的前提）
-    const preview = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/preview`, payload: { mode: 'authorized-summary' } });
-    expect(preview.statusCode).toBe(200);
-    expect(preview.json().descriptor.mode).toBe('authorized-summary');
 
     // 未批准 → 出站门拒绝
     const gateBefore = (await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/check`, payload: { mode: 'authorized-summary' } })).json();
@@ -108,9 +103,7 @@ describe('S2 出站治理', () => {
     await app2.close();
   });
 
-  it('local_only：预览与批准均被拒；capabilities 显示 AI 关闭', async () => {
-    const preview = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/preview`, payload: { mode: 'structure-only' } });
-    expect(preview.statusCode).toBe(403);
+  it('local_only：批准被拒；capabilities 显示 AI 关闭', async () => {
     const approve = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/approve`, payload: { mode: 'structure-only' } });
     expect(approve.statusCode).toBe(403);
     const detail = (await app.inject({ url: `/api/projects/${projectId}` })).json();

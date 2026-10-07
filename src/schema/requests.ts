@@ -1,187 +1,23 @@
 import { z } from 'zod';
 import { PrivacyPolicySchema, SourceKindSchema } from './project.js';
-import { ReportBriefSchema } from './report-spec.js';
-import { BrandConfigSchema } from './brand.js';
-import { PlacementSchema } from './editorial.js';
-import { PageLocksSchema, ReportLocksSchema } from './proposal.js';
-import { OUTBOUND_MODES } from '../model/outbound.js';
 
-/** API 请求体 schema（边界类型化：全部请求体经 zod 校验，替代裸 cast） */
+/** 六步 API 请求体契约（M10）。旧报告请求 schema 随功能删除（git 历史可查）。 */
 
 export const CreateProjectRequestSchema = z.object({
   title: z.string().min(1),
   purpose: z.string().optional(),
+  template_id: z.string().optional(),
   privacy_policy: PrivacyPolicySchema.optional(),
-  template_id: z.string().min(1).optional(),
+});
+
+export const OutboundModeRequestSchema = z.object({
+  mode: z.enum(['structure-only', 'authorized-summary']),
 });
 
 export const SourceUploadRequestSchema = z.object({
   filename: z.string().min(1),
   content_base64: z.string().min(1),
   kind: SourceKindSchema,
-  media_type: z.string().min(1),
-  sheet: z.string().optional(), // XLSX 显式选表
+  media_type: z.string().optional(),
+  sheet: z.string().optional(),
 });
-
-export const OutlineRequestSchema = z.object({
-  brief: ReportBriefSchema,
-});
-
-/** M7 一键生成管线请求（模版决定 deliverable_type 与页数上限；confirm_outline=大纲确认开关） */
-export const GenerateRequestSchema = z.object({
-  audience: z.string().min(1),
-  purpose: z.string().min(1),
-  confirm_outline: z.boolean().optional(),
-});
-
-/** 大纲确认请求（REVIEW Low10：headlines 强校验，空串拒绝） */
-export const ConfirmGenerateRequestSchema = z.object({
-  headlines: z.record(z.string().min(1), z.string().min(1)).optional(),
-});
-
-export const PagePlanItemSchema = z.object({
-  page_id: z.string().min(1),
-  type: z.enum(['cover', 'summary', 'metrics_overview', 'trend', 'issue_breakdown', 'option_comparison', 'action_items', 'evidence_appendix']),
-  headline: z.string().min(1),
-  intent: z.enum(['conclusion', 'evidence', 'decision', 'info']),
-  claim_refs: z.array(z.string()).default([]),
-  table_ids: z.array(z.string()).default([]),
-  gap_notes: z.array(z.string()).default([]),
-  locked: z.boolean().default(false),
-  /** M4 逐页蓝图（F04） */
-  blueprint: z
-    .object({
-      page_purpose: z.string().min(1),
-      core_message: z.string().optional(),
-      inclusion_reason: z.string().optional(),
-      required_limits: z.array(z.string()).optional(),
-    })
-    .optional(),
-});
-
-export const AssembleRequestSchema = z.object({
-  pages: z.array(PagePlanItemSchema).optional(),
-});
-
-export const EditOpSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('edit_text'), page_id: z.string().min(1), field: z.enum(['headline', 'body']), text: z.string() }),
-  z.object({ kind: z.literal('reorder'), order: z.array(z.string().min(1)).min(1) }),
-  z.object({ kind: z.literal('regenerate_page'), page_id: z.string().min(1) }),
-  z.object({ kind: z.literal('split_page'), page_id: z.string().min(1) }),
-  z.object({ kind: z.literal('switch_layout'), page_id: z.string().min(1), layout_id: z.string().min(1) }),
-  z.object({ kind: z.literal('delete_page'), page_id: z.string().min(1) }),
-  /** S6 整页重生成（模型起草）：整页替换 headline/bullets/body；表格图表不在此范围 */
-  z.object({
-    kind: z.literal('rewrite_page'),
-    page_id: z.string().min(1),
-    headline: z.string().min(1),
-    bullets: z.array(z.object({ text: z.string().min(1), label: z.string().optional(), claim_ref: z.string().optional() })).min(1),
-    body: z.string().optional(),
-  }),
-  z.object({ kind: z.literal('toggle_lock'), page_id: z.string().min(1), locked: z.boolean() }),
-  z.object({ kind: z.literal('set_locks'), page_id: z.string().min(1), locks: PageLocksSchema.partial().optional() }),
-  z.object({ kind: z.literal('set_report_locks'), locks: ReportLocksSchema.partial().optional() }),
-]);
-
-/** M4 变更提案入口（§12.1）：op + 预期修订；/edit 为其薄壳（expected=当前修订） */
-export const ProposeRequestSchema = z.object({
-  op: EditOpSchema,
-  expected_revision: z.string().min(1),
-  /** S5：起草来源标记（仅接受 model-draft，R2 收紧审计枚举） */
-  source: z.enum(['model-draft']).optional(),
-});
-
-/** M5 提案起草请求（§12.1）：自然语言意图，模型只产草案不应用 */
-export const ProposalDraftRequestSchema = z.object({
-  intent: z.string().min(1).max(500),
-  /** S6：scope=rewrite_page 时整页重生成（需 page_id）；缺省为单标题修改 */
-  scope: z.enum(['edit_text', 'rewrite_page']).optional(),
-  page_id: z.string().min(1).optional(),
-});
-export type ProposeRequest = z.infer<typeof ProposeRequestSchema>;
-
-/** G1 批准（§8.1） */
-export const ApproveG1RequestSchema = z.object({
-  approver: z.string().min(1),
-  scope: z.string().optional(),
-});
-export type ApproveG1Request = z.infer<typeof ApproveG1RequestSchema>;
-
-/** 补证请求草拟（§11.2） */
-export const EvidenceRequestCreateSchema = z.object({
-  request_id: z.string().optional(),
-  question: z.string().min(1),
-  gap: z.string().optional(),
-  affected_objects: z.array(z.string()).optional(),
-  required_evidence: z.string().optional(),
-});
-export type EvidenceRequestCreate = z.infer<typeof EvidenceRequestCreateSchema>;
-
-/** 补证请求批准（T16：批准 ≠ 授权执行） */
-export const EvidenceApproveRequestSchema = z.object({ approver: z.string().min(1) });
-
-/** M5 出站治理请求（§14.2）：mode 单一来源取自 OUTBOUND_MODES；include_sensitive 延后（当前一律默认排除） */
-export const OutboundModeRequestSchema = z.object({
-  mode: z.enum(OUTBOUND_MODES),
-});
-export type OutboundModeRequest = z.infer<typeof OutboundModeRequestSchema>;
-
-/** 待复核解除（§7.7）：按逻辑键或受影响页解除——补证回流可能无键只有页（N1） */
-export const ResolvePendingRequestSchema = z
-  .object({
-    logical_keys: z.array(z.string()).optional(),
-    affected_pages: z.array(z.string()).optional(),
-  })
-  .refine((v) => (v.logical_keys?.length ?? 0) > 0 || (v.affected_pages?.length ?? 0) > 0, {
-    message: '需要 logical_keys 或 affected_pages 至少一项非空',
-  });
-
-export const EditRequestSchema = z.object({
-  op: EditOpSchema,
-});
-
-/** M4 编排决定（§7.3）：对象/位置/理由按报告隔离持久化 */
-export const DecidePlacementRequestSchema = z.object({
-  report_id: z.string().optional(),
-  decisions: z
-    .array(
-      z.object({
-        logical_key: z.string().min(1),
-        placement: PlacementSchema,
-        reason: z.string().optional(),
-        operator: z.string().optional(),
-      }),
-    )
-    .min(1),
-});
-export type DecidePlacementRequest = z.infer<typeof DecidePlacementRequestSchema>;
-
-export const ResolveConflictRequestSchema = z.object({
-  resolution: z.record(
-    z.string(),
-    z.union([
-      z.enum(['source_a', 'source_b']),
-      z.object({ resolution: z.literal('manual_value'), value: z.number() }),
-    ]),
-  ),
-});
-
-export const ExportRequestSchema = z.object({
-  mode: z.enum(['formal', 'draft']),
-  formats: z.array(z.enum(['pptx', 'pdf', 'html', 'docx'])).min(1),
-  exportScope: z.enum(['internal', 'external']).optional(),
-  chart_data_mode: z.enum(['keep_editable', 'aggregate_only']).optional(),
-  ack_editable_data: z.boolean().optional(),
-  ack_external_share: z.boolean().optional(),
-  deliverable: z.enum(['executive_summary']).optional(),
-});
-
-export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
-export type SourceUploadRequest = z.infer<typeof SourceUploadRequestSchema>;
-export type OutlineRequest = z.infer<typeof OutlineRequestSchema>;
-export type EditRequest = z.infer<typeof EditRequestSchema>;
-export type ResolveConflictRequest = z.infer<typeof ResolveConflictRequestSchema>;
-export type ExportRequest = z.infer<typeof ExportRequestSchema>;
-
-export const BrandRequestSchema = z.object({ brand: BrandConfigSchema });
-export type BrandRequest = z.infer<typeof BrandRequestSchema>;

@@ -116,9 +116,8 @@ describe('出站批准持久化与预算门挂点（S5）', () => {
     // 预置历史调用触顶（次数线）
     for (let i = 0; i < 50; i++) await store.appendOutboundLog(pid, logEntry());
     const wb = new WorkbenchService(store);
-    const res = await wb.aiComposeOutline(pid, {
-      audience: 'a', purpose: 'p', page_budget: 8, language: 'zh-CN',
-    } as never).catch((e: Error & { statusCode?: number; reason?: string }) => e);
+    await store.updateProject(pid, { privacy_policy: 'allow_external' });
+    const res = await wb.gateOrThrow(pid, 'authorized-summary', 'draft').catch((e: Error & { statusCode?: number }) => e);
     expect((res as Error).message).toMatch(/调用次数/);
     expect((res as { statusCode?: number }).statusCode).toBe(403);
     // 阻断审计留痕（零内容）
@@ -127,14 +126,15 @@ describe('出站批准持久化与预算门挂点（S5）', () => {
     expect(blocked.length).toBeGreaterThan(0);
   });
 
-  it('生成管线阶段事件写独立审计流（零内容，P5/P6）', async () => {
-    const project = await store.createProject({ title: '管线审计' });
+  it('门决策写独立审计流（零内容，P5/P6；六步管线阶段审计随 S5 回归）', async () => {
+    const project = await store.createProject({ title: '门审计' });
+    const pid = project.project_id;
+    for (let i = 0; i < 50; i++) await store.appendOutboundLog(pid, logEntry());
     const wb = new WorkbenchService(store);
-    await wb.generate(project.project_id, { audience: 'a', purpose: 'p' });
-    const audit = await store.readAuditLog(project.project_id);
-    const stages = audit.filter((e) => e.kind === 'generation_stage');
-    expect(stages.some((e) => e.stage === 'outline')).toBe(true);
-    expect(stages.some((e) => e.stage === 'assemble')).toBe(true);
+    await wb.gateOrThrow(pid, 'authorized-summary', 'draft').catch(() => undefined);
+    const audit = await store.readAuditLog(pid);
+    const gates = audit.filter((e) => e.kind === 'gate_decision');
+    expect(gates.some((e) => e.stage === 'draft' && e.status === 'budget_blocked')).toBe(true);
     // 零内容：不含文本载荷字段；每条含审计骨架键
     for (const e of audit) {
       expect(Object.keys(e)).not.toContain('text');

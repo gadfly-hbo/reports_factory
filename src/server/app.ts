@@ -2,32 +2,12 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { WorkspaceStore } from '../storage/workspace.js';
 import { ingestAndSave } from '../ingest/persist.js';
-import { importAnalysisBundle } from '../ingest/bundle.js';
-import { exportReport } from '../pipeline/export.js';
 import { WorkbenchService } from './workbench.js';
-import {
-  ApproveG1RequestSchema,
-  ConfirmGenerateRequestSchema,
-  AssembleRequestSchema,
-  BrandRequestSchema,
-  CreateProjectRequestSchema,
-  DecidePlacementRequestSchema,
-  EditRequestSchema,
-  EvidenceApproveRequestSchema,
-  EvidenceRequestCreateSchema,
-  ExportRequestSchema,
-  OutlineRequestSchema,
-  GenerateRequestSchema,
-  OutboundModeRequestSchema,
-  ProposalDraftRequestSchema,
-  ProposeRequestSchema,
-  ResolveConflictRequestSchema,
-  ResolvePendingRequestSchema,
-  SourceUploadRequestSchema,
-} from '../schema/requests.js';
-import { ZodError, z } from 'zod';
+import { CreateProjectRequestSchema, OutboundModeRequestSchema, SourceUploadRequestSchema } from '../schema/requests.js';
+import { ZodError } from 'zod';
 import { PrivacyPolicySchema } from '../schema/project.js';
 import { listTemplates, getTemplate } from '../schema/template.js';
 import { chainFromEnv } from '../model/client.js';
@@ -54,32 +34,15 @@ function replyGateError(reply: import('fastify').FastifyReply, err: Error & { st
   return { ok: false, error: err.message };
 }
 
-async function runPptFromInput(
-  req: import('fastify').FastifyRequest,
-  reply: import('fastify').FastifyReply,
-  wb: import('./workbench.js').WorkbenchService,
-  input: { markdown: string },
-) {
-  const id = (req.params as { id: string }).id;
-  const body = (req.body ?? {}) as { audience?: string; pageBudget?: number; briefPrompt?: string; themeId?: string };
-  try {
-    const buf = await wb.pptFromInput(id, { markdown: input.markdown, audience: body.audience, pageBudget: body.pageBudget, briefPrompt: body.briefPrompt, themeId: body.themeId });
-    reply.header('content-type', 'application/vnd.openxmlformats-officedocument.presentationml');
-    reply.header('content-disposition', `attachment; filename="ppt-${id}.pptx"`);
-    return reply.send(buf);
-  } catch (e) {
-    return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
-  }
-}
-
-/** 本地服务（F 界面）：API + 静态托管构建后的 UI（web-dist） */
+/** 本地服务（M10 纯 PPT 报告生成器）：六步 API + 静态托管构建后的 UI（web-dist） */
 export function buildServer(store: WorkspaceStore, webDist?: string): FastifyInstance {
   const app = Fastify({ logger: false });
   const workbench = new WorkbenchService(store);
 
   app.get('/api/projects', async () => {
     const projects = await store.listProjects();
-    return { projects };
+    // M10 G6：只列 PPT 项目——旧报告项目（无 kind 字段）数据保留但不出现
+    return { projects: projects.filter((p) => p.kind === 'ppt') };
   });
 
   app.get('/api/templates', async () => {
@@ -94,10 +57,11 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const project = await store.createProject({
       title: body.title,
       purpose: body.purpose,
-      // M7 D6：创建不预设品牌——brand 留空时用模版预设，用户自定义后覆盖（优先级见 assemble）
       template_id: body.template_id,
     });
-    if (body.privacy_policy) await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy });
+    if (body.privacy_policy) {
+      return { project: await store.updateProject(project.project_id, { privacy_policy: body.privacy_policy }) };
+    }
     return { project };
   });
 
@@ -109,48 +73,37 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
 
   app.get('/api/projects/:id', async (req) => {
     const { id } = req.params as { id: string };
-    const project = await store.getProject(id);
-    if (!project) throw httpError(404, '项目不存在');
-    const [sources, revisions, exports, conflicts, spec, editorial, capabilities] = await Promise.all([
-      store.listSourceAssets(id),
-      store.listRevisions(id),
-      store.listExports(id),
-      workbench.getResolvedConflicts(id),
-      workbench.getSpec(id),
-      workbench.editorial(id),
-      workbench.aiCapabilities(id),
-    ]);
-    const editorialActive = editorial.decisions.length > 0 || !!editorial.approval;
-    return {
-      project, sources, revisions: revisions.map((r) => r.meta), exports, conflicts, hasSpec: !!spec, spec: spec ?? null,
-      // M4 编审摘要（状态栏显示；编审模式=存在编排决定或已推进状态）
-      editorial: editorialActive
-        ? {
-            status: editorial.status,
-            pending_pages: editorial.pending_review.affected_pages.length,
-            pending_updates: editorial.pending_review.updates.length,
-            g1: !!editorial.approval,
-            g2: !!editorial.g2,
-          }
-        : null,
-      // M5 AI 能力（驱动前端入口渲染）
-      capabilities,
-    };
+    return workbench.projectDetail(id);
   });
 
-  // M5 出站治理：预览（调用前可查看）→ 批准（会话级，projectId|mode）→ 门检查
-  app.post('/api/projects/:id/outbound/preview', async (req, reply) => {
+  // M9 收尾保留：改项目隐私策略（M-U2：项目级隐私语义保留，Inspector/创建区可设）
+  app.put('/api/projects/:id/privacy', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = parseBody(OutboundModeRequestSchema, req.body);
+    const body = parseBody(z.object({ privacy_policy: PrivacyPolicySchema }), req.body);
     try {
-      return await workbench.outboundPreview(id, body.mode);
+      const project = await store.updateProject(id, { privacy_policy: body.privacy_policy });
+      return { project };
     } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
+      return replyGateError(reply, e as Error & { statusCode?: number });
     }
   });
 
+  // 上传资料（S1 保留既有 ingest 通道；移除与理解在 S3 补齐）
+  app.post('/api/projects/:id/sources', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(SourceUploadRequestSchema, req.body);
+    const result = await ingestAndSave(store, id, {
+      filename: body.filename,
+      content: Buffer.from(body.content_base64, 'base64'),
+      kind: body.kind,
+      media_type: body.media_type ?? '',
+      sheet: body.sheet,
+    });
+    const { ok, failure_reason, claims, evidence, tables, notes, confirmations, available_sheets } = result;
+    return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined, available_sheets: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations, available_sheets };
+  });
+
+  // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = parseBody(OutboundModeRequestSchema, req.body);
@@ -170,401 +123,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     return workbench.checkOutbound(id, body.mode);
   });
 
-  app.post('/api/projects/:id/sources', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(SourceUploadRequestSchema, req.body);
-    const result = await ingestAndSave(store, id, {
-      filename: body.filename,
-      content: Buffer.from(body.content_base64, 'base64'),
-      kind: body.kind,
-      media_type: body.media_type,
-      sheet: body.sheet,
-    });
-    const { ok, failure_reason, claims, evidence, tables, notes, confirmations, available_sheets } = result;
-    return { source: { ...result, claims: undefined, evidence: undefined, tables: undefined, notes: undefined, confirmations: undefined, available_sheets: undefined }, ok, failure_reason, counts: { claims: claims.length, tables: tables.length, evidence: evidence.length, notes: notes.length }, confirmations, available_sheets };
-  });
-
-  // M4：授权分析成果包导入（AnalysisBundle 合同 §11.1；未知版本/结构非法即 400 拒绝）
-  app.post('/api/projects/:id/bundle', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    try {
-      const result = await importAnalysisBundle(store, id, req.body);
-      const { ok, counts, deduped, update, ...source } = result;
-      return { ok, counts, deduped, update, source };
-    } catch (e) {
-      if (e instanceof ZodError) {
-        const version = (req.body as Record<string, unknown>)?.['schema_version'];
-        const hint =
-          version !== undefined && version !== '1.0'
-            ? `不支持的成果包 schema_version：${String(version)}（当前支持 1.0）`
-            : '成果包结构不符合 AnalysisBundle 合同';
-        reply.code(400);
-        return { ok: false, error: hint };
-      }
-      throw e;
-    }
-  });
-
-  // M4 编审层：发现卡片（组合视图）与编排决定（§7.2/§7.3）
-  app.get('/api/projects/:id/findings', async (req) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { report_id?: string };
-    return { findings: await workbench.findings(id, q.report_id) };
-  });
-
-  app.post('/api/projects/:id/decisions', async (req) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(DecidePlacementRequestSchema, req.body);
-    const decisions = await workbench.saveDecisions(id, body);
-    return { ok: true, decisions };
-  });
-
-  // M4 G1 人工编审（§8.1）：冻结蓝图/任务书/来源快照并绑定批准人
-  app.post('/api/projects/:id/approve-g1', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ApproveG1RequestSchema, req.body);
-    try {
-      const result = await workbench.approveG1(id, { approver: body.approver, scope: body.scope });
-      return { ok: true, ...result };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // M4 补证管理（F07/§11.2）：草拟→批准→导出→结果回流
-  app.post('/api/projects/:id/evidence-requests', async (req) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(EvidenceRequestCreateSchema, req.body);
-    const request = await workbench.createEvidenceRequest(id, body);
-    return { request };
-  });
-
-  app.get('/api/projects/:id/evidence-requests', async (req) => {
-    const { id } = req.params as { id: string };
-    return { requests: await workbench.listEvidenceRequests(id) };
-  });
-
-  app.post('/api/projects/:id/evidence-requests/:rid/approve', async (req, reply) => {
-    const { id, rid } = req.params as { id: string; rid: string };
-    const body = parseBody(EvidenceApproveRequestSchema, req.body);
-    try {
-      return { request: await workbench.approveEvidenceRequest(id, rid, body.approver) };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  app.get('/api/projects/:id/evidence-requests/:rid/export', async (req, reply) => {
-    const { id, rid } = req.params as { id: string; rid: string };
-    try {
-      return await workbench.exportEvidenceRequest(id, rid);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // M4 待复核解除（§7.7）：用户复核新版本影响后放行正式发布
-  app.post('/api/projects/:id/pending-updates/resolve', async (req) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ResolvePendingRequestSchema, req.body);
-    await workbench.resolvePendingUpdates(id, { logical_keys: body.logical_keys, affected_pages: body.affected_pages });
-    return { ok: true };
-  });
-
-  // M4 取舍推荐（F03）：确定性规则给正文/附录/不采用建议与理由，人工只调整例外
-  app.post('/api/projects/:id/recommend', async (req) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { report_id?: string };
-    return { recommendations: await workbench.recommend(id, q.report_id) };
-  });
-
-  // M5 AI 取舍推荐（授权摘要模式）：批准门 403(needsApproval) → 模型建议 + 粘性合并；失败回退规则版
-  app.post('/api/projects/:id/recommend/ai', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    try {
-      return await workbench.aiRecommend(id);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  // M4 任务书（F01）：核心问题/非重点/必要边界/交付隐私，草稿持久化
-  app.post('/api/projects/:id/brief', async (req) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(OutlineRequestSchema, req.body);
-    await workbench.saveBrief(id, body.brief);
-    return { ok: true };
-  });
-
-  app.get('/api/projects/:id/editorial', async (req) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { report_id?: string };
-    return workbench.editorial(id, q.report_id);
-  });
-
-  app.post('/api/projects/:id/outline', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(OutlineRequestSchema, req.body);
-    const draft = await workbench.composeOutline(id, body.brief);
-    return { draft };
-  });
-
-  // M7 一键生成管线：outline → 逐页 LLM 起草 → assemble → checks；403(needsApproval) 上抛
-  app.post('/api/projects/:id/generate', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(GenerateRequestSchema, req.body);
-    try {
-      const generation = await workbench.generate(id, body);
-      return { generation };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      else reply.code(500);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  // M9 收尾：改已有项目隐私策略（此前只在创建时可设——现有 local_only 项目无法启用 AI）
-  app.put('/api/projects/:id/privacy', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(z.object({ privacy_policy: PrivacyPolicySchema }), req.body);
-    try {
-      const project = await store.updateProject(id, { privacy_policy: body.privacy_policy });
-      return { project };
-    } catch (e) {
-      return replyGateError(reply, e as Error & { statusCode?: number });
-    }
-  });
-
-  // M9 PPT-only 一站式生成：MD 或纯文本 → LLM 出结构 → 现有渲染器出 Buffer
-  app.post('/api/projects/:id/ppt/from-md', async (req, reply) => {
-    return runPptFromInput(req, reply, workbench, { markdown: ((req.body ?? {}) as { markdown?: string }).markdown ?? '' });
-  });
-  app.post('/api/projects/:id/ppt/from-text', async (req, reply) => {
-    return runPptFromInput(req, reply, workbench, { markdown: ((req.body ?? {}) as { text?: string }).text ?? '' });
-  });
-
-  
-  app.get('/api/projects/:id/generation', async (req) => {
-    const { id } = req.params as { id: string };
-    return { generation: await workbench.getGeneration(id) };
-  });
-
-  // 大纲确认后续跑（PRD D7）：应用 headline 修改并继续起草
-  app.post('/api/projects/:id/generate/confirm', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ConfirmGenerateRequestSchema, req.body);
-    try {
-      const generation = await workbench.confirmGenerate(id, body.headlines);
-      return { generation };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      if (err.statusCode) reply.code(err.statusCode);
-      else reply.code(500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // M5 AI 蓝图编排（仅结构模式）：批准门 403(needsApproval) → 模型结构 + 确定性绑定；失败自动兜底
-  app.post('/api/projects/:id/outline/ai', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(OutlineRequestSchema, req.body);
-    try {
-      return await workbench.aiComposeOutline(id, body.brief);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  app.post('/api/projects/:id/assemble', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(AssembleRequestSchema, req.body ?? {});
-    const spec = await workbench.assemble(id, body.pages);
-    return { spec };
-  });
-
-  // M5 提案起草（§12.1）：自然语言 → EditOp 草案（仅起草，应用走 /propose 由人确认）
-  app.post('/api/projects/:id/proposal/draft', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ProposalDraftRequestSchema, req.body);
-    try {
-      return await workbench.draftProposal(id, body.intent, { scope: body.scope, page_id: body.page_id });
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  app.post('/api/projects/:id/edit', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(EditRequestSchema, req.body);
-    const spec = await workbench.edit(id, body.op);
-    return { spec };
-  });
-
-  // M4 变更提案（§12）：expected_revision + 原子应用；stale=409，锁定/范围拒绝=422（附原因）
-  app.post('/api/projects/:id/propose', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ProposeRequestSchema, req.body);
-    const outcome = await workbench.propose(id, { op: body.op, expected_revision: body.expected_revision, source: body.source });
-    if (outcome.state === 'stale') reply.code(409);
-    else if (outcome.state === 'rejected') reply.code(422);
-    return {
-      ok: outcome.ok,
-      state: outcome.state,
-      reason: outcome.reason,
-      proposal: outcome.proposal,
-      current_revision: outcome.state === 'stale' ? (await workbench.getSpec(id))?.revision_id : undefined,
-      spec: outcome.spec ?? null,
-    };
-  });
-
-  app.get('/api/projects/:id/proposals', async (req) => {
-    const { id } = req.params as { id: string };
-    return { proposals: await workbench.proposals(id) };
-  });
-
-  // M4 导出回执（§11.3）：修订/文件/哈希/检查/来源映射/交付状态（幂等重取，T23）
-  app.get('/api/projects/:id/exports/:eid/receipt', async (req, reply) => {
-    const { id, eid } = req.params as { id: string; eid: string };
-    try {
-      return await workbench.exportReceipt(id, eid);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  app.post('/api/projects/:id/checks', async (req) => {
-    const { id } = req.params as { id: string };
-    const body = (req.body ?? {}) as { exportScope?: 'internal' | 'external' };
-    return workbench.checks(id, body.exportScope);
-  });
-
-  // M5 语义检查（授权摘要；warning-only，永不计入 blockers）
-  app.post('/api/projects/:id/checks/ai', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    try {
-      return await workbench.aiSemanticChecks(id);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  // M5 补证建议（授权摘要）：生成 EvidenceRequest 草稿（不自动批准）
-  app.post('/api/projects/:id/evidence-requests/ai-draft', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    try {
-      return await workbench.aiDraftEvidenceGaps(id);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number; needsApproval?: boolean };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message, needsApproval: err.needsApproval };
-    }
-  });
-
-  app.post('/api/projects/:id/resolve-conflict', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ResolveConflictRequestSchema, req.body);
-    const { resolution } = body;
-    try {
-      await workbench.resolveConflict(id, resolution);
-      return { ok: true };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      if (err.statusCode) reply.code(err.statusCode);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // 品牌配置（M3：token 级，换品牌不重生成内容）
-  app.put('/api/projects/:id/brand', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(BrandRequestSchema, req.body);
-    try {
-      const spec = await workbench.applyBrand(id, body.brand);
-      return { ok: true, spec_theme: spec.theme };
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // 版本比较（§5.3：差异显示；数字/绑定变化时重触发检查）
-  app.get('/api/projects/:id/diff', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { a?: string; b?: string };
-    if (!q.a || !q.b) return reply.code(400).send({ error: '需要 a 与 b 两个修订 id' });
-    try {
-      return await workbench.diff(id, q.a, q.b);
-    } catch (e) {
-      const err = e as Error & { statusCode?: number };
-      reply.code(err.statusCode ?? 500);
-      return { error: err.message };
-    }
-  });
-
-  // 来源替换影响面（§13.2：新材料版本到来后提示受影响页面）
-  app.get('/api/projects/:id/impact', async (req) => {
-    const { id } = req.params as { id: string };
-    return { impact: await workbench.impactMap(id) };
-  });
-
-  app.get('/api/projects/:id/conflict-resolutions', async (req) => {
-    const { id } = req.params as { id: string };
-    return store.readConflictResolutions(id);
-  });
-
-  app.post('/api/projects/:id/export', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = parseBody(ExportRequestSchema, req.body);
-    const spec = await workbench.getSpec(id);
-    if (!spec) throw httpError(400, '尚未组装报告，无法导出');
-    const outcome = await exportReport(store, id, spec, {
-      mode: body.mode,
-      formats: body.formats,
-      conflicts: await workbench.getResolvedConflicts(id),
-      exportScope: body.exportScope ?? 'internal',
-      chartDataMode: body.chart_data_mode,
-      ackEditableData: body.ack_editable_data,
-      ackExternalShare: body.ack_external_share,
-      deliverable: body.deliverable,
-    });
-    return {
-      allowed: outcome.gate.allowed,
-      reason: outcome.gate.reason,
-      checks: outcome.checks,
-      privacy: outcome.privacy && {
-        checked_count: outcome.privacy.checked_count,
-        not_checked_count: outcome.privacy.not_checked_count,
-        items: outcome.privacy.items,
-      },
-      exports: outcome.exports.map((e) => ({ export_id: e.export_id, format: e.format, artifact_path: e.artifact_path, is_draft: e.is_draft })),
-    };
-  });
-
-  app.get('/api/projects/:id/preview', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    reply.type('text/html; charset=utf-8');
-    return workbench.previewHtml(id);
-  });
-
-  // M5 AI 状态（设置页展示）：模型链 + 密钥存在性（零密钥内容）
+  // AI 状态（设置页展示）：模型链 + 密钥存在性（零密钥内容）
   app.get('/api/ai/status', async () => {
     const chain = chainFromEnv();
     return {

@@ -1,67 +1,56 @@
-# 提案：M9 PPT 一站式生成（独立切片）
+# 提案：第二次重构——收敛为纯 PPT 报告生成器（M10）
 
-> 来源：2026-10-06 用户裁定——「新做 PPT 一站式生成（推荐）」：粘贴 MD/文本 + 一句提示词（主题/受众/页数），端到端出可编辑可导出 PPTX。本文件取代 M8 提案（其内容已交付并推送），是后续 PRD / GRILL / 拆解的根规范源。
+> 状态机 spec 源（root spec source）。来源：用户 2026-10-07 方向指令（KA-1 式回访以用户直接给方向的方式完成）。dev-flow gated 模式 + 大改造动工审批门（2026-10-05 约定）。本文件取代 M9 提案（其内容已交付并推送 78f3b83/6246838，git 历史可查）。
 
-## 背景：M7 后试用仍感成品感差（用户反馈）
+## 一、背景与判定史（为何重构）
 
-M7 已让默认路径走 LLM（MiniMax-M3）逐页起草完整内容，但「完整内容」≠「Kimi 那种一套出来的成品感」。M7 主路径是把报告工厂整套管线套上去（含材料导入、编审、审批），M9 单独走轻量：跳过那些，只做「0→1 快速草稿」。**先 M9 验证效果，效果好再考虑是否与 M7 主流程拼合。**
+- **M6 判定「重构失败」**（2026-10-06）：模版驱动一键生成流程压对，但产物是确定性组装的骨架式 deck（大量「待补充」页），成品感/完整度不对。
+- **M9 判定「还不是我想要的」**（2026-10-07）：MD/文本+提示词→PPTX 一站式切片，机械链路全通（MD→PPTX 端到端、0 emoji、原生可编辑、围栏全生效、249 测试绿），但用户整体仍不认可——形态层连错两次后，用户直接给出第二次重构方向（本提案），并裁定**形态级重构**。
+- 外部调研（docs/research-ai-ppt-2026-10.md）：行业标准 = 材料→大纲可改→直出完整 PPT；单页 AI 修改普及（对话式/按钮式）；导出后断链与内容审批真空是行业痛点。我们的审批工作流是差异化，保留。
+- 已排除原因（勿再怀疑）：机械链路、围栏、测试全通。缺口在设计美学/模板质量/页型结构/整体形态，用户已用本提案裁决。
 
-## 选型结论（依调研证据）
+## 二、用户决策（close to verbatim，约束级，后续阶段不得推翻）
 
-| 候选 | 决策 | 理由 |
-|---|---|---|
-| **自研 + 复用现有 `src/render/pptx.ts`** | **采纳（M9 主线）** | 零新依赖；M7 已有 80% 骨架；LLM 出结构 + 程序渲染是国产产品共识路径（Kimi/WPS/Gamma 均此模式）；成品感由模板设计 + LLM prompt 拉满 |
-| dom-to-pptx（HTML→可编辑） | 不采纳 | 需引入服务端 Chromium 中转、字体/CORS 坑多；成品感依赖 HTML 美学设计（要重做） |
-| Marp/Slidev/Marpit MD 语法 | 不采纳 | 模型写 Marpit 语法难，调好一轮废几百 token；产物美感依赖用户 CSS |
-| docxtemplater / pptx-automizer（模板填充） | **采纳（备份路径）** | 若用户自带公司 `.pptx` 模板，需精确占位符替换时启用；保留接口不首版必做 |
-| dashi-ppt-skill / oh-my-ppt | 不采纳 | AGPL-3.0 + 闭源导出器，license 阻断商用 |
-| Playwright 驱动 Kimi 网页（外挂质感） | 不采纳（明确否决） | 服务条款 + 反爬 + 非合规；不可编辑 |
-| Python 生态（md2pptx/Pandoc） | 不采纳 | 引入 Python runtime、跨进程调用、维护成本高 |
-| **GordenSun/GordenPPTSkill**（MIT，1.6k★） | **借鉴——模板/编排骨架** | 17 套中文 pptx 模板 + `detail.json` 协议 + `INDEX.md` 索引；可直接用作 M9 模板系统参考（仅借鉴协议/字段命名；模板资产商用授权另议）；工作流「style→outline→spec→scaffold」与本调研一致 | 借鉴价值 4/5 |
-| **genspark-ai/genoffice**（Apache-2.0，8.8k★） | **借鉴——端到端编排骨架** | 5 步流水线（style→outline→spec→create→audit）+ `genoffice` CLI；`skills/genoffice/SKILL.md` 单文件精简；M9「模板/大纲/规格/生成/审计」5 步骨架可借鉴其命名 | Apache-2.0 商用 OK |
-| minimax / MoonshotAI 独立 PPT skill | **不存在** | GitHub 搜 0 结果（MiniMaxAI org 404 / MoonshotAI 无相关仓 / Kimi-PPT-skill 第三方已 archive+清空）；**minimax 模型供应商无对应 PPT skill**——M9 守则只能从 anthropics/Z.AI 系学习 | 已澄清 |
+### D1 产品收敛
+**只做 PPT 报告生成器，其余非相关的全部删除掉。**
+- 删除范围 = 一切不以「材料→PPT」为主路径服务的功能（具体清单由 PRD/GRILL 盘点确认）。
+- 报告（docx/md 报告产物）、五阶段编排壳层、多交付物体检等非 PPT 面向用户的功能删除；底层围栏/传输/审计资产按 D3 与标准保留判断。
 
-**核心设计**：「**LLM 出结构 JSON（zod 强约束 + digitGuard）→ 复用现有 PptxGenJS 渲染器 → 原生可编辑 PPTX**」。模板/守则套 Z.AI pptx skill 的「去掉 AI 风、avoid bullet overflow、字体克制、accent 克制使用」等约束（仅作 prompt 内部守则，非软件商用）。
+### D2 生成发布主流程（用户定义，顺序不可变）
+1. **上传资料**：md、word、pdf、图片等，格式不限；
+2. **读取并理解资料**；
+3. **与用户确认 PPT 框架**（大纲确认是显式环节，非可选）；
+4. **根据框架自己组织材料并生成 PPT**（agent 自主组织，非确定性组装）;
+5. **逐页可编辑**：手工改文字内容 **或** 自然语言描述给 agent 改；
+6. **审核发布**：可导出 **PPTX、HTML、PDF** 三种格式。
 
-## 范围（M9 独立切片）
+### D3 技术形态
+**全程用 pi-agent-core 及 skill 等来完成。**
+- 撤销 M8 偏差 D-1（此前不引 pi-agent-core）；pi-ai 已在依赖中（0.86.1），pi-agent-core 需引入（0.86.x 钉版）。
+- PPT skill 已调研：GordenSun/GordenPPTSkill 17 套中文 MIT 模板（detail.json 协议已记录）+ Z.AI/anthropics 守则思想层（已入 ai-ppt-prompt.ts）。
+- 如需其他 harness 能力开发或安装，授权进行；自研前必须先查 pi-agent-core 导出面（标准 §6）。
 
-1. **`src/render/ai-ppt-from-md.ts`**：接收 `{markdown?, audience?, page_budget?, theme_id?, brief_prompt?}` → LLM 出 `pages: [{type, headline, purpose, body?, bullets?, chart?}]`（复用/扩展现有 `ai-outline.ts` 的 OutlineOutputSchema）→ 适配为最小 `ReportSpec` → 调现有 `renderReportPptx()` 出 Buffer → 返回。
-2. **`src/model/ai-ppt-prompt.ts`**：system prompt 守则（参考 Z.AI pptx skill 的「去 AI 风」「avoid bullet overflow」「不堆 emoji」「accent 克制」「字体系统栈」「source 标注」等约束——抄内容不抄代码）。
-3. **`POST /api/ppt/from-md`** 路由：表单/JSON 入参；出站门 + 预算门 + 审计 + 隐私复用 M7 设计（禁止裸出文件路径、不落盘用户 MD）；不入项目库（不与现有 ReportSpec/编审/审批耦合）。
-4. **`web/src/views/PptGeneratorView.tsx`**：粘贴 MD 文本框 + 「主题/受众/页数」输入 + 一句提示词 + 生成按钮 + 下载 .pptx；本地快捷入口（侧栏或主页「快速生成 PPT」按钮）。
-5. **护栏**（与 M7 对齐，标准 §4.6）：
-   - zod schema：每页 `{type, headline, purpose, body?, bullets?, chart?}`，headline/bullets 长度上限、bullets 数 ≤6（避免 overflow）
-   - **数字护栏（复用 M7 `digitGuardViolation`）**：起草页数字必须来自输入 MD/材料，否则拒绝该页并回退
-   - **uncovered 不编造**：材料未覆盖 → 输出 `uncovered: true` + 「材料未覆盖」占位
-   - **出站门**：`gateOrThrow(authorized-summary)` + 预算三线 + 零内容审计
-   - **批准持久化**：复用 M7 批准机制
-6. **守则注入**（M9 prompt 工程）：
-   - **主学习对象**：`anthropics/skills/skills/pptx` SKILL.md（开源事实上标准，结构清晰）
-   - **离线参考**：本机 `~/.zcode/cli/plugins/cache/zcode-plugins-official/presentations/0.1.7/skills/pptx/SKILL.md`（Z.AI proprietary，仅作 prompt 拼接素材，不复制文本）
-   - **核心守则要点**：sandwich 结构（标题/正文/数据各占清晰区域）、BG/PRIMARY/ACCENT 三色克制（accent ≤10%）、字号 12pt 下限、bullet 数 ≤6 避免 overflow、native chart 而非位图、来源标注、字体系统栈
-   - **模板设计**：参考 `GordenSun/GordenPPTSkill` 的 17 套中文模板字段（`detail.json` 协议）+ `genspark-ai/genoffice` 的 `style.md` 骨架；首版只内置 1-2 套克制设计
-7. **测试**（红绿）：
-   - 结构遵从（zod）+ 数字护栏拒/放 + uncovered 占位 + 预算超帽 403 + 批准未给 403
-   - record→replay 闭环（合成 fixture）
-   - 渲染端到端：合成输入 → 真调 LLM（replay 模式）→ 产出 PPTX 文件能 zip 解开、含文本框/标题
+## 三、延续性约束（不因重构而失效）
 
-## 约束
+1. **AGENT-RUNTIME 标准 v1.3 全程强制**：P1–P6、§4 架构强制（适配层/工具注册表/确认门/预算双线/审计/上下文装配/沙箱）、§5 决策矩阵（模式选择）、§10 坑表逐条规避、§11 合规清单为验收门、§7.5 真实单轮+多轮联调为准入硬卡点。
+2. **围栏资产延续**：写操作过门、预算三线封顶（次数/墙钟/轮次；成本线不作阻断依据）、出站白名单 fail-closed、批准持久化、审计留痕、fail-closed 默认——这些是 harness 架构事实，不删。
+3. **全局 UI 设计规范** `~/.zcode/design/DESIGN.md`（JuanerAI 蓝图 v4.2 契约版：暖灰纸感底 #f7f6f3 + 白面板 + 铁锈橘 #b44626 + 深藏青 #263442，mono 编号/分段控件/原则横条）为 UI 基线。
+4. **工程约定**：verify = `npm run verify`（typecheck+vitest+build+vite build，构建后需显式 tsc 产出 dist）；TS 5.9 勿升；pptxgenjs v4 ChartType 实例 API；双机同步拓扑（dataSync 模式）延续。
+5. **默认链**：minimax-cn/MiniMax-M3 主 + xiaomi mimo-v2.6-flash 备（§3.4/§3.4A reverse config 已沉淀于 pi-transport.ts resolveModelFor）。
 
-- **零新 npm 依赖**（除现有 pptxgenjs/zod/pi-ai/JSZip 外）；如需新增必须论证并获用户授权
-- 不动 M7 主路径、不重构 `src/render/pptx.ts`；新增薄薄一层
-- 不引 template-fill 路径（docxtemplater/pptx-automizer）到首版，作为后续增强点
-- 不动「现有五视图」与「主路径三步化」（M7 成果）
-- 技术栈沿用 TS/pi-ai 0.86.1 钉版/Fastify/React 19；UI 遵循全局 DESIGN.md
-- gated dev-flow；同步 macbook（按 `git-sync` 规则）
+## 四、被否决的备选（本轮裁定）
 
-## 否决的备选
+- **模板+版式增强**（保留现有管线扩模板，2–3 天）：否——用户选形态级。
+- **保留多功能报告工厂**：否——D1 明确删除。
+- **M9 快速 PPT 原样扩展**：否——两次判定证明形态不对；其资产（ai-ppt-prompt 守则、render/pptx.ts、pi-transport）视新方向可复用或替换。
 
-- 引入第三方 PPT skill（AGPL/license 阻断 / 闭源）——已在选型结论否决
-- 引入 Playwright 代理 Kimi 网页（合规 + 不可编辑）——已明确否决
-- 把 M7 主路径拆开塞 PPT-only 路径（破坏 M7 三步化与围栏资产）—— M9 独立切片，新路由新视图
+## 五、开放问题（留给 PRD/GRILL，不在此裁决）
 
-## 开放问题（GRILL 定）
-
-- 是否首版就支持 docxtemplater 模板填充？建议**否**，作为后续增强
-- 「一句提示词」语义：是作为 brief augment（叠加到任务书 audience/purpose）还是仅作 free-form 增强？建议前者（schema 强约束更稳）
-- 首版页数上下限（与现有 brief.page_budget 对齐 vs 自由？）
+- 删除清单的精确边界（哪些底层模块随功能删、哪些因被 PPT 主路径复用而留）。
+- 「读取并理解资料」的 agent 形态：工人模式单发 vs 拴绳主导工具循环（标准 §5 决策矩阵裁决）；图片理解的多模态支持范围。
+- PPT 框架确认的交互形态（整表确认 vs 逐页确认）与数据结构（page_plan 演进还是新 schema）。
+- 逐页编辑 agent 的工具面与门禁（改哪些字段、哪些过确认门）。
+- HTML/PDF 导出实现路径（现有 render/html.ts、pdf.ts 能否复用；HTML 导出是网页版还是单文件）。
+- GordenSun 模板/版式接入方式（借 detail.json 协议自研 vs 引 skill 包）。
+- pi-agent-core skills 机制如何承载 PPT skill（pi 内置 skills 导出面调研后定）。
+- 旧项目数据兼容策略（data/ 下现有 report 项目如何处置）。

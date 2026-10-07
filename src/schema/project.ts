@@ -10,26 +10,36 @@ export const PrivacyPolicySchema = z.enum([
   'allow_external', // 已授权范围内可出站
 ]);
 
-export const ProjectStageSchema = z.enum([
-  'materials',
-  'outline',
-  'draft',
-  'checked',
-  'exported',
+/**
+ * 六步主流程步骤键（M10 D2，顺序不可变）：
+ * upload → understand → framework → generate → page-edit → publish。
+ * 解锁状态由项目数据推导（workbench.stepsFor），不单独落盘。
+ */
+export const PptStepSchema = z.enum([
+  'upload',
+  'understand',
+  'framework',
+  'generate',
+  'page-edit',
+  'publish',
 ]);
+export type PptStep = z.infer<typeof PptStepSchema>;
 
 export const ProjectSchema = z.object({
   project_id: z.string().min(1),
+  /** M10 G6：产品收敛为纯 PPT 生成器后新建项目均为 'ppt'；旧报告项目无此字段，列表过滤隐藏（数据保留） */
+  kind: z.literal('ppt').optional(),
   title: z.string().min(1),
   purpose: z.string().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   privacy_policy: PrivacyPolicySchema.default('local_only'),
-  stage: ProjectStageSchema.default('materials'),
+  /** 旧五阶段字段（M4-M9 遗留）：M10 起不再推进，仅为旧项目数据可解析保留 */
+  stage: z.string().optional(),
   brand: BrandConfigSchema.optional(),
-  /** 报告模版引用（S1）；缺省回退经营复盘 deck */
+  /** 框架模板引用（M10 G10：决定框架页序列倾向）；缺省回退运营复盘 */
   template_id: z.string().min(1).default(DEFAULT_TEMPLATE_ID),
-  /** S5 项目级预算覆盖（三线：调用次数/墙钟秒/轮次；env 优先，见 model/budget.ts） */
+  /** 项目级预算覆盖（三线：调用次数/墙钟秒/轮次；env 优先，见 model/budget.ts） */
   budget: z
     .object({
       max_calls: z.number().int().positive().optional(),
@@ -39,7 +49,7 @@ export const ProjectSchema = z.object({
     .optional(),
 });
 
-export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'bundle']);
+export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'pdf', 'bundle']);
 
 export const ParseStatusSchema = z.enum(['pending', 'parsed', 'failed']);
 
@@ -92,7 +102,6 @@ export const ExportRecordSchema = z.object({
 });
 
 export type PrivacyPolicy = z.infer<typeof PrivacyPolicySchema>;
-export type ProjectStage = z.infer<typeof ProjectStageSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
 export type SourceKind = z.infer<typeof SourceKindSchema>;
 export type SourceAsset = z.infer<typeof SourceAssetSchema>;

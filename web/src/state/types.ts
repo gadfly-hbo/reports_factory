@@ -1,77 +1,31 @@
-/* 领域类型:与后端 schema 对齐的最小集(前端只声明用到的字段)。 */
+/* 领域类型:与后端 schema 对齐的最小集(前端只声明用到的字段)。M10 六步。 */
 
-export type StageKey = 'generate' | 'materials' | 'outline' | 'compose' | 'check' | 'export' | 'ppt';
-export type ProjectStage = 'materials' | 'outline' | 'draft' | 'checked' | 'exported';
-export type DeliverableType = 'meeting_deck' | 'research_report' | 'executive_summary';
+/** 六步主流程（proposal D2，顺序不可变）：解锁规则由后端 steps 推导下发 */
+export type StageKey = 'upload' | 'understand' | 'framework' | 'generate' | 'page-edit' | 'publish';
 
 export const STAGES: { key: StageKey; title: string; n: number }[] = [
-  { key: 'materials', title: '材料', n: 1 },
-  { key: 'outline', title: '编审', n: 2 },
-  { key: 'compose', title: '组装', n: 3 },
-  { key: 'check', title: '检查', n: 4 },
-  { key: 'export', title: '导出', n: 5 },
+  { key: 'upload', title: '上传资料', n: 1 },
+  { key: 'understand', title: '读取理解', n: 2 },
+  { key: 'framework', title: '确认框架', n: 3 },
+  { key: 'generate', title: '生成', n: 4 },
+  { key: 'page-edit', title: '逐页编辑', n: 5 },
+  { key: 'publish', title: '审核发布', n: 6 },
 ];
 
-/** M7 三步主路径：生成 → 编辑 → 审批导出（侧栏主组；五阶段收进高级组） */
-export const MAIN_STAGES: { key: StageKey; title: string; n: number }[] = [
-  { key: 'generate', title: '生成', n: 1 },
-  { key: 'compose', title: '编辑', n: 2 },
-  { key: 'export', title: '审批导出', n: 3 },
-];
+export const STAGE_TITLE: Record<StageKey, string> = Object.fromEntries(
+  STAGES.map((s) => [s.key, s.title]),
+) as Record<StageKey, string>;
 
-export const STAGE_TITLE: Record<StageKey, string> = {
-  ppt: '快速 PPT',
-  generate: '生成',
-  materials: '材料',
-  outline: '编审',
-  compose: '组装',
-  check: '检查',
-  export: '导出',
-};
-
-export const isStageKey = (v: string): v is StageKey =>
-  v === 'generate' || v === 'materials' || v === 'outline' || v === 'compose' || v === 'check' || v === 'export' || v === 'ppt';
-
-export interface GenerationStage {
-  name: 'outline' | 'draft' | 'assemble' | 'checks';
-  status: 'pending' | 'done' | 'failed' | 'fallback';
-  error?: string;
-  note?: string;
-  pages?: Record<string, string>;
-  total?: number;
-}
-
-export interface GenerationState {
-  status: 'running' | 'done' | 'failed' | 'awaiting_confirmation';
-  stages: GenerationStage[];
-  /** 待确认大纲时附带的结构摘要（getGeneration） */
-  outline?: { page_id: string; type: string; headline: string }[];
-  /** 累计模型调用次数（零内容，预算可见） */
-  calls?: number;
-}
-
-export const DELIVERABLE_LABEL: Record<string, string> = {
-  meeting_deck: '会议汇报',
-  research_report: '研究报告',
-  executive_summary: '一页摘要',
-};
-
-export const PROJECT_STAGE_LABEL: Record<string, string> = {
-  materials: '材料',
-  outline: '大纲',
-  draft: '草稿',
-  checked: '已检查',
-  exported: '已导出',
-};
+export const isStageKey = (v: string): v is StageKey => STAGES.some((s) => s.key === v);
 
 export interface Project {
   project_id: string;
+  kind?: 'ppt';
   title: string;
   purpose?: string;
   created_at: string;
   updated_at: string;
   privacy_policy: string;
-  stage: ProjectStage;
   brand?: BrandConfig;
   template_id: string;
 }
@@ -80,7 +34,6 @@ export interface TemplateInfo {
   id: string;
   name: string;
   description: string;
-  deliverable_type: string;
   page_plan: string[];
   brand?: { primary: string; accent: string };
 }
@@ -104,193 +57,33 @@ export interface SourceAsset {
   imported_at: string;
 }
 
-export interface ConflictValue { source_id: string; value: string | number }
-export interface Conflict {
-  conflict_id: string;
-  row_key: string;
-  column_label: string;
-  values: ConflictValue[];
-  resolution: string;
+export interface ExportRec {
+  export_id: string;
+  format: string;
+  artifact_path: string;
+  is_draft: boolean;
+  export_scope?: 'internal' | 'external';
+  created_at?: string;
+  delivery_status?: 'draft' | 'formal' | 'superseded';
 }
 
-export interface RevisionMeta { revision_id: string; created_at: string; note?: string }
-export interface ExportRec { export_id: string; format: string; artifact_path: string; is_draft: boolean }
-
-export interface Claim {
-  claim_id: string;
-  kind: string;
-  text: string;
-  verification_state: string;
-  evidence_refs?: string[];
-}
-
-export interface Metric {
-  metric_id: string;
-  value: number;
-  unit: string;
-  display_format?: string;
-  scope?: string;
-  formula?: string;
-}
-
-export interface EvidenceRef { evidence_id: string; source_id: string; locator: string; excerpt: string }
-
-export interface Spec {
-  report_id: string;
-  revision_id: string;
-  brief: { audience: string; purpose: string; page_budget: number; deliverable_type?: string };
-  claims: Claim[];
-  metrics: Metric[];
-  pages: { page_id: string; type: string; headline: string; claim_refs: string[]; layout_id?: string }[];
-  source_snapshot: { source_id: string; version: string; is_demo?: boolean }[];
-}
+export interface StepState { key: StageKey; unlocked: boolean }
 
 export interface ProjectDetail {
   project: Project;
   sources: SourceAsset[];
-  revisions: RevisionMeta[];
   exports: ExportRec[];
-  conflicts: Conflict[];
-  hasSpec: boolean;
-  deliverable_type: string;
-  spec: Spec | null;
-  /** M4 编审摘要（未进入编审模式时为 null；legacy 项目不受影响） */
-  editorial?: {
-    status: string;
-    pending_pages: number;
-    pending_updates: number;
-    g1: boolean;
-    g2: boolean;
-  } | null;
-  /** M5 AI 能力（驱动前端入口渲染；local_only 或无密钥时 enabled=false） */
+  steps: StepState[];
   capabilities?: {
     ai: { enabled: boolean; needsApproval: boolean; modelAvailable: boolean; approvedModes: string[] };
   };
 }
 
-export interface OutboundPreview {
-  descriptor: { mode: string; sections: { label: string; count: number; bytes: number }[]; totalBytes: number };
-  itemCount: number;
-  policy: { needsApproval: boolean; approved: boolean };
-  session: { calls: number; totalCost: number };
-  /** 目标模型链（R2-6：预览可见发送目标） */
-  target: string;
+/** 发布状态徽（ui-contract S0.3；S7 接真实语义） */
+export type PublishState = '未发布' | '内用草稿' | '已外发';
+export function publishStateOf(d: ProjectDetail | null): PublishState {
+  if (!d) return '未发布';
+  const formal = d.exports.some((e) => e.export_scope === 'external' || e.delivery_status === 'formal');
+  if (formal) return '已外发';
+  return d.exports.length > 0 ? '内用草稿' : '未发布';
 }
-
-export interface AiOutlineResult {
-  draft: OutlineDraft;
-  ai: { used: boolean; usedFallback: boolean; provider?: string; reason?: string };
-}
-
-export const EDITORIAL_STATUS_LABEL: Record<string, string> = {
-  organizing: '整理材料',
-  brief_draft: '任务书草拟',
-  blueprint_review: '蓝图待审',
-  g1_approved: 'G1 已批准',
-  draft_editing: '初稿编辑',
-  published: '已发布',
-};
-
-export type Placement = 'candidate' | 'body' | 'speaker_notes' | 'appendix' | 'excluded' | 'deferred';
-
-export const PLACEMENT_LABEL: Record<Placement, string> = {
-  candidate: '候选',
-  body: '正文',
-  speaker_notes: '讲稿',
-  appendix: '附录',
-  excluded: '不采用',
-  deferred: '暂缓',
-};
-
-export interface FindingCardT {
-  logical_key: string;
-  kind: string;
-  text: string;
-  verification_state: string;
-  uncertainty?: string;
-  metrics: { metric_id: string; value: number; unit: string; scope?: string }[];
-  evidence: { locator: string; excerpt: string }[];
-  limitations: string[];
-  counter_evidence: string[];
-  placement: Placement;
-  decision?: { reason?: string };
-}
-
-export interface EditorialStateT {
-  status: string;
-  brief?: Record<string, unknown>;
-  decisions: { logical_key: string; placement: Placement; reason?: string }[];
-  approval?: { approver: string; approved_at: string };
-  pending_review: { affected_pages: string[]; repropose: string[]; updates: unknown[] };
-}
-
-export interface CheckIssue {
-  id: string;
-  severity: 'blocker' | 'warning';
-  page_id?: string;
-  object_ref: string;
-  message: string;
-  /** semantic = 模型辅助检查（M5，warning-only） */
-  category?: 'content' | 'policy' | 'semantic';
-}
-
-export interface CheckIssueLite {
-  id: string;
-  severity: 'warning';
-  category: 'semantic';
-  page_id?: string;
-  object_ref: string;
-  message: string;
-}
-export interface CheckReport { issues: CheckIssue[]; blockers: number; warnings: number }
-
-export interface OpenQuestion { text: string; kind: 'conflict' | 'confirmation' | 'gap'; ref?: string }
-export interface PagePlan {
-  page_id: string;
-  type: string;
-  headline: string;
-  intent: string;
-  claim_refs: string[];
-  table_ids: string[];
-  gap_notes: string[];
-  locked: boolean;
-  /** M4 逐页蓝图 */
-  blueprint?: { page_purpose: string; core_message?: string; inclusion_reason?: string; required_limits?: string[] };
-}
-export interface OutlineDraft { pages: PagePlan[]; open_questions: OpenQuestion[] }
-
-export interface PrivacyItem { item: string; status: string; detail?: string }
-export interface ExportResult {
-  allowed: boolean;
-  reason: string;
-  checks?: CheckReport;
-  privacy?: { checked_count: number; not_checked_count: number; items: PrivacyItem[] };
-  exports?: ExportRec[];
-}
-
-export const KIND_LABEL: Record<string, string> = {
-  fact_statement: '事实',
-  computed_statement: '计算结果',
-  inference: '推断',
-  recommendation: '建议',
-  user_supplement: '人工补充',
-  data_note: '口径',
-};
-
-export const VERIF_LABEL: Record<string, string> = {
-  unverified: '待核实',
-  bound_to_source: '已绑定来源',
-  arithmetic_checked: '算术已校验',
-  needs_review: '待复核',
-  conflict: '存在冲突',
-  source_updated: '来源已更新',
-};
-
-export const VERIF_CHIP: Record<string, string> = {
-  unverified: 'chip-warn',
-  needs_review: 'chip-warn',
-  conflict: 'chip-fail',
-  bound_to_source: 'chip-accent',
-  arithmetic_checked: 'chip-ok',
-  source_updated: 'chip-warn',
-};

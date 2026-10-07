@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProjects } from '../state/projects';
-import { PROJECT_STAGE_LABEL, type TemplateInfo } from '../state/types';
+import { type TemplateInfo } from '../state/types';
 import { api } from '../state/api';
 
 const PAGE_TYPE_LABEL: Record<string, string> = {
@@ -40,31 +40,31 @@ export function ProjectsView() {
 
   const submit = async () => {
     if (!title.trim()) return;
-    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined, template_id: tpl || undefined });
-    if (id) navigate(`/project/${id}/materials`);
+    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined, template_id: tpl || undefined, privacy_policy: 'local_only' });
+    if (id) navigate(`/project/${id}/upload`);
   };
 
   return (
     <div className="main" id="main" tabIndex={-1}>
       <div className="home-wrap">
         <h1 className="home-title">Report Studio</h1>
-        <p className="home-sub">把已有分析材料变成可信、可编辑、可追溯的会议汇报 / 研究报告 / 一页摘要。材料与报告默认只保存在本机。</p>
+        <p className="home-sub">上传资料 → 确认 PPT 框架 → 生成 → 逐页编辑 → 审核发布;数据默认只保存在本机。</p>
 
         <div className="card">
-          <div className="card-h">新建汇报<button className="btn btn-ghost btn-sm" type="button" onClick={() => setOpen(!open)}>{open ? '收起' : '展开'}</button></div>
+          <div className="card-h">新建项目<button className="btn btn-ghost btn-sm" type="button" onClick={() => setOpen(!open)}>{open ? '收起' : '展开'}</button></div>
           {open && (
             <>
               <div className="fld">
                 <label className="fld-label" htmlFor="np-title">项目名称</label>
-                <input id="np-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如:Q3 经营复盘" />
+                <input id="np-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="" />
               </div>
               <div className="fld">
-                <label className="fld-label" htmlFor="np-purpose">用途（可选）</label>
+                <label className="fld-label" htmlFor="np-purpose">项目简介（可选，用于生成 PPT 框架）</label>
                 <input id="np-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="如:经营例会汇报" />
               </div>
               {templates.length > 0 && (
                 <div className="fld">
-                  <label className="fld-label" htmlFor="np-tpl">报告模版</label>
+                  <label className="fld-label" htmlFor="np-tpl">框架模板</label>
                   <select id="np-tpl" value={tpl} onChange={(e) => setTpl(e.target.value)}>
                     {templates.map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
@@ -92,23 +92,22 @@ export function ProjectsView() {
           {!loaded ? (
             <p className="fine">加载中…</p>
           ) : projects.length === 0 ? (
-            <Empty>还没有项目——展开上方「新建汇报」开始第一次制作。</Empty>
+            <Empty>还没有项目——展开上方「新建项目」开始第一次制作。</Empty>
           ) : (
             <table className="tbl">
               <thead>
-                <tr><th>名称</th><th>阶段</th><th>更新时间</th><th>隐私</th><th></th></tr>
+                <tr><th>名称</th><th>更新时间</th><th>隐私</th><th></th></tr>
               </thead>
               <tbody>
                 {projects.map((p) => (
                   <tr key={p.project_id}>
                     <td>
-                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate(`/project/${p.project_id}/materials`)}>
+                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate(`/project/${p.project_id}`)}>
                         {p.title}
                       </button>
                     </td>
-                    <td>{PROJECT_STAGE_LABEL[p.stage] ?? p.stage}</td>
                     <td className="num">{new Date(p.updated_at).toLocaleString('zh-CN')}</td>
-                    <td>{p.privacy_policy === 'local_only' ? '仅本地' : '允许外部'}</td>
+                    <td>{p.privacy_policy === 'local_only' ? 'local_only' : 'external'}</td>
                     <td>
                       <button
                         className="btn btn-danger btn-sm"

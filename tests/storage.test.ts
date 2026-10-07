@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { WorkspaceStore } from '../src/storage/workspace.js';
-import { retailReviewSpec } from '../src/samples/retail-review.js';
+import { trendPageSpec } from './fixtures/trend-page.spec.js';
 
 function tempStore(): { store: WorkspaceStore; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), 'rs-store-'));
@@ -32,7 +32,7 @@ describe('项目 CRUD 与存储布局（F01）', () => {
     const { store, dir } = tempStore();
     try {
       const p = await store.createProject({ title: '原项目' });
-      await store.saveRevision(p.project_id, retailReviewSpec, '初稿');
+      await store.saveRevision(p.project_id, trendPageSpec, '初稿');
       const copy = await store.copyProject(p.project_id, '副本');
       expect(copy.project_id).not.toBe(p.project_id);
       expect(copy.title).toBe('副本');
@@ -95,7 +95,7 @@ describe('修订与导出记录（F10/F11 基础）', () => {
       await store.saveSourceAsset(p.project_id, {
         filename: 'a.md', content: Buffer.from('材料'), media_type: 'text/markdown', kind: 'markdown',
       });
-      await store.saveRevision(p.project_id, retailReviewSpec, '初稿');
+      await store.saveRevision(p.project_id, trendPageSpec, '初稿');
       await store.saveExport(p.project_id, {
         revision_id: 'rev_001',
         format: 'pdf',
@@ -110,7 +110,7 @@ describe('修订与导出记录（F10/F11 基础）', () => {
       expect(loaded!.title).toBe('恢复测试');
       const revs = await store2.listRevisions(p.project_id);
       expect(revs.length).toBe(1);
-      expect(revs[0]!.spec.report_id).toBe('report_m0_page_types');
+      expect(revs[0]!.spec.report_id).toBe(trendPageSpec.report_id);
       const exportsList = await store2.listExports(p.project_id);
       expect(exportsList.length).toBe(1);
       const sources = await store2.listSourceAssets(p.project_id);
@@ -124,12 +124,13 @@ describe('修订与导出记录（F10/F11 基础）', () => {
     const { store, dir } = tempStore();
     try {
       const p = await store.createProject({ title: '版本冻结' });
-      const r1 = await store.saveRevision(p.project_id, retailReviewSpec, '初稿');
-      const modified = structuredClone(retailReviewSpec);
+      const r1 = await store.saveRevision(p.project_id, trendPageSpec, '初稿');
+      const modified = structuredClone(trendPageSpec);
+      const originalHeadline = trendPageSpec.pages[0]!.headline;
       modified.pages[0]!.headline = '改后的封面';
       await store.saveRevision(p.project_id, modified, '改标题');
       const readBack = await store.getRevision(p.project_id, r1.revision_id);
-      expect(readBack!.spec.pages[0]!.headline).toContain('经营复盘'); // 旧修订未漂移
+      expect(readBack!.spec.pages[0]!.headline).toBe(originalHeadline); // 旧修订未漂移
 
       const e1 = await store.saveExport(p.project_id, {
         revision_id: r1.revision_id, format: 'pdf',

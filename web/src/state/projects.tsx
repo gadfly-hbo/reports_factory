@@ -1,72 +1,59 @@
-/* 项目列表上下文:侧栏、项目总览、命令面板共用一份数据。 */
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { api, post, errMsg } from './api';
-import { useToast } from './toast';
+/* 项目列表上下文:GET /api/projects(后端只列 PPT 项目,G6)+ 创建/删除动作。 */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Project } from './types';
+import { api } from './api';
 
 interface ProjectsCtx {
   projects: Project[];
   loaded: boolean;
-  error: string | null;
-  reload(): Promise<void>;
-  create(form: { title: string; purpose?: string; template_id?: string }): Promise<string | null>;
-  remove(p: Project): Promise<void>;
+  refresh: () => Promise<void>;
+  create: (input: { title: string; purpose?: string; template_id?: string; privacy_policy?: string }) => Promise<string | null>;
+  remove: (p: Project) => Promise<void>;
 }
 
 const Ctx = createContext<ProjectsCtx | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
-  const toast = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
       const r = await api<{ projects: Project[] }>('/api/projects');
       setProjects(r.projects);
-      setError(null);
-    } catch (e) {
-      setError(errMsg(e));
+    } catch {
+      setProjects([]);
     } finally {
       setLoaded(true);
     }
   }, []);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
-  const create = useCallback(async (form: { title: string; purpose?: string; template_id?: string }): Promise<string | null> => {
+  const create = useCallback<ProjectsCtx['create']>(async (input) => {
     try {
-      const r = await post<{ project: Project }>('/api/projects', form);
-      toast.show('项目已创建', 'ok');
-      await reload();
+      const r = await api<{ project: Project }>('/api/projects', { method: 'POST', body: JSON.stringify(input), headers: { 'content-type': 'application/json' } });
+      await refresh();
       return r.project.project_id;
-    } catch (e) {
-      toast.show(errMsg(e), 'fail');
+    } catch {
       return null;
     }
-  }, [reload, toast]);
+  }, [refresh]);
 
-  const remove = useCallback(async (p: Project): Promise<void> => {
+  const remove = useCallback<ProjectsCtx['remove']>(async (p) => {
     try {
       await api(`/api/projects/${p.project_id}`, { method: 'DELETE' });
-      toast.show(`已删除「${p.title}」及其全部材料与导出`);
-      await reload();
-    } catch (e) {
-      toast.show(errMsg(e), 'fail');
+    } finally {
+      await refresh();
     }
-  }, [reload, toast]);
+  }, [refresh]);
 
-  return (
-    <Ctx.Provider value={{ projects, loaded, error, reload, create, remove }}>
-      {children}
-    </Ctx.Provider>
-  );
+  const value = useMemo(() => ({ projects, loaded, refresh, create, remove }), [projects, loaded, refresh, create, remove]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const useProjects = (): ProjectsCtx => {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useProjects 必须在 ProjectsProvider 内使用');
-  return ctx;
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useProjects 必须在 ProjectsProvider 内使用');
+  return v;
 };

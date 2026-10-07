@@ -1,53 +1,55 @@
-# Red-Team: M9 PPT 一站式生成
+# Red-Team: M10 形态级重构——收敛为纯 PPT 报告生成器（pi-agent-core + skill 全程）
 
-> 对象：`.flow/proposal.md`（2026-10-06）｜方法：strategy-red-team
-> 裁决：**go**（无 kill 标准触发；KA-1/3 为执行纪律硬条件）
+> 评估对象：.flow/proposal.md（2026-10-07 第二次重构提案）。方法：strategy-red-team（steelman 后攻击，按 影响×可能×可测性 排序）。
 
-## 承重主张
+## Verdict: **go**
 
-| # | 主张 | 性质 |
-|---|---|---|
-| C1 | 复用现有 `render/pptx.ts` + zod + pi-ai 一周内可端到端 | 承重 |
-| C2 | LLM 出结构 JSON + 程序渲染是国产产品共识路径（Kimi/WPS/Gamma） | 承重 |
-| C3 | Z.AI pptx skill 内容可作 prompt 守则注入（仅约束文本，不商用其代码） | 承重 |
-| C4 | 「一页一句提示词 + md」入口体验可追平 Kimi 观感 | 承重 |
+（无 kill criterion 已被满足；KA-2 已实证，KA-1/KA-3/KA-4 带约束进 PRD，证据项按大改造约定放动工审批门讨要。）
 
-## Top Kill-Assumptions
+## Top Kill-Assumptions (ranked)
 
-### KA-1｜效果仍追不上 Kimi
-- **Claim**：自研+现有渲染器可拉满成品感。
-- **Fails if**：实际跑出来「AI 风」重（emoji 满天飞、大字 bullet、accent 泛滥）→ 用户弃用。
-- **应对**：system prompt 严格守则（抄 Z.AI pptx skill 的「去 AI 风」「字体克制」「accent 单点」「避免 overflow」）；few-shot 示例 1-2 份好样张；先做 1 个模板固定设计系统（拒绝模板任意选）。
-- **Kill criterion**：交付即真调 3 个不同主题样张；若仍 AI 风→回归走 F 方案（Playwright 调 Kimi 网页）。
+### KA-1 流程形态改造 ≠ 自动解决「成品感」（最高风险）
+- **Claim:** 用户两次不满的根因可以通过形态级重构（新主流程 + 删除杂物）解决。
+- **Steelman:** 用户本次直接给出完整六步流程定义，与行业标准体验（调研报告：Kimi/WPS/Gamma 主路径）精确对齐；五阶段壳层与报告工厂杂物确实是两次交付的可观测形态差异；用户还明确否决了渐进选项。
+- **Fails if:** 第三次交付后用户仍说「不是我想要的」，而真实不满在**视觉质量/模板美学**——流程改造不触及 render/pptx.ts 的版式天花板（276 行形状组合）。
+- **Evidence to get this week:** 视觉样张盲评——用 GordenSun 模板协议渲染 1–2 页真实材料样张给用户确认方向。
+- **Kill criterion:** 用户对样张方向仍不满意 → 停止全线开发，先重做视觉系统。
+- **Cheapest test:** 样张盲评，小时级；按大改造约定放**动工审批门讨要** + 排早期切片。
 
-### KA-2｜LLM 配 MD 时的素材抽取抽不出
-- **Claim**：模型能正确把 md 的章节/数据点抽到 page/bullets。
-- **Fails if**：模型把 md 整段贴到 body、bullets 仅是标题重写——信息密度低。
-- **应对**：system prompt 给显式抽取规则（标题→page headline；列表→bullets；数据点→chart；段落→body 摘要）；结构化重试（首版不满意，接口层面允许「再生成」单页）。
+### KA-2 pi-agent-core + skill 能承载全流程 —— **已实证**
+- **Claim:** D3 技术形态可行。
+- **Steelman + 证据（2026-10-07 实测）：** `@earendil-works/pi-agent-core@0.86.1` 存在且依赖 pi-ai ^0.86.1（与现有钉版对齐）；导出面确认 **skills 机制完整**：`loadSkills`/`loadSourcedSkills`（SKILL.md 目录风格，与 GordenPPTSkill 协议同构）+ `formatSkillsForSystemPrompt`/`formatSkillInvocation` + `UnknownSkill` 错误类型；另含 Agent/AgentHarness/agentLoop/内置工具工厂（bash/read/edit/write）/compaction/session（Jsonl/Memory repo）/telemetry/convertToLlm/calculateContextTokens——标准 §6 列举的能力全部在导出面上。
+- **Fails if:** 接入时发现 AgentHarness 装配形态与现有 pi-transport/workbench 架构冲突到不可缝合（概率低——适配层模式已有）。
+- **Kill criterion:** N/A（已证实）。
+- **Cheapest test:** 已做（临时安装 + 导出面/类型定义检查）。
 
-### KA-3｜零新依赖但成品感被渲染管线天花板封顶
-- **Claim**：现有 `render/pptx.ts` 已能出可编辑 PPTX，模板设计空间够。
-- **Fails if**：pptxgenjs 形状 API 对复杂版式（双栏图文、引用块、彩色分割）表现平庸。
-- **应对**：首版限定 6 种页型（cover/summary/bullets/quote/chart/divider），克制复杂度；后续按需要扩或接入 dom-to-pptx（方案 B）。
+### KA-3 「格式不限」上传（pdf/图片）的解析与理解可行性
+- **Claim:** md/word/pdf/图片都能被「读取并理解」。
+- **Steelman:** md/docx/xlsx/csv 解析器已在依赖（mammoth/exceljs/csv-parse）；M7/M8 已有多模态边界注入与围栏经验。
+- **Fails if:** 主链模型（MiniMax-M3 / mimo-v2.6-flash）不支持图片输入，或 pdf 解析无库可用——「格式不限」对恰好用图片/pdf 资料的用户缩水。
+- **Evidence to get this week:** 查 MiniMax-M3/mimo vision 支持文档 + pdf 解析库选型（pdf-parse/pdfjs-dist）；必要时一次真实多模态调用验证。
+- **Kill criterion:** vision 不可用 → 图片理解降级 OCR 或明示不支持；缩水项上**动工审批门要用户裁决**。
+- **Cheapest test:** 文档查证 + 真调验证，小时级。
 
-### KA-4｜M9 独立切片成永久孤儿
-- **Claim**：M9 是「先验证」性质，与 M7 主流程可后续拼合。
-- **Fails if**：独立做完后发现拼不回去（与现有数据模型冲突）。
-- **应对**：接口设计「output=ReportSpec 子集」而非自家格式，未来拼回只要适配 M7；新视图不侵入现有侧栏主路径（单独入口）。
+### KA-4 删除不伤及 PPT 主路径依赖
+- **Claim:** 「其余非相关的全部删除」可安全执行。
+- **Steelman:** git 历史全存档可回溯；删除是用户明确指令。
+- **Fails if:** 删除清单未做依赖盘点，把 PPT 管线仍依赖的模块删了（例：schema/report-spec 是 render/pptx.ts 的输入、checks/privacy 是审批围栏、ingest 是上传解析底座），管线断裂返工。
+- **Evidence to get this week:** rg import 依赖图盘点（PRD/GRILL 内完成，作为删除清单的证据基础）。
+- **Kill criterion:** N/A——执行纪律要求，非信念风险。
+- **Cheapest test:** 依赖图盘点，半小时。
+
+### KA-5 第三次押注的总风险（meta）
+- 已被 KA-1 的 cheapest test 覆盖：样张盲评前置到动工审批门讨要，是整个计划最便宜的止损点；避免 M6→M9「原则层对、成品感层连错两次」再演。
 
 ## What's Well-Reasoned
 
-- 自研选型被 license 风险驱动 + 现有栈 80% 复用，工程账清晰
-- 不引 AGPL/闭源 = 不污染 reports-factory 仓库许可面
-- 范围克制（独立切片、不重构）符合 gated dev-flow「substance over form」精神
-- 「M9 先做，再考虑与 M7 拼合」的递进路径是 M7 用户反馈的真接续
+- 六步主流程与行业标准路径精确对齐（外部调研背书），且保留了全行业真空的审批差异化。
+- 技术栈指令与 AGENT-RUNTIME 标准**同向**：pi-agent-core 本就是标准批准栈（§3.1），撤销 D-1 偏差是向合规收敛，不是新偏离。
+- 删除决策有 git 历史兜底，实际可逆。
+- 大改造动工审批门约定继续有效，前置证据在门上讨要，止损机制存在。
 
 ## What I Couldn't Assess
 
-- M3 在「长 md 一次性吃入、出 16 页整报告」的实测成品感（要交付即真调）
-- 是否真有人用 Kimi web 服务做 license 合规接入（不必采纳，但用户可能想问）
-- 模板设计审美是否用户认可（1 天内可出，但需用户评审）
-
-## Verdict
-
-**go**。条件：KA-1/2 成品感硬约束（首版交付含 3 主题样张与对比 Kimi 截图）、KA-3 形状克制（首版 ≤6 页型）。
+- 用户对「成品感」的具体审美参照（Kimi vs Gamma vs WPS 视觉风格未指明）——样张盲评时补。
+- pi-agent-core AgentHarness 装配形态与现有 workbench 的融合深度——GRILL 时代码探索解决。

@@ -283,6 +283,7 @@ export class WorkspaceStore {
   }): Promise<Project> {
     const project = ProjectSchema.parse({
       project_id: shortId('proj'),
+      kind: 'ppt', // M10：产品收敛后新建项目均为 PPT 项目（旧数据无 kind，列表过滤隐藏）
       title: input.title,
       purpose: input.purpose,
       brand: input.brand,
