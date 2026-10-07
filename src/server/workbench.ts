@@ -14,6 +14,7 @@ import { UnderstandingSchema, UNDERSTAND_INSTRUCTION, type Understanding } from 
 import { FrameworkGenSchema, FrameworkSchema, FRAMEWORK_INSTRUCTION, type Framework, type FrameworkPage } from '../schema/framework.js';
 import { PageDraftSchema, PAGE_DRAFT_INSTRUCTION, type PageDraft } from '../schema/page-draft.js';
 import { buildWorkerRequest } from '../model/agent-kernel.js';
+import { checkPrivacy, type PrivacyReport, type PrivacyCheckItem } from '../checks/privacy.js';
 import { getTemplate } from '../schema/template.js';
 
 /**
@@ -762,6 +763,116 @@ export class WorkbenchService {
       at: new Date().toISOString(), kind: 'source_removed', stage: 'upload', status: 'done',
       detail: { source_id: sourceId },
     });
+  }
+
+  // ---- 第 6 步：审核发布（S7）----
+
+  /** 内容哈希：sources 计数 + page 标题 + bullets 文本哈希（任一变化即失效） */
+  private async contentHash(projectId: string, work: PptWorkState): Promise<string> {
+    const { createHash } = await import('node:crypto');
+    const sources = await this.store.listSourceAssets(projectId);
+    const parts = [
+      `sources:${sources.length}`,
+      ...sources.map((s) => `${s.source_id}@${s.version}:${s.parse_status}`),
+    ];
+    if (work.framework) parts.push(`framework:${work.framework.pages.map((p) => p.title).join('|')}`);
+    if (work.pages) parts.push(`pages:${Object.entries(work.pages).map(([pid, d]) => `${pid}:${d.headline}|${d.bullets.map((b) => b.text).join(';')}`).join('|')}`);
+    return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 16);
+  }
+
+  /** 发布门审批：内容变更集哈希（材料增删/页内容变 → 失效） */
+  async approvalState(projectId: string): Promise<{ approved_at?: string; content_hash?: string; revoked?: boolean; reason?: string }> {
+    const project = await this.store.getProject(projectId);
+    if (!project) return {};
+    if (project.privacy_policy === 'local_only') return {};
+    const approvals = await this.store.readOutboundApprovals(projectId);
+    if (!approvals['formal-export']) return {};
+    const work = await this.readWork(projectId);
+    const curHash = await this.contentHash(projectId, work);
+    if (approvals['content_hash'] && approvals['content_hash'] !== curHash) {
+      return { approved_at: approvals['formal-export'], content_hash: approvals['content_hash'], revoked: true, reason: '内容已变更，需重新批准' };
+    }
+    return { approved_at: approvals['formal-export'], content_hash: curHash };
+  }
+
+  /** 隐私检查（发布门前置，N3 fail-closed） */
+  async privacyCheck(projectId: string): Promise<PrivacyReport> {
+    const work = await this.readWork(projectId);
+    if (!work.framework || !work.framework_confirmed) {
+      throw Object.assign(new Error('框架未确认：不可发布'), { statusCode: 422 });
+    }
+    const sources = await this.store.listSourceAssets(projectId);
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const spec = this.pagesToReportSpec(project, work.framework, work.pages ?? {});
+    const flaggableBullets = Object.values(work.pages ?? {}).some((d) => d.uncovered);
+    const hasCharts = spec.pages.some((p) => !!p.chart);
+    return checkPrivacy(spec, {
+      sources: sources.map((s) => ({ sensitivity: s.sensitivity })),
+      hasEditableCharts: hasCharts,
+      chartDataMode: 'aggregate_only',
+      pagesHaveSpeculativeBullets: flaggableBullets,
+    });
+  }
+
+  /** 批准外发：内容哈希随审批持久化；内容变更后失效态自动呈现 */
+  async approveFormalExport(projectId: string): Promise<void> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    if (project.privacy_policy === 'local_only') throw Object.assign(new Error('local_only 项目不可外发'), { statusCode: 403 });
+    const work = await this.readWork(projectId);
+    if (!work.framework || !work.framework_confirmed) throw Object.assign(new Error('框架未确认：不可外发'), { statusCode: 422 });
+    const check = await this.privacyCheck(projectId);
+    if (check.has_flags) throw Object.assign(new Error('隐私检查未通过：' + check.items.filter((i: PrivacyCheckItem) => i.status === 'flag').map((i: PrivacyCheckItem) => `${i.item}(${i.detail ?? ''})`).join('; ')), { statusCode: 422 });
+    const hash = await this.contentHash(projectId, work);
+    const approvals = await this.store.readOutboundApprovals(projectId);
+    approvals['formal-export'] = new Date().toISOString();
+    approvals['content_hash'] = hash;
+    await this.store.writeOutboundApprovals(projectId, approvals);
+    await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'outbound_approval', stage: 'publish', status: 'approved', detail: { mode: 'formal-export', content_hash: hash } });
+  }
+
+  /** 导出三格式（PPTX/HTML/PDF）；内用草稿无需检查/批准，外发需批准且未失效 */
+  async exportPublish(
+    projectId: string,
+    input: { formats: Array<'pptx' | 'html' | 'pdf'>; level: 'internal' | 'external' },
+  ): Promise<{ exports: Array<{ format: string; export_id: string }>; revoked?: boolean }> {
+    const work = await this.readWork(projectId);
+    if (!work.framework || !work.framework_confirmed) throw Object.assign(new Error('框架未确认：不可发布'), { statusCode: 422 });
+    if (Object.values(work.page_states ?? {}).some((s) => s !== 'done')) {
+      throw Object.assign(new Error('存在未就绪页面：先完成或重试失败页'), { statusCode: 422 });
+    }
+    if (input.level === 'external') {
+      const ap = await this.approvalState(projectId);
+      if (!ap.approved_at) throw Object.assign(new Error('外发未批准'), { statusCode: 422 });
+      if (ap.revoked) throw Object.assign(new Error(`外发批准已失效：${ap.reason}`), { statusCode: 422 });
+    }
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const spec = this.pagesToReportSpec(project, work.framework, work.pages ?? {});
+    const exports: Array<{ format: string; export_id: string }> = [];
+    for (const fmt of input.formats) {
+      const artifact = await this.renderExport(spec, fmt);
+      const rec = await this.store.saveExport(projectId, {
+        revision_id: spec.revision_id,
+        format: fmt,
+        artifact,
+        checks: { privacy: await this.privacyCheck(projectId) },
+        is_draft: input.level === 'internal',
+        export_scope: input.level,
+      });
+      exports.push({ format: fmt, export_id: rec.export_id });
+      await this.store.appendAuditLog(projectId, { at: new Date().toISOString(), kind: 'export', stage: 'publish', status: 'done', detail: { format: fmt, level: input.level } });
+    }
+    return { exports };
+  }
+
+  /** 单一格式渲染（PPTX/HTML/PDF） */
+  private async renderExport(spec: import('../schema/report-spec.js').ReportSpec, fmt: 'pptx' | 'html' | 'pdf'): Promise<Buffer> {
+    if (fmt === 'pptx') return (await import('../render/pptx.js')).renderReportPptx(spec);
+    if (fmt === 'html') return Buffer.from((await import('../render/deck-html.js')).renderDeckHtml(spec), 'utf-8');
+    if (fmt === 'pdf') return (await import('../render/deck-pdf.js')).renderDeckPdf(spec);
+    throw new Error(`不支持的导出格式：${fmt}`);
   }
 
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */

@@ -84,6 +84,8 @@ export interface ProjectDetail {
   /** S4 框架（确认后不可变） */
   framework?: { pages: FrameworkPage[] } | null;
   framework_confirmed?: boolean;
+  /** S7 发布门审批态（含失效判定） */
+  approval_state?: { approved_at?: string; revoked?: boolean; reason?: string };
   /** S5 页内容与逐页 checkpoint */
   pages?: Record<string, PageDraftT>;
   page_states?: Record<string, 'pending' | 'running' | 'done' | 'failed'>;

@@ -225,6 +225,61 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
+  // 第 6 步 审核发布：隐私检查 + 批准 + 失效判定 + 三格式导出
+  app.post('/api/projects/:id/privacy-check', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const report = await workbench.privacyCheck(id);
+      return { ok: true, report };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
+  app.post('/api/projects/:id/approve-formal', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      await workbench.approveFormalExport(id);
+      return { ok: true };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
+  app.get('/api/projects/:id/approval-state', async (req) => {
+    const { id } = req.params as { id: string };
+    return workbench.approvalState(id);
+  });
+
+  app.post('/api/projects/:id/export', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const body = parseBody(z.object({
+        formats: z.array(z.enum(['pptx', 'html', 'pdf'])).min(1),
+        level: z.enum(['internal', 'external']),
+      }), req.body);
+      const result = await workbench.exportPublish(id, { formats: body.formats, level: body.level });
+      return { ok: true, ...result };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
+    }
+  });
+
+  // 导出产物文件下载
+  app.get('/api/projects/:id/exports/:eid/file', async (req, reply) => {
+    const { id, eid } = req.params as { id: string; eid: string };
+    const rec = await store.getExport(id, eid);
+    if (!rec) throw httpError(404, '导出记录不存在');
+    try {
+      const data = await readFile(join(store.root, id, rec.artifact_path));
+      const mime = rec.format === 'html' ? 'text/html' : rec.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml';
+      reply.type(mime);
+      return reply.send(data);
+    } catch (e) {
+      throw httpError(404, `导出文件丢失：${(e as Error).message}`);
+    }
+  });
+
   // 出站治理：批准 + 门检查（预览载荷随 S7 发布门重设计重建）
   app.post('/api/projects/:id/outbound/approve', async (req, reply) => {
     const { id } = req.params as { id: string };
