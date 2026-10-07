@@ -33,7 +33,7 @@ export const ProjectSchema = z.object({
   purpose: z.string().optional(),
   created_at: z.string(),
   updated_at: z.string(),
-  privacy_policy: PrivacyPolicySchema.default('local_only'),
+  privacy_policy: PrivacyPolicySchema.default('allow_external'), // 用户 2026-10-07 裁决：全面解除隐私策略，PPT 生成不再被 local_only 围栏阻断
   /** 旧五阶段字段（M4-M9 遗留）：M10 起不再推进，仅为旧项目数据可解析保留 */
   stage: z.string().optional(),
   brand: BrandConfigSchema.optional(),

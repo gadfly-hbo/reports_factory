@@ -40,7 +40,7 @@ export function ProjectsView() {
 
   const submit = async () => {
     if (!title.trim()) return;
-    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined, template_id: tpl || undefined, privacy_policy: 'local_only' });
+    const id = await create({ title: title.trim(), purpose: purpose.trim() || undefined, template_id: tpl || undefined, privacy_policy: 'allow_external' });
     if (id) navigate(`/project/${id}/upload`);
   };
 

@@ -17,7 +17,7 @@ describe('项目 CRUD 与存储布局（F01）', () => {
     try {
       const p = await store.createProject({ title: 'Q3 经营复盘', purpose: '经营例会' });
       expect(p.title).toBe('Q3 经营复盘');
-      expect(p.privacy_policy).toBe('local_only');
+      expect(p.privacy_policy).toBe('allow_external'); // 用户裁决：默认全面解除隐私
       for (const sub of ['sources', 'revisions', 'exports']) {
         expect(existsSync(join(dir, p.project_id, sub))).toBe(true);
       }

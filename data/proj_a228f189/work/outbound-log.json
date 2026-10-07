@@ -64,5 +64,137 @@
     "bytes": 0,
     "cost": 0,
     "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:21.686Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:23.318Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:28.943Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:29.327Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:29.560Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:29.783Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:30.324Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:30.509Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:30.711Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:31.365Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:31.560Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T13:58:32.849Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
   }
 ]

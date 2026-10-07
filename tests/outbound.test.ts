@@ -104,6 +104,8 @@ describe('S2 出站治理', () => {
   });
 
   it('local_only：批准被拒；capabilities 显示 AI 关闭', async () => {
+    // 默认已是 allow_external（用户裁决）；显式设 local_only 验证围栏仍生效
+    await store.updateProject(projectId, { privacy_policy: 'local_only' });
     const approve = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/outbound/approve`, payload: { mode: 'structure-only' } });
     expect(approve.statusCode).toBe(403);
     const detail = (await app.inject({ url: `/api/projects/${projectId}` })).json();
