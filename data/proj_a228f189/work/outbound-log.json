@@ -9,5 +9,60 @@
     "bytes": 0,
     "cost": 0,
     "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:25:13.165Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:25:14.020Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:25:14.235Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:25:14.715Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T07:25:14.923Z",
+    "stage": "understand",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
   }
 ]

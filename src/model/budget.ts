@@ -21,9 +21,9 @@ export interface BudgetEntry {
 }
 
 export const DEFAULT_BUDGET: BudgetConfig = {
-  maxCalls: 50,
-  maxWallMs: 30 * 60_000,
-  maxTurns: 20,
+  maxCalls: 200,
+  maxWallMs: 4 * 60 * 60_000,
+  maxTurns: 100,
 };
 
 export interface BudgetVerdict {

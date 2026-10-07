@@ -18,5 +18,475 @@
       "source_id": "src_6160ab3e",
       "reason": "error"
     }
+  },
+  {
+    "at": "2026-10-07T07:26:13.619Z",
+    "kind": "understand",
+    "stage": "understand",
+    "status": "done",
+    "detail": {
+      "source_id": "src_6160ab3e",
+      "points": 40
+    }
+  },
+  {
+    "at": "2026-10-07T07:26:55.909Z",
+    "kind": "framework",
+    "stage": "framework",
+    "status": "generated",
+    "detail": {
+      "pages": 9
+    }
+  },
+  {
+    "at": "2026-10-07T07:27:08.343Z",
+    "kind": "framework",
+    "stage": "framework",
+    "status": "confirmed",
+    "detail": {
+      "pages": 9
+    }
+  },
+  {
+    "at": "2026-10-07T07:28:44.158Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_01",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T07:28:51.546Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_02"
+    }
+  },
+  {
+    "at": "2026-10-07T07:29:01.989Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_03"
+    }
+  },
+  {
+    "at": "2026-10-07T07:29:10.912Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_04"
+    }
+  },
+  {
+    "at": "2026-10-07T07:29:22.886Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_05",
+      "attempt": 0
+    }
+  },
+  {
+    "at": "2026-10-07T07:29:29.838Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_05"
+    }
+  },
+  {
+    "at": "2026-10-07T07:29:40.217Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_06"
+    }
+  },
+  {
+    "at": "2026-10-07T07:30:11.380Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_07"
+    }
+  },
+  {
+    "at": "2026-10-07T07:30:23.107Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_08",
+      "attempt": 0
+    }
+  },
+  {
+    "at": "2026-10-07T07:30:31.125Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_08",
+      "attempt": 1
+    }
+  },
+  {
+    "at": "2026-10-07T07:30:31.133Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_08",
+      "reason": "数字护栏拒绝：37.6"
+    }
+  },
+  {
+    "at": "2026-10-07T07:30:58.282Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_09",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T07:32:13.831Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_01",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T07:41:24.596Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:41:26.550Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:41:28.092Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:41:30.169Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:41:32.059Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:42:53.131Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:42:53.606Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:44:15.257Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:45:55.184Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_01",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T07:48:06.661Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_failed",
+    "detail": {
+      "page_id": "page_01",
+      "reason": "模型服务不可用（全部尝试失败）：minimax-cn: 输出不符合 schema | xiaomi-token-plan"
+    }
+  },
+  {
+    "at": "2026-10-07T07:48:59.727Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_01"
+    }
+  },
+  {
+    "at": "2026-10-07T07:49:22.644Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:36.077Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:37.834Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:38.903Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:39.752Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:40.472Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:43.275Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:44.020Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:45.240Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:45.971Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:50.745Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:52:51.355Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:53:26.962Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:53:28.583Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:53:29.436Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:53:38.662Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:53:39.274Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T07:54:29.497Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:54:55.173Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:56:05.759Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:56:05.778Z",
+    "kind": "gate_decision",
+    "stage": "page-draft",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "turns"
+    }
+  },
+  {
+    "at": "2026-10-07T07:58:34.341Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "digit_guard",
+    "detail": {
+      "page_id": "page_08",
+      "attempt": 0
+    }
+  },
+  {
+    "at": "2026-10-07T07:58:51.471Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_08"
+    }
+  },
+  {
+    "at": "2026-10-07T08:00:32.576Z",
+    "kind": "page_generation",
+    "stage": "page-draft",
+    "status": "page_done",
+    "detail": {
+      "page_id": "page_09"
+    }
   }
 ]

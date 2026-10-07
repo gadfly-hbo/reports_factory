@@ -10,6 +10,8 @@ export function GenerateView() {
   const { detail, refresh } = useProject();
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const id = detail?.project.project_id;
   const framework = detail?.framework?.pages ?? [];
   const states = detail?.page_states ?? {};
@@ -22,13 +24,21 @@ export function GenerateView() {
 
   const run = async (pageId?: string) => {
     if (!id) return;
-    setRunning(true);
+    if (pageId) { setRetrying(pageId); } else { setRunning(true); }
+    setError(null);
     try {
-      await api(`/api/projects/${id}/pages/generate`, {
+      const r: any = await api(`/api/projects/${id}/pages/generate`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(pageId ? { page_id: pageId } : {}),
       });
-    } catch { /* 页级失败以列表呈现 */ }
-    setRunning(false);
+      // 页级重试失败：显示原因（数字护栏/schema/预算）
+      if (pageId && r && r.failed > 0) {
+        const st = (detail?.page_states as Record<string, string> | undefined)?.[pageId];
+        if (st === 'failed') setError(`第 ${pageId.replace('page_', '')} 页重试失败：模型输出不合规或数字护栏拒绝（可再试）`);
+      }
+    } catch (e) {
+      setError(`生成失败：${e instanceof Error ? e.message : '未知错误'}`);
+    }
+    setRunning(false); setRetrying(null);
     await refresh();
   };
 
@@ -64,8 +74,8 @@ export function GenerateView() {
                       : st === 'running' ? <span className="chip">生成中…</span> : <span className="chip">排队中</span>}
                     {st === 'done' && draft?.chart && <span className="chip" style={{ marginLeft: 6 }}>原生图表</span>}
                     {st === 'failed' && (
-                      <button className="btn btn-ghost btn-sm" type="button" style={{ marginLeft: 8 }} disabled={running}
-                              onClick={() => void run(p.page_id)}>重试该页</button>
+                      <button className="btn btn-ghost btn-sm" type="button" style={{ marginLeft: 8 }} disabled={running || retrying !== null}
+                              onClick={() => void run(p.page_id)}>{retrying === p.page_id ? '重试中…' : '重试该页'}</button>
                     )}
                   </td>
                 </tr>
