@@ -186,8 +186,17 @@ export function createPptxTools(ctx: ToolCtx): AgentTool<any>[] {
             env: { ...process.env },
           });
           const pptxName = filename.replace(/\.js$/, '.pptx');
-          const pptxPath = safeJoin(ctx.tmpDir, pptxName);
-          const ok = existsSync(pptxPath!);
+          let pptxPath = safeJoin(ctx.tmpDir, pptxName);
+          let ok = existsSync(pptxPath!);
+          if (!ok) {
+            // 模型可能写到 CWD/项目根（绝对或相对路径漂移）：在项目根兜底查找并移回 tmpDir
+            const alt = join(ctx.nodeProjectDir, pptxName);
+            if (existsSync(alt)) {
+              const { renameSync } = await import('node:fs');
+              renameSync(alt, pptxPath!);
+              ok = true;
+            }
+          }
           const out = [
             stdout && `stdout: ${stdout.slice(0, 2000)}`,
             stderr && `stderr: ${stderr.slice(0, 2000)}`,
@@ -269,18 +278,15 @@ export interface PptxAgentResult {
   tmpDir: string;
 }
 
-const PPTX_SYSTEM = `你是 pptxgenjs 专家，为一份中文 PPT 渲染单页。你有四个工具：write_code / run_render / read_file / list_dir。
+const PPTX_SYSTEM = `为一份中文 PPT 渲染单页。你有四个工具：write_code / run_render / read_file / list_dir。
 
-硬性要求：
-1) 用 write_code 写完整可执行 ESM 代码（import pptxgenjs from "pptxgenjs"），禁止 require（项目是 ES module）。
-2) 页面尺寸 13.33 x 7.5 英寸（16:9 宽屏）。
-3) 最后必须 pres.writeFile({ fileName: "<与代码文件同名的 .pptx，相对路径>" }) —— 例如代码文件 page_01.js 就写 'page_01.pptx'。
-4) 视觉规范：深藏青 #263442 与铁锈橘 #b44626 是主色；白底 #ffffff、暖灰底 #f7f6f3；正文字号 ≥12pt、标题 22–30pt；accent 只用于小面积点睛；0 emoji。
-5) 中文内容用 PingFang SC / Microsoft YaHei 字体栈。
-6) 数字逐字来自输入材料，禁止编造。
-7) 若 run_render 报 stderr，读错误、改代码、再渲染，直到成功或确认无法修复。
+上面的技能规范（PPT 报告生成与渲染规范）是必须遵守的版式与内容标准：色彩系统、版式模板、图表规范、代码硬约束都在其中。
 
-工作方式：先 write_code 一版 → run_render → 若有 stderr 就修 → 成功后停止（不要重复渲染已成功的页）。`;
+工作流程：
+1) write_code 写完整 ESM 代码（import pptxgenjs from "pptxgenjs"，禁 require）。
+2) run_render 执行；若 stderr 非空，读错误改代码再渲染，直到成功。
+3) 成功后停止，不要重复渲染已成功的页。
+4) 数字逐字来自输入材料，禁止编造。0 emoji。`;
 
 export async function runPptxAgent(input: PptxAgentInput): Promise<PptxAgentResult> {
   const budget: AgentBudget = { ...DEFAULT_PAGE_BUDGET, ...input.budget };
