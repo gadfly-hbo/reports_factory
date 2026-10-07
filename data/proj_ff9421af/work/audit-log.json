@@ -846,5 +846,35 @@
       "format": "pptx",
       "level": "internal"
     }
+  },
+  {
+    "at": "2026-10-07T12:04:27.218Z",
+    "kind": "gate_decision",
+    "stage": "page-agent",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T12:05:01.982Z",
+    "kind": "gate_decision",
+    "stage": "page-agent",
+    "status": "budget_blocked",
+    "detail": {
+      "line": "wall"
+    }
+  },
+  {
+    "at": "2026-10-07T12:08:10.219Z",
+    "kind": "page_agent",
+    "stage": "page-agent",
+    "status": "done",
+    "detail": {
+      "page_id": "page_01",
+      "turns": 11,
+      "toolCalls": 8,
+      "stop": "rendered"
+    }
   }
 ]

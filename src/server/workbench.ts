@@ -10,10 +10,12 @@ import { LlmStageClient, chainFromEnv, DEFAULT_TIMEOUT_MS } from '../model/clien
 import { replayTransport, loadRecordings } from '../model/recording.js';
 import { resolveBudget, checkBudget, type BudgetEntry } from '../model/budget.js';
 import { PptStepSchema, type PptStep, type Project, type SourceAsset } from '../schema/project.js';
+import { join } from 'node:path';
 import { UnderstandingSchema, UNDERSTAND_INSTRUCTION, type Understanding } from '../schema/understanding.js';
 import { FrameworkGenSchema, FrameworkSchema, FRAMEWORK_INSTRUCTION, type Framework, type FrameworkPage } from '../schema/framework.js';
 import { PageDraftSchema, PAGE_DRAFT_INSTRUCTION, type PageDraft } from '../schema/page-draft.js';
 import { buildWorkerRequest } from '../model/agent-kernel.js';
+import { runPptxAgent, type PptxAgentResult } from '../model/agent-loop.js';
 import { checkPrivacy, type PrivacyReport, type PrivacyCheckItem } from '../checks/privacy.js';
 import { getTemplate } from '../schema/template.js';
 
@@ -32,6 +34,10 @@ export interface PptWorkState {
   framework_confirmed?: boolean;
   /** S5/S6 页内容（page_id → 草稿）与逐页 checkpoint */
   pages?: Record<string, PageDraft>;
+  /** B 方案：工具 Agent 产物（page_id → pptx base64） */
+  pptx_buffers?: Record<string, string>;
+  /** B 方案：agent 过程状态（前端轮询显示） */
+  agent_progress?: Record<string, { turns: number; toolCalls: number; wallMs: number; status: string }>;
   page_states?: Record<string, 'pending' | 'running' | 'done' | 'failed'>;
   /** 生成任务态（S5）：running 僵尸按 stale_at 回收 */
   generation?: { status: 'running' | 'done' | 'failed'; stale_at?: string; note?: string };
@@ -639,6 +645,63 @@ export class WorkbenchService {
     });
   }
 
+  // ---- B 方案：工具 Agent 生成（第 4 步重构）----
+
+  /** 单页工具 Agent 生成：模型自主写 pptxgenjs 代码 → bash 渲染 → Buffer 产物 */
+  async generatePageAgent(
+    projectId: string,
+    pageId: string,
+    deps: { client?: Awaited<ReturnType<WorkbenchService['modelClient']>> } = {},
+  ): Promise<{ ok: boolean; pptxBase64?: string; agent: PptxAgentResult }> {
+    const project = await this.store.getProject(projectId);
+    if (!project) throw Object.assign(new Error('项目不存在'), { statusCode: 404 });
+    const work = await this.readWork(projectId);
+    if (!work.framework || !work.framework_confirmed) {
+      throw Object.assign(new Error('框架未确认：不可生成'), { statusCode: 422 });
+    }
+    const fp = work.framework.pages.find((p) => p.page_id === pageId);
+    if (!fp) throw Object.assign(new Error(`页不存在：${pageId}`), { statusCode: 404 });
+    await this.gateOrThrow(projectId, 'authorized-summary', 'page-agent');
+
+    // 材料投影（同工人模式语义）
+    const digest = await this.materialDigest(projectId);
+    const { materials } = this.projectMaterials(digest, fp);
+
+    // agent 过程进度（前端轮询）
+    const setProgress = async (status: string, extra: Record<string, unknown> = {}) => {
+      const w = await this.readWork(projectId);
+      await this.writeWork(projectId, {
+        ...w,
+        agent_progress: { ...(w.agent_progress ?? {}), [pageId]: { turns: 0, toolCalls: 0, wallMs: 0, status, ...extra } },
+      });
+    };
+    await setProgress('运行中');
+
+    const agentDir = join(process.cwd(), 'data', projectId, 'work');
+    const result = await runPptxAgent({
+      page_id: pageId,
+      title: fp.title,
+      intent: fp.intent,
+      materials,
+      projectTitle: project.title,
+      nodeProjectDir: process.cwd(),
+      workDir: agentDir,
+    });
+
+    const w = await this.readWork(projectId);
+    await this.writeWork(projectId, {
+      ...w,
+      pptx_buffers: { ...(w.pptx_buffers ?? {}), ...(result.pptxBuffer ? { [pageId]: result.pptxBuffer.toString('base64') } : {}) },
+      page_states: { ...(w.page_states ?? {}), [pageId]: result.ok ? 'done' : 'failed' },
+      agent_progress: { ...(w.agent_progress ?? {}), [pageId]: { turns: result.turns, toolCalls: result.toolCalls, wallMs: result.wallMs, status: result.ok ? '渲染成功' : `失败（${result.stopReason}）` } },
+    });
+    await this.store.appendAuditLog(projectId, {
+      at: new Date().toISOString(), kind: 'page_agent', stage: 'page-agent', status: result.ok ? 'done' : 'failed',
+      detail: { page_id: pageId, turns: result.turns, toolCalls: result.toolCalls, stop: result.stopReason },
+    });
+    return { ok: result.ok, pptxBase64: result.pptxBuffer?.toString('base64'), agent: result };
+  }
+
   /** 项目详情聚合：project + sources + steps + capabilities（路由 GET /api/projects/:id 的数据源） */
 
   /** 理解请求载荷（§4.6 上下文装配单点）：文本材料带确定性提炼；图片走 vision（M-U4） */
@@ -904,6 +967,8 @@ export class WorkbenchService {
       framework_confirmed: work.framework_confirmed === true,
       pages: work.pages ?? {},
       page_states: work.page_states ?? {},
+      pptx_buffers: work.pptx_buffers ?? {},
+      agent_progress: work.agent_progress ?? {},
       approval_state,
       generation: work.generation ?? null,
     };

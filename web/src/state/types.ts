@@ -89,6 +89,9 @@ export interface ProjectDetail {
   /** S5 页内容与逐页 checkpoint */
   pages?: Record<string, PageDraftT>;
   page_states?: Record<string, 'pending' | 'running' | 'done' | 'failed'>;
+  /** B 方案：agent 过程进度 */
+  agent_progress?: Record<string, { turns: number; toolCalls: number; wallMs: number; status: string }>;
+  pptx_buffers?: Record<string, string>;
   generation?: { status: 'running' | 'done' | 'failed'; stale_at?: string; note?: string } | null;
 }
 

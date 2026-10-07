@@ -72,7 +72,12 @@ export function GenerateView() {
                     {st === 'done' ? <span className="chip chip-ok">已完成</span>
                       : st === 'failed' ? <span className="chip chip-fail">失败</span>
                       : st === 'running' ? <span className="chip">生成中…</span> : <span className="chip">排队中</span>}
-                    {st === 'done' && draft?.chart && <span className="chip" style={{ marginLeft: 6 }}>原生图表</span>}
+                    {(() => {
+                      const ap = detail?.agent_progress?.[p.page_id];
+                      if (!ap || st === 'done') return null;
+                      const sec = Math.round((ap.wallMs ?? 0) / 1000);
+                      return <span className="chip" style={{ marginLeft: 6 }} title="工具 Agent 过程">{ap.status} · {ap.turns}轮/{ap.toolCalls}次 · {sec}s</span>;
+                    })()}
                     {st === 'failed' && (
                       <button className="btn btn-ghost btn-sm" type="button" style={{ marginLeft: 8 }} disabled={running || retrying !== null}
                               onClick={() => void run(p.page_id)}>{retrying === p.page_id ? '重试中…' : '重试该页'}</button>

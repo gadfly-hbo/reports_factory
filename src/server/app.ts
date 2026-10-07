@@ -175,13 +175,31 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     }
   });
 
-  // 第 4 步 生成：{page_id?} 缺省=整套（checkpoint 跳过已完成页；指定页=页级重试）
+  // 第 4 步 生成：B 方案工具 Agent（page_id 指定=单页 Agent 生成；缺省=整套逐页 Agent）
   app.post('/api/projects/:id/pages/generate', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = (req.body ?? {}) as { page_id?: string };
+    const body = (req.body ?? {}) as { page_id?: string; mode?: 'agent' | 'worker' };
     try {
-      const result = await workbench.generatePages(id, { page_id: body.page_id });
-      return { ok: result.failed === 0, ...result };
+      // B 方案默认：工具 Agent 模式（v1.4 P2）；mode=worker 显式回退旧工人模式
+      if (body.mode === 'worker') {
+        const result = await workbench.generatePages(id, { page_id: body.page_id });
+        return { ok: result.failed === 0, ...result };
+      }
+      if (body.page_id) {
+        const r = await workbench.generatePageAgent(id, body.page_id);
+        return { ok: r.ok, page_id: body.page_id, agent: { turns: r.agent.turns, toolCalls: r.agent.toolCalls, stopReason: r.agent.stopReason } };
+      }
+      // 整套：逐页 Agent（串行）
+      const detail = await workbench.projectDetail(id);
+      const states = (detail as { page_states?: Record<string, string> }).page_states ?? {};
+      const results: Array<{ page_id: string; ok: boolean }> = [];
+      for (const p of detail.framework?.pages ?? []) {
+        if (states[p.page_id] === 'done') { results.push({ page_id: p.page_id, ok: true }); continue; }
+        const r = await workbench.generatePageAgent(id, p.page_id);
+        results.push({ page_id: p.page_id, ok: r.ok });
+      }
+      const done = results.filter((r) => r.ok).length;
+      return { ok: done === results.length, done, failed: results.length - done, states: Object.fromEntries(results.map((r) => [r.page_id, r.ok ? 'done' : 'failed'])) };
     } catch (e) {
       return replyGateError(reply, e as Error & { statusCode?: number; needsApproval?: boolean });
     }
