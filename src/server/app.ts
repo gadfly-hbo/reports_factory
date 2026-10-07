@@ -27,7 +27,8 @@ import {
   ResolvePendingRequestSchema,
   SourceUploadRequestSchema,
 } from '../schema/requests.js';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
+import { PrivacyPolicySchema } from '../schema/project.js';
 import { listTemplates, getTemplate } from '../schema/template.js';
 import { chainFromEnv } from '../model/client.js';
 import { hasApiKey, modelChainAvailable } from '../model/pi-transport.js';
@@ -328,6 +329,18 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       if (err.statusCode) reply.code(err.statusCode);
       else reply.code(500);
       return { ok: false, error: err.message, needsApproval: err.needsApproval };
+    }
+  });
+
+  // M9 收尾：改已有项目隐私策略（此前只在创建时可设——现有 local_only 项目无法启用 AI）
+  app.put('/api/projects/:id/privacy', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = parseBody(z.object({ privacy_policy: PrivacyPolicySchema }), req.body);
+    try {
+      const project = await store.updateProject(id, { privacy_policy: body.privacy_policy });
+      return { project };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
     }
   });
 

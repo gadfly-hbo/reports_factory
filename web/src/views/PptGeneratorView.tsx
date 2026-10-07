@@ -22,6 +22,20 @@ export function PptGeneratorView() {
 
   if (!p.detail) return <div className="view"><p className="fine">加载中…</p></div>;
   const d = p.detail;
+  const localOnly = d.project.privacy_policy === 'local_only';
+
+  const enableExternal = async () => {
+    try {
+      await fetch(`/api/projects/${p.id}/privacy`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ privacy_policy: 'allow_external_with_approval' }),
+      });
+      toast.show('已允许外部模型（出站首次调用仍需批准）', 'ok');
+      await p.reload();
+    } catch (e) {
+      toast.show(String(e).slice(0, 120), 'fail');
+    }
+  };
 
   const generate = async () => {
     if (!input.trim()) { toast.show('请粘贴内容', 'fail'); return; }
@@ -75,6 +89,17 @@ export function PptGeneratorView() {
     <div className="view">
       <h1 className="view-h">快速 PPT<span className="chip chip-accent">M9 一站式</span></h1>
       <p className="view-sub">粘贴 Markdown 或纯文本，写一句提示词，AI 起草后端到端生成可编辑 PPTX；不与现有编审/审批耦合。</p>
+
+      {localOnly && (
+        <div className="notice warn" data-testid="ppt-local-only">
+          <b>当前项目隐私策略为「仅本地」——AI 起草被阻断，只会生成规则版骨架。</b>
+          <div className="inline-row" style={{ marginTop: 6 }}>
+            <button className="btn btn-sm btn-primary" type="button" data-testid="ppt-enable-external" onClick={() => void enableExternal()}>
+              允许外部模型（出站首次调用仍需批准）
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-h">输入</div>

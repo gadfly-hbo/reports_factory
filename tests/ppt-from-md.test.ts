@@ -179,6 +179,20 @@ describe('M9 S1 PPT-only 后端', () => {
     expect((r.rawPayload).length).toBeGreaterThan(1000);
   });
 
+  it('隐私切换路由：PUT 改策略生效，非法值 400（M9 收尾）', async () => {
+    const ok = await app.inject({
+      method: 'PUT', url: `/api/projects/${projectId}/privacy`,
+      payload: { privacy_policy: 'allow_external' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().project.privacy_policy).toBe('allow_external');
+    const bad = await app.inject({
+      method: 'PUT', url: `/api/projects/${projectId}/privacy`,
+      payload: { privacy_policy: 'no_such_policy' },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('pageBudget 越界 → 422（PRD G3）', async () => {
     await store.updateProject(projectId, { privacy_policy: 'allow_external' });
     const r = await app.inject({

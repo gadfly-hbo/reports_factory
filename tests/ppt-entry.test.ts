@@ -31,5 +31,8 @@ describe('M9 S2 壳层入口存在性', () => {
     // S2 AC：needsApproval → 视图内就地批准预览（data-testid 存在性）
     expect(view).toContain('ppt-outbound-preview');
     expect(view).toContain('ppt-approve');
+    // M9 收尾：local_only 阻断提示与「允许外部模型」开关
+    expect(view).toContain('ppt-local-only');
+    expect(view).toContain('ppt-enable-external');
   });
 });
