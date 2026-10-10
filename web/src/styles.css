@@ -87,12 +87,12 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica 
 /* deck 工作区（W5） */
 .wb-deck { display: flex; flex-direction: column; gap: 8px; }
 .wb-deck-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.wb-deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
-.wb-thumb { border: 1px solid var(--wb-line); border-radius: 8px; overflow: hidden; background: var(--wb-panel); cursor: pointer; padding: 0; display: flex; flex-direction: column; text-align: left; }
-.wb-thumb.active { outline: 2px solid var(--wb-brand); outline-offset: 1px; }
-.wb-thumb img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #fff; }
-.wb-thumb-name { font-size: .72rem; color: var(--wb-ink2); padding: 4px 8px; border-top: 1px solid var(--wb-line); }
-.wb-figure { margin: 4px 0 0; align-self: flex-start; width: min(640px, 100%); }
+.wb-page-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wb-page-tab { border: 1px solid var(--wb-line); background: var(--wb-panel); color: var(--wb-ink2); border-radius: 999px; padding: 4px 13px; cursor: pointer; font: inherit; font-size: .8rem; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-page-tab:hover { border-color: var(--wb-brand); color: var(--wb-brand); }
+.wb-page-tab.active { background: var(--wb-accent-soft); border-color: var(--wb-brand); color: var(--wb-brand); font-weight: 600; box-shadow: inset 0 0 0 1px var(--wb-brand); }
+.wb-page-tab .num { font-variant-numeric: tabular-nums; }
+.wb-figure { margin: 4px 0 0; align-self: stretch; width: 100%; max-width: 980px; }
 .wb-figure img { width: 100%; border-radius: 8px; border: 1px solid var(--wb-line); display: block; }
 .wb-figure figcaption { font-size: .74rem; color: var(--wb-fine); margin-top: 4px; }
 .chip-accent { border-color: #bcd8c6; background: var(--wb-accent-soft); color: var(--wb-brand); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }

@@ -505,14 +505,13 @@ export function Workbench() {
                   </tbody>
                 </table>
               )}
-              <div className="wb-deck-grid">
+              <div className="wb-page-tabs" role="tablist" aria-label="页列表">
                 {deck?.pages.map((p, i) => (
-                  <button key={p.name} type="button"
-                          className={`wb-thumb ${selectedPage === p.name ? 'active' : ''}`}
+                  <button key={p.name} type="button" role="tab" aria-selected={selectedPage === p.name}
+                          className={`wb-page-tab ${selectedPage === p.name ? 'active' : ''}`}
+                          title={p.preview_ready ? p.name : `${p.name}（近似预览）`}
                           onClick={() => setSelectedPage(p.name)}>
-                    <img src={`/api/projects/${activeId}/deck/preview/${p.name}?t=${busy ? 0 : (deck.pptx?.bytes ?? i)}`} alt={`${p.name} 近似预览`}
-                         onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-                    <span className="wb-thumb-name">{String(i + 1).padStart(2, '0')} · {pageTitle(p.name)}{p.preview_ready ? '' : '（近似）'}</span>
+                    <span className="num">{String(i + 1).padStart(2, '0')}</span> · {pageTitle(p.name)}
                   </button>
                 ))}
               </div>

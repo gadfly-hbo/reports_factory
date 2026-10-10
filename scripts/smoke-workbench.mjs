@@ -101,14 +101,16 @@ try {
   await writeFile(join(home, pid, 'deck', 'deck.mjs'), "import pptxgen from 'pptxgenjs'; const x = new pptxgen(); await x.writeFile({ fileName: 'deck/empty.pptx' });");
   await page.reload();
   await page.click('.wb-seg-btn:nth-child(2)');
-  await page.waitForSelector('.wb-thumb', { timeout: 5000 });
-  const thumbs = await page.$$('.wb-thumb');
-  if (thumbs.length !== 2) fail(`缩略图数量 ${thumbs.length} ≠ 2`);
-  const approx = await page.textContent('.wb-thumb:nth-child(2) .wb-thumb-name');
-  if (!approx.includes('近似')) fail(`无 HTML 页未标近似：${approx}`);
-  console.log(`PASS 页网格（2 缩略图，无 HTML 页标「近似」）`);
+  await page.waitForSelector('.wb-page-tab', { timeout: 5000 });
+  const tabs = await page.$$('.wb-page-tab');
+  if (tabs.length !== 2) fail(`页签数量 ${tabs.length} ≠ 2`);
+  const tabTitle = await page.getAttribute('.wb-page-tab:nth-child(2)', 'title');
+  if (!tabTitle || !tabTitle.includes('近似')) fail(`无 HTML 页签未标近似：${tabTitle}`);
+  const tabText = await page.textContent('.wb-page-tab:nth-child(1)');
+  if (!/^01/.test(tabText.trim())) fail(`页签非「01. 标题」形态：${tabText.slice(0, 20)}`);
+  console.log(`PASS 文本页签（2 个，「01·标题」形态，近似标注在 title）→ ${tabText.trim().slice(0, 24)}`);
 
-  await page.click('.wb-thumb:nth-child(2)');
+  await page.click('.wb-page-tab:nth-child(2)');
   await page.waitForSelector('.wb-figure img', { timeout: 15000 });
   // flow-4：成果视图内嵌页级 composer（免切换）
   await page.waitForSelector('.wb-page-composer .chip-accent', { timeout: 3000 });

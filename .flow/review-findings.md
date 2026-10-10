@@ -52,3 +52,10 @@ Round 2 **PASS**：H1 真插话（busy 分支 POST /chat→steer+送达反馈）
 
 R1 FAIL：Major 大图预览缺 ?t= cache-bust（轮末不刷新）；Low lastReply 误取系统提示；Info 插话缺 title。
 R2 PASS：Major ?t=+key 双保险；Low/Info 修；smoke 18 项（新增 cache-bust 断言）+ verify 59 用例亲跑绿。残余（不阻塞）：lastReply 前缀过滤偏宽（真实回复以「已」开头会被排除）；pptx 为 null 时 t 恒 0（与缩略图一致）。
+
+
+---
+
+# flow-5 REVIEW（2026-10-11）
+
+单轮 PASS（1 Low 死 CSS + 2 Info）：①.wb-thumb 4 行死 CSS 已删（rg=0，verify/smoke 复跑绿）；②proposal 960→980 措辞统一；③active 高亮类断言可选补强（未做，选中态已有间接验证）。
