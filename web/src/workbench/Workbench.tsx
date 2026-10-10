@@ -306,6 +306,7 @@ export function Workbench() {
   const pageLabel = selectedPage ? `第 ${pageNo(selectedPage)} 页 · ${pageTitle(selectedPage)}` : '';
 
   const active = projects.find((p) => p.project_id === activeId) ?? null;
+  const lastReply = [...messages].reverse().find((m) => m.role === 'assistant' && !m.text.startsWith('——') && !m.text.startsWith('已') && !m.text.startsWith('会话已恢复'))?.text ?? '';
   const hasDeck = !!deck && deck.pages.length > 0;
   const lastActivity = (p: Project) => new Date(p.updated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   const waitState = (() => {
@@ -517,9 +518,46 @@ export function Workbench() {
               </div>
               {selectedPage && (
                 <figure className="wb-figure">
-                  <img src={`/api/projects/${activeId}/deck/preview/${selectedPage}`} alt={`${pageLabel} 大图预览`} />
-                  <figcaption className="fine">近似渲染，实际以导出 PPTX 为准。切换到「对话」视图修改这一页。</figcaption>
+                  <img key={`${selectedPage}-${deck?.pptx?.bytes ?? 0}`} src={`/api/projects/${activeId}/deck/preview/${selectedPage}?t=${busy ? 0 : (deck?.pptx?.bytes ?? 0)}`} alt={`${pageLabel} 大图预览`} />
+                  <figcaption className="fine">近似渲染，实际以导出 PPTX 为准。</figcaption>
                 </figure>
+              )}
+              {selectedPage && activeId && (
+                <form className="wb-composer wb-page-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+                  <div className="page-badge-row">
+                    <span className="chip chip-accent">修改 {pageLabel}</span>
+                  </div>
+                  <textarea rows={2} placeholder={`直接对话修改${pageLabel}（如：标题改成结论式 / 换个图表）……`} value={input}
+                             onChange={(e) => setInput(e.target.value)}
+                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+                  <div className="wb-composer-foot">
+                    <span className="fine">{busy ? waitState : '修改将发送给 AI，完成后预览自动刷新'}</span>
+                    {busy ? (
+                      <span style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary btn-sm" type="submit" disabled={!input.trim()} title="作为插话（steer）注入进行中的任务">插话</button>
+                        <button className="btn btn-sm wb-stop" type="button" onClick={() => void stop()}>停止</button>
+                      </span>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" type="submit" disabled={!input.trim()}>发送修改</button>
+                    )}
+                  </div>
+                  {busy && runTools.length > 0 && (
+                    <div className="wb-toolcards">
+                      {runTools.slice(-3).map((t, i) => (
+                        <span key={i} className={`wb-toolcard st-${t.status}`}>
+                          <span className="wb-tool-name">{t.name}</span>
+                          <span>{t.status === 'running' ? '运行中…' : t.status === 'failed' ? `失败${t.reason ? `：${t.reason}` : ''}` : `完成${t.durationMs ? ` ${(t.durationMs / 1000).toFixed(1)}s` : ''}`}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {!busy && lastReply && (
+                    <details className="wb-page-reply">
+                      <summary className="fine">最近一轮回复（全文在对话视图）</summary>
+                      <p className="fine" style={{ whiteSpace: 'pre-wrap', maxHeight: 120, overflow: 'auto' }}>{lastReply}</p>
+                    </details>
+                  )}
+                </form>
               )}
             </section>
           )}

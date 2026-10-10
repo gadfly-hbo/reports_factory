@@ -158,3 +158,5 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica 
 .page-badge-row { margin-bottom: 6px; }
 .wb-item { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .wb-item .fine { font-size: .68rem; }
+.wb-page-composer { margin-top: 10px; align-self: stretch; max-width: 720px; }
+.wb-page-reply summary { cursor: pointer; margin-top: 4px; }

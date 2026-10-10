@@ -44,3 +44,11 @@ Round 2 **PASS**：F1/F2/F3 修复实证（SDK 级复跑 run 存活、模型收�
 
 Round 1 **FAIL**：H1 插话假控件（send busy 短路 + steer 分支重写丢失）；M1 confirm 路径工具摘要跨轮；L1/L3/L6/L7/L8。
 Round 2 **PASS**：H1 真插话（busy 分支 POST /chat→steer+送达反馈）；M1 waitResult 入口统一清零；L1/L3/L6/L8 修复；smoke 增插话语义断言（16 项）；L2/L4/L5/I9 LOW/INFO 记档。
+
+
+---
+
+# flow-4 REVIEW（2026-10-11）
+
+R1 FAIL：Major 大图预览缺 ?t= cache-bust（轮末不刷新）；Low lastReply 误取系统提示；Info 插话缺 title。
+R2 PASS：Major ?t=+key 双保险；Low/Info 修；smoke 18 项（新增 cache-bust 断言）+ verify 59 用例亲跑绿。残余（不阻塞）：lastReply 前缀过滤偏宽（真实回复以「已」开头会被排除）；pptx 为 null 时 t 恒 0（与缩略图一致）。

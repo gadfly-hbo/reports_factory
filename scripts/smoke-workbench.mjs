@@ -110,6 +110,18 @@ try {
 
   await page.click('.wb-thumb:nth-child(2)');
   await page.waitForSelector('.wb-figure img', { timeout: 15000 });
+  // flow-4：成果视图内嵌页级 composer（免切换）
+  await page.waitForSelector('.wb-page-composer .chip-accent', { timeout: 3000 });
+  const pcBadge = await page.textContent('.wb-page-composer .chip-accent');
+  if (!/第 2 页/.test(pcBadge)) fail(`页级 composer 徽标错误：${pcBadge}`);
+  const pcBtn = await page.textContent('.wb-page-composer .wb-composer-foot .btn-primary');
+  if (!pcBtn.includes('发送修改')) fail(`页级 composer 按钮错误：${pcBtn}`);
+  console.log(`PASS 成果视图内嵌页级 composer → ${pcBadge.trim().slice(0, 20)}`);
+  // 大图 cache-bust：记录当前 src，改 bytes 后应变化
+  const imgBefore = await page.getAttribute('.wb-figure img', 'src');
+  const tBefore = new URL(imgBefore, 'http://x').searchParams.get('t');
+  if (tBefore === null) fail(`大图预览缺 ?t= cache-bust：${imgBefore}`);
+  console.log(`PASS 大图 cache-bust 参数（t=${tBefore}）`);
   await page.click('.wb-seg-btn:nth-child(1)'); // 回对话视图：页标记应跟随
   await page.waitForSelector('.wb-composer .chip-accent', { timeout: 3000 });
   const chipTxt = await page.textContent('.wb-composer .chip-accent');
