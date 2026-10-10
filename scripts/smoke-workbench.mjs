@@ -124,6 +124,23 @@ try {
   const tBefore = new URL(imgBefore, 'http://x').searchParams.get('t');
   if (tBefore === null) fail(`大图预览缺 ?t= cache-bust：${imgBefore}`);
   console.log(`PASS 大图 cache-bust 参数（t=${tBefore}）`);
+
+  // 一键重新生成（flow-6 迭代③）：stub 捕获请求体，断言 page 与固定指令
+  await page.route('**/api/projects/*/chat', async (route) => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({ json: { ok: true, mode: 'run', sessionId: 'x' } });
+    globalThis.__regenBody = body;
+  });
+  await page.route('**/api/projects/*/agent/result', (route) => route.fulfill({ json: { active: false, status: 'succeeded', value: '已重新生成。' } }));
+  await page.waitForSelector('.wb-regen:not([disabled])', { timeout: 5000 }).catch(() => fail('重新生成按钮不可用（busy 卡死？）'));
+  await page.click('.wb-regen');
+  await page.waitForTimeout(600);
+  const rb = globalThis.__regenBody ?? {};
+  if (rb.page !== 'page_02') fail(`重新生成未带 page 参数：${JSON.stringify(rb).slice(0, 80)}`);
+  if (!rb.text || !rb.text.includes('重新生成')) fail(`重新生成指令缺失：${String(rb.text ?? '').slice(0, 40)}`);
+  await page.unroute('**/api/projects/*/chat');
+  await page.unroute('**/api/projects/*/agent/result');
+  console.log(`PASS 一键重新生成（page=${rb.page}，固定指令发送）`);
   await page.click('.wb-seg-btn:nth-child(1)'); // 回对话视图：页标记应跟随
   await page.waitForSelector('.wb-composer .chip-accent', { timeout: 3000 });
   const chipTxt = await page.textContent('.wb-composer .chip-accent');

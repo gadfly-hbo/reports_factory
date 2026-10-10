@@ -254,6 +254,25 @@ export function Workbench() {
     } catch (e) { setError(`恢复失败：${errMsg(e)}`); }
   };
 
+  /** 一键重新生成选中页（迭代③）：固定指令走 send 管线（页上下文注入+预览刷新） */
+  const regeneratePage = async () => {
+    if (!activeId || !selectedPage || busy) return;
+    const page = selectedPage;
+    const text = '请重新生成这一页：依据材料重新产出该页内容与版式（风格与全套保持一致），完成后 render_deck 重渲染。';
+    lastUserText.current = text; // 失败重试语义与手动消息一致
+    setMessages((m) => [...m, { role: 'user', text: `【重新生成 第 ${pageNo(page)} 页 · ${pageTitle(page)}】` }]);
+    setRunTools([]);
+    setBusy(true);
+    setError(null);
+    try {
+      await post(`/api/projects/${activeId}/chat`, { text, page });
+      await waitResult(activeId);
+    } catch (e) {
+      setMessages((m) => [...m, { role: 'assistant', text: `重新生成失败：${errMsg(e)}`, failed: true, retry: true }]);
+      setBusy(false);
+    }
+  };
+
   const stop = async () => {
     if (!activeId) return;
     try { await post(`/api/projects/${activeId}/agent/stop`, {}); } catch (e) { setError(errMsg(e)); }
@@ -525,6 +544,9 @@ export function Workbench() {
                 <form className="wb-composer wb-page-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
                   <div className="page-badge-row">
                     <span className="chip chip-accent">修改 {pageLabel}</span>
+                    <button type="button" className="btn btn-ghost btn-sm wb-regen" disabled={busy}
+                            title="依据材料重新产出这一页（风格与全套一致）"
+                            onClick={() => void regeneratePage()}>↻ 重新生成本页</button>
                   </div>
                   <textarea rows={2} placeholder={`直接对话修改${pageLabel}（如：标题改成结论式 / 换个图表）……`} value={input}
                              onChange={(e) => setInput(e.target.value)}

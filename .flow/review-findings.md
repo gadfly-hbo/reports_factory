@@ -59,3 +59,10 @@ R2 PASS：Major ?t=+key 双保险；Low/Info 修；smoke 18 项（新增 cache-b
 # flow-5 REVIEW（2026-10-11）
 
 单轮 PASS（1 Low 死 CSS + 2 Info）：①.wb-thumb 4 行死 CSS 已删（rg=0，verify/smoke 复跑绿）；②proposal 960→980 措辞统一；③active 高亮类断言可选补强（未做，选中态已有间接验证）。
+
+
+---
+
+# flow-6 REVIEW（2026-10-11）
+
+单轮 PASS。开发插曲：按钮漏写 onClick 成假控件——被本次新增 smoke route-stub 断言当场抓住（假控件防线首次实战生效）。Low（regen 失败重试不发 page）已顺手修；2 Info 记档。
