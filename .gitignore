@@ -37,3 +37,5 @@ samples/**/*.pptx
 samples/**/*.pdf
 samples/**/page-*.png
 web-dist/
+# deck 渲染兜底符号链接（R1-5）
+data/*/node_modules

@@ -1,133 +1,137 @@
-# M10 Tasks：垂直切片（tracer bullets）
+# Tasks：对话式自主 PPT Agent 重构收尾（S3–S6）
 
-> spec 链：proposal.md → prd.md → ui-contract.md（demo 已批准）→ 本拆解。切片自批准（ISSUES 规则）；动工审批门由大改造约定另设。
-> 依赖基本沿主流程线性：S1 清场 → S2 地基 → S3–S7 沿六步 → S8 收口。每片端到端可验证。
+拆解自 `.flow/prd.md`（US1–23 + G1–G8 + UI 合同 .flow/ui-contract.md）。自批准（dev-flow ISSUES 规则），依赖关系如下。删除类工作全部压到 T7（硬约束：S5 验收后执行）。
 
-- [x] S1. 清场与壳层六步化（删除报告工厂 + PPT 项目骨架）
-- [x] S2. pi-agent-core 适配层 + PPT skill 骨架
-- [ ] S3. 上传资料与读取理解（pdf/图片 + checkpoint）
-- [x] S4. 框架生成与确认锁定
-- [x] S5. 逐页生成（护栏/checkpoint/预算）+ 样张盲评检查点（代码完成；样张盲评待用户）
-- [x] S6. 逐页编辑（手工直改 + agent 改写 + 删页）
-- [x] S7. 审核发布与三格式导出（PPTX/HTML/PDF）
-- [ ] S8. 真调准入（§7.5）+ 合规收口 + 视觉门
+- [x] T0. 账本崩溃恢复负例（红队#2，prefactoring）
+- [x] T1. 材料通道垂直切片（上传→提取落盘→agent 可读）
+- [x] T2. 框架提案垂直切片（propose_outline + 提案卡 + 确认流）
+- [x] T3. 自主生成垂直切片（deck 约定 + render_deck + 生成进行态 UI）
+- [x] T4. 逐页对话编辑垂直切片
+- [x] T5. QA 与三格式导出垂直切片
+- [x] T6. 会话恢复 + 运行详情抽屉 + 状态完备性垂直切片（R1 补齐：设置页/失败分类/空页提示/恢复分隔线/用量页签）
+- [x] T7. 旧产品清理 + README + 真调端到端冒烟（依赖 T4/T5/T6 全部完成）
 
 ---
 
-## S1. 清场与壳层六步化
+## T0. 账本崩溃恢复负例
 
-### What to build
-产品收敛第一步：删除全部非 PPT 面向用户的功能及其专属代码（报告编修链、体检/证据链、docx/md 报告渲染、五阶段壳层语义、旧视图与旧路由、报告样张与回归脚本），保留围栏/传输/渲染/存储/同步平台资产。同时立起新骨架：PPT 项目 schema（brief/sources/framework/pages/publish_state/privacy_policy，G6 旧项目不显示）、六步路由表与步骤解锁规则、Sidebar 六步导航与项目列表改造、StatusBar 发布状态徽、六步空壳视图。删除清单以 prd.md ID1 为准（KA-4 依赖盘点背书）。
+**What to build**：进程在 reserve 后 settle 前崩溃时，重启后同任务 claim 报 TASK_BUSY（合同正确），但宿主必须有一条**显式恢复路径**（核查后释放残留 lease），否则任务永久卡死。给 FileBudgetStore 增加宿主显式 `releaseActive(taskId)`（审计可见的恢复动作），并补负例测试证明：崩溃模拟 → TASK_BUSY → 显式恢复 → 可续。
 
-### Acceptance criteria
-- [ ] 旧报告路由/视图/专属模块不再存在（rg 验证零引用）；旧路由访问重定向到当前步骤
-- [ ] 围栏与平台资产（pi-transport/budget/outbound/privacy-gate/recording/gateway/client/storage/dataSync）保留且测试通过
-- [ ] 新 PPT 项目可创建（名称/简介/框架模板/隐私策略），旧 data/proj_* 文件在但 UI 不可见
-- [ ] 六步路由 + 解锁规则（upload→understand→framework→generate→page-edit→publish）在 web 端可走，空壳视图占位
-- [ ] `npm run verify` 全绿（测试随功能删改后全量通过）
+**Acceptance criteria**
+- [ ] 活动 lease 未释放时，新实例 claim 同任务 → TASK_BUSY（已有语义，测试固化）
+- [ ] 宿主显式恢复动作存在且生效：恢复后同任务可重新 claim，历史用量保留不清零
+- [ ] 恢复动作写入审计文件（JSONL 一行）
 
-### Blocked by
-None — can start immediately.
+**Blocked by**: None
 
-## S2. pi-agent-core 适配层 + PPT skill 骨架
+**US/来源**: 红队#2；PRD 测试决策
 
-### What to build
-安装钉版 `@earendil-works/pi-agent-core@0.86.1`；在适配层（既有 pi-transport 收敛点旁）新增 agent 集成模块：AgentHarness 装配（session=项目、operation=工人单发、`kind:"skill"` 调用、images 入参），skills 经 loadSkills 装载 + formatSkillsForSystemPrompt 注入；遥测桥接审计留痕与预算三线钩子。PPT skill 落为 SKILL.md 目录形态（守则单源迁移自 ai-ppt-prompt.ts，含 0 emoji/数字护栏/版式思想层规则；GordenSun detail.json 协议作版式知识参照）。装配形态若与工人单发冲突，按 G3 降级阶梯（A→C：loadSkills+pi-ai 直调）执行并披露。§10 坑表逐条规避（convertToLlm/错误重抛/usage 回填/<think> 剥离等）。
+---
 
-### Acceptance criteria
-- [ ] 业务代码零直接 `@earendil-works/*` import（适配层单点收敛，§4.1）
-- [ ] PPT skill 经 pi skills 机制装载并在 system prompt 中可见（夹具断言）
-- [ ] 录制回放夹具闭环（record→replay 全绿）；遥测→审计、预算钩子有夹具证据
-- [ ] MiniMax-M3 + mimo-v2.6-flash 真实端点单轮/多轮联调通过（§7.5 初验，S8 全链终验）
-- [ ] 合规文档记 D-1 撤销与新装配形态
+## T1. 材料通道垂直切片
 
-### Blocked by
-- S1（清场后适配层改造不被旧链干扰）
+**What to build**：上传即提取：md/csv 原文直读；pdf/docx/xlsx 上传时提取文本落盘（沿现有 ingest 提取器，产物写到 sources 提取文件）；图片走 vision 预理解→文字描述落盘（经 transport 缝可离线测）。agent 侧：材料索引文件（manifest）写入项目目录，agent 用 read 工具读提取文本与索引。UI：composer 附件列表带解析状态（解析中/就绪/失败，沿 UI 合同 W2）。
 
-## S3. 上传资料与读取理解
+**Acceptance criteria**
+- [ ] 四类文件上传后存在提取文本产物，解析状态正确（离线测试覆盖 md/csv；pdf/docx 用夹具；图片走合成 transport）
+- [ ] manifest 列出全部材料（文件名/类型/提取文件路径/状态）
+- [ ] UI 上传后能看到解析状态流转（组件级测试或冒烟走查记录）
+- [ ] 解析失败单文件不影响其他文件，UI 显示失败原因
 
-### What to build
-六步第 1–2 步端到端：上传（md/docx/xlsx/csv/pdf/图片，格式不限前端不拦截；ingest 扩 unpdf 文本提取与图片 base64 化）、移除（M-U1：连摘要与 checkpoint 一并删，失败文件不再阻塞）、逐文件 LLM 单发理解摘要（结构化 schema：要点/数据要点/**每条带主题标签**——为 S5 语义投影建索引；图片走 vision，CN 端点行为探针验证；长 PDF 代码确定性分段、逐段摘要 map）、逐文件 checkpoint 持久化（G11）、理解视图（进度 N/M/展开摘要/失败重试）。PPT skill 在理解环节注入（版式无关，但守则中的「不编造/来源绑定」适用）。
+**Blocked by**: None
 
-### Acceptance criteria
-- [ ] 六类格式文件上传→解析→摘要→持久化全链路可演示；解析失败明示原因可移除可重试
-- [ ] pdf（中文 CID 字体）文本提取验证；图片经 vision 出摘要（真调探针 ≥1 次通过）
-- [ ] checkpoint：重进不重跑已完成文件；移除文件后摘要与 checkpoint 同步清除
-- [ ] 预算/审计在理解调用上生效（计量/留痕有夹具证据）
-- [ ] 视图与 ui-contract S3/S4 一致（含冲突提示、失败面板）
+**US/来源**: US2、G3、UI 合同 W2
 
-### Blocked by
-- S1、S2
+---
 
-## S4. 框架生成与确认锁定
+## T2. 框架提案垂直切片
 
-### What to build
-六步第 3 步端到端：框架 schema（`{page_id, title, page_type, intent, source_hint?}[]`，G7）持久化于项目；材料摘要合集 + brief → 单发生成框架（工人模式，框架模板作页序列倾向，G10）；框架确认视图（改题/删页/调序/加页，确认后锁定只读）；未确认不可生成（服务端围栏同拒，N1）。
+**What to build**：自定义工具 `propose_outline`（页数组 title/page_type/intent/source_hint + ≤3 澄清问题）；宿主把提案存项目状态（版本号、确认态、历史版本）；outline 路由（读/编辑保存/确认；确认=用户定稿或聊天确认均入会话上下文）；PPT skill 增加框架梳理守则；UI 提案卡（内联编辑/删页/加页/调序/澄清问题区/版本折叠/「按此框架生成」+ 聊天意见回复入口，沿 UI 合同 W3）。守则约束：读完材料先提案，确认前不生成。
 
-### Acceptance criteria
-- [ ] 生成→编辑→确认→锁定全链路可演示；确认后无任何解锁控件且服务端拒绝改框架
-- [ ] 未确认框架时生成端点 4xx（负例测试）
-- [ ] 框架生成失败/超时有重试路径；预算/审计生效
-- [ ] 视图与 ui-contract S5 一致
+**Acceptance criteria**
+- [ ] 合成 assistant toolCall 驱动 propose_outline → 提案落盘（版本 v1）且工具返回模型可见成功文本（SessionHost 主缝）
+- [ ] 用户编辑保存 → 同版本更新；聊天意见 → agent 新提案版本+1（G4）
+- [ ] 确认路由后：确认态持久 + 确认上下文注入会话（宿主测试断言后续 prompt 含确认大纲）
+- [ ] 未确认时守则存在（skill 文本断言）；UI 提案卡交互可用（走查记录）
 
-### Blocked by
-- S3
+**Blocked by**: T1（来源标签需材料 manifest）
 
-## S5. 逐页生成 + 样张盲评检查点
+**US/来源**: US3–6、G1/G4、UI 合同 W3
 
-### What to build
-六步第 4 步端到端（产品核心）：按已确认框架逐页生成（逐页工人单发：框架页 + **语义投影材料上下文**——按页意图×理解阶段主题标签匹配命中摘要段落连同来源装进上下文，投影不足时插入一次「检索单发」兜底（页意图+候选清单→选中条目，schema 校验，固定轮次）→ 页内容 schema，经 ReportSpec 演进层驱动 render/pptx.ts；数字护栏/uncovered 不编造/来源引用沿用 M7 范式）、逐页 checkpoint 断点续跑（重进跳过已完成）、页级失败单独重试、预算逐页复查 + 失败计量、生成视图（逐页状态/进度/继续生成）。**本切片内置样张盲评检查点（KA-1）：用真实材料渲 1–2 页真 PPTX 样张呈用户盲评方向，不满意则停止全线先重做视觉系统（kill criterion）。**
+---
 
-### Acceptance criteria
-- [ ] 确认框架后一键生成整套，每页内容有材料支撑、0 emoji（渲染断言）
-- [ ] 断点续跑：中断后重进「继续生成」跳过已完成页；页级重试只跑失败页
-- [ ] 预算封顶触发即停止并明示（负例）；审计留痕含 page_fallback 粗粒度事件
-- [ ] 出站白名单对生成路径生效（负例）
-- [ ] 视图与 ui-contract S6 一致
-- [ ] 样张盲评：真实材料 1–2 页 PPTX 交用户，方向确认后放行 S6+
+## T3. 自主生成垂直切片
 
-### Blocked by
-- S4
+**What to build**：deck 工件约定（`deck/pages/page_XX.js` 导出 `buildSlide(pptx)` + `deck/deck.js` 汇总）；自定义工具 `render_deck`（node 执行 → zip 头/slide 数校验 → 每页 HTML 预览 → 返回成功/错误详情）；PPT skill 扩展 deck 组织规范与守则；确认后 agent 自主写页并渲染直至成功；UI 生成进行态（SSE 事件流卡片/steer 插话/停止）与 deck 页列表+预览路由。
 
-## S6. 逐页编辑
+**Acceptance criteria**
+- [ ] render_deck 单测：好 js → deck.pptx 落盘 + 校验通过 + 预览生成；坏 js（语法错）→ 错误详情返回模型（自纠素材）；无 slide → 校验失败
+- [ ] SessionHost 缝：合成 toolCall（write_code 语义由 write 工具 + render_deck 承担）→ deck 产物落盘
+- [ ] 页列表/预览路由：GET 页清单与 preview PNG（沿近似预览渲染）
+- [ ] UI 生成态：事件流卡片随 SSE 更新、可 steer、可停止（走查记录）
+- [ ] 真调样张首验（红队#1 最便宜测试）：8 页样例材料端到端出 deck.pptx（脚本，不进 CI）
 
-### What to build
-六步第 5 步端到端：手工直改纯文字字段（headline/bullets 文本/table_note/图表标题，G8）持久化；agent 整页重生成（自然语言指令 + 当前页 + 材料上下文 → 单发变换，出站白名单 fail-closed，拒绝时面板明示原因可重试）；编辑层删页（锁页/最后一页拒删，M6 语义；无加页）；编辑视图（页列表/编辑器/只读区说明/示意预览列）。
+**Blocked by**: T2
 
-### Acceptance criteria
-- [ ] 手工改文字保存后重进不丢（持久化断言）
-- [ ] agent 改写成功路径 + 白名单拒绝路径（负例面板明示）+ 超时重试
-- [ ] 删页：最后一页/锁页拒绝（负例）；删除后页号不重排
-- [ ] 视图与 ui-contract S7 一致
+**US/来源**: US7–11、G1、UI 合同 W4/W5
 
-### Blocked by
-- S5
+---
 
-## S7. 审核发布与三格式导出
+## T4. 逐页对话编辑垂直切片
 
-### What to build
-六步第 6 步端到端：隐私检查并入发布门（原 checks/privacy.ts 判定迁移为发布前整 deck 扫描，命中 fail-closed 不可跳过，N3）、内用/外发两级（内用草稿随时导标 draft；外发需检查通过+批准，批准持久化，内容变更自动失效，服务端二次校验 N2）、导出三格式（PPTX 复用 render/pptx.ts；HTML 新渲染器单文件翻页幻灯片；PDF 经 Playwright 打印）、发布视图（检查/批准/导出/记录）与全站发布状态徽。
+**What to build**：选中页后发送的消息由宿主注入页上下文前缀（页号/标题/page 文件路径）；守则要求 agent 用 edit 改对应 page_XX.js 后调 render_deck 重渲；UI deck 工作区（页网格缩略图/点选大图/「针对第 N 页」composer 标记，沿 UI 合同 W5）。
 
-### Acceptance criteria
-- [ ] 隐私命中即阻断外发（负例：命中明细常驻、无跳过入口）
-- [ ] 未批准外发导出被拒（负例：服务端二次校验）；批准持久化 + 内容变更失效（负例）
-- [ ] 三格式产物断言：PPTX（slide 数/0 emoji/zip 可解/可编辑）、HTML（单文件/翻页/无外部依赖）、PDF（页数=页数）
-- [ ] 导出记录与 Inspector/StatusBar 状态如实（未发布/内用草稿/已外发）
-- [ ] 视图与 ui-contract S8 一致
+**Acceptance criteria**
+- [ ] 宿主测试：选中第 2 页发消息 → 会话 prompt 含页上下文
+- [ ] 端到端（合成 transport）：edit 工具改 page js → render_deck → 预览刷新（产物 mtime/内容断言）
+- [ ] UI：页标记可见、改后预览刷新（走查记录）
 
-### Blocked by
-- S5、S6
+**Blocked by**: T3
 
-## S8. 真调准入 + 合规收口 + 视觉门
+**US/来源**: US12–13、UI 合同 W5
 
-### What to build
-上线前收口：§7.5 硬卡点全链终验（MiniMax-M3 + mimo-v2.6-flash 单轮 + 多轮 + 带图探针 + skill 注入下 schema 遵从；probe 脚本留仓）、AGENT-RUNTIME §11 合规清单逐项三态核对、合规文档更新（D-1 撤销/装配形态/§10 坑表复核）、全站视觉门（visual-judge 子代理过 ui-contract 全 surfaces；额度受限则降级自查并披露）、双机同步验证。
+---
 
-### Acceptance criteria
-- [ ] §7.5 单轮/多轮/带图全绿（真实端点证据）
-- [ ] §11 清单逐项带证据锚点更新入 docs/agent-runtime-compliance.md
-- [ ] 视觉门 pass（或降级自查 + 披露）
-- [ ] `npm run verify` 全绿；macbook 同步演练通过
+## T5. QA 与三格式导出垂直切片
 
-### Blocked by
-- S7
+**What to build**：`qa_deck`（zip/slide 数/文本框非空结构校验 + checks/privacy 精简建议性输出，不阻断）；`export_deck`（pptx=deck 工件直出；html=页面 HTML 合集；pdf=Playwright 打印合集）；导出记录沿用 exports 存储 + 下载路由（已有）；UI QA 卡与导出区（沿 UI 合同 W6）。
+
+**Acceptance criteria**
+- [ ] qa_deck 单测：好 deck → pass 明细；缺 slide/坏 zip → 结构 flag；建议性输出含隐私项
+- [ ] export_deck 三格式落盘 exports 记录 + 文件可下载（inject 测试）
+- [ ] UI：QA 卡呈现 + 三格式下载 + 记录表（走查记录）
+
+**Blocked by**: T3
+
+**US/来源**: US14–16、G8、UI 合同 W6
+
+---
+
+## T6. 会话恢复 + 运行详情 + 状态完备性垂直切片
+
+**What to build**：重启恢复 UI（历史线程从 host.history 渲染，服务重启续聊）；运行详情抽屉（SSE 事件时间线：工具名/模型/耗时/状态 + 审计计数）；失败态完备（模型不可用/工具失败/部分页失败的真实原因 + 重试/停止按钮，沿 UI 合同 W7/W9）；空态（无材料/未开始）。
+
+**Acceptance criteria**
+- [ ] 服务重启（新 host 实例）后 history 可渲染、续聊成功（已有 host 测试，补 API 级）
+- [ ] 抽屉时间线渲染真实 SSE 事件（组件测试或走查记录）
+- [ ] 失败态展示真实原因与可行下一步（合成失败 transport 驱动）
+
+**Blocked by**: T3
+
+**US/来源**: US17–22、UI 合同 W7/W8/W9
+
+---
+
+## T7. 旧产品清理 + README + 真调端到端冒烟
+
+**What to build**：**前置硬约束：T4/T5/T6 验收通过（S5 前端可用）后才执行删除**。删除六步 workbench 与路由、LlmStageClient/recording/agent-loop/budget(旧)/outbound(旧)/probe-task、render/{pptx,deck-html,deck-pdf}、六步与报告工厂 schema、旧前端视图与样式、对应旧测试；删除项目=项目及其会话与产物不可恢复（UI 合同语义，确认弹窗）；README 重写为新形态；最终 `npm run verify` 全绿 + 真调端到端冒烟（上传→对话→提案→确认→生成→改页→导出）。
+
+**Acceptance criteria**
+- [ ] 旧模块/视图/测试删除后 tsc 与 vitest 全绿（无死引用）
+- [ ] 删除项目语义落地（确认弹窗 + 删除后不可恢复 + 列表移除）
+- [ ] README 反映新入口与流程
+- [ ] 真调端到端冒烟通过并留证（脚本输出）
+
+**Blocked by**: T4, T5, T6
+
+**US/来源**: US23、US19、UI 合同 W1/W9

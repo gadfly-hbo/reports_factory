@@ -1,29 +1,10 @@
 import { z } from 'zod';
-import { BrandConfigSchema } from './brand.js';
-import { DEFAULT_TEMPLATE_ID } from './template.js';
-
-/** 项目与存储对象（proposal §9.1）：首期用结构化文件 + 轻量元数据，不建库。 */
 
 export const PrivacyPolicySchema = z.enum([
-  'local_only', // 禁止外部模型（F12：未授权材料不得发送外部服务）
-  'allow_external_with_approval', // 每次出站需用户确认
-  'allow_external', // 已授权范围内可出站
+  'local_only',
+  'allow_external_with_approval',
+  'allow_external',
 ]);
-
-/**
- * 六步主流程步骤键（M10 D2，顺序不可变）：
- * upload → understand → framework → generate → page-edit → publish。
- * 解锁状态由项目数据推导（workbench.stepsFor），不单独落盘。
- */
-export const PptStepSchema = z.enum([
-  'upload',
-  'understand',
-  'framework',
-  'generate',
-  'page-edit',
-  'publish',
-]);
-export type PptStep = z.infer<typeof PptStepSchema>;
 
 export const ProjectSchema = z.object({
   project_id: z.string().min(1),
@@ -33,20 +14,7 @@ export const ProjectSchema = z.object({
   purpose: z.string().optional(),
   created_at: z.string(),
   updated_at: z.string(),
-  privacy_policy: PrivacyPolicySchema.default('allow_external'), // 用户 2026-10-07 裁决：全面解除隐私策略，PPT 生成不再被 local_only 围栏阻断
-  /** 旧五阶段字段（M4-M9 遗留）：M10 起不再推进，仅为旧项目数据可解析保留 */
-  stage: z.string().optional(),
-  brand: BrandConfigSchema.optional(),
-  /** 框架模板引用（M10 G10：决定框架页序列倾向）；缺省回退运营复盘 */
-  template_id: z.string().min(1).default(DEFAULT_TEMPLATE_ID),
-  /** 项目级预算覆盖（三线：调用次数/墙钟秒/轮次；env 优先，见 model/budget.ts） */
-  budget: z
-    .object({
-      max_calls: z.number().int().positive().optional(),
-      max_wall_seconds: z.number().int().positive().optional(),
-      max_turns: z.number().int().positive().optional(),
-    })
-    .optional(),
+  privacy_policy: PrivacyPolicySchema.default('allow_external'), // 用户 2026-10-07 裁决：全面解除隐私策略
 });
 
 export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'pdf', 'bundle']);

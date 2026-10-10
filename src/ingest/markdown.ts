@@ -1,5 +1,5 @@
 import { emptyIngestResult, type EvidenceRef, type IngestResult } from '../schema/assets.js';
-import type { Claim } from '../schema/report-spec.js';
+import type { Claim } from '../schema/assets.js';
 
 /**
  * Markdown 显式标记解析（G11 约定）：

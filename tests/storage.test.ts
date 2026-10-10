@@ -1,147 +1,81 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { WorkspaceStore } from '../src/storage/workspace.js';
-import { trendPageSpec } from './fixtures/trend-page.spec.js';
 
 function tempStore(): { store: WorkspaceStore; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), 'rs-store-'));
   return { store: new WorkspaceStore(dir), dir };
 }
 
-describe('项目 CRUD 与存储布局（F01）', () => {
-  it('创建项目：目录结构与 project.json 就位', async () => {
+describe('workspace 存储（T7 现行合同）', () => {
+  it('项目 CRUD：kind=ppt、列表排序、更新、删除整目录', async () => {
     const { store, dir } = tempStore();
     try {
-      const p = await store.createProject({ title: 'Q3 经营复盘', purpose: '经营例会' });
-      expect(p.title).toBe('Q3 经营复盘');
-      expect(p.privacy_policy).toBe('allow_external'); // 用户裁决：默认全面解除隐私
-      for (const sub of ['sources', 'revisions', 'exports']) {
-        expect(existsSync(join(dir, p.project_id, sub))).toBe(true);
-      }
-      const manifest = JSON.parse(readFileSync(join(dir, p.project_id, 'project.json'), 'utf-8'));
-      expect(manifest.project_id).toBe(p.project_id);
+      const a = await store.createProject({ title: '甲', purpose: '复盘' });
+      expect(a.kind).toBe('ppt');
+      const b = await store.createProject({ title: '乙' });
+      const list = await store.listProjects();
+      expect(list.map((p) => p.project_id).sort()).toEqual([a.project_id, b.project_id].sort());
+
+      const updated = await store.updateProject(a.project_id, { title: '甲改' });
+      expect(updated.title).toBe('甲改');
+      expect((await store.getProject(a.project_id))!.title).toBe('甲改');
+
+      await store.deleteProject(b.project_id);
+      expect(await store.getProject(b.project_id)).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('复制项目：独立副本，互不影响', async () => {
-    const { store, dir } = tempStore();
-    try {
-      const p = await store.createProject({ title: '原项目' });
-      await store.saveRevision(p.project_id, trendPageSpec, '初稿');
-      const copy = await store.copyProject(p.project_id, '副本');
-      expect(copy.project_id).not.toBe(p.project_id);
-      expect(copy.title).toBe('副本');
-      const origRevs = await store.listRevisions(p.project_id);
-      const copyRevs = await store.listRevisions(copy.project_id);
-      expect(copyRevs.length).toBe(origRevs.length);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('删除项目：原件、派生结果与目录一并清理', async () => {
-    const { store, dir } = tempStore();
-    try {
-      const p = await store.createProject({ title: '将删除' });
-      await store.saveSourceAsset(p.project_id, {
-        filename: 'summary.csv',
-        content: Buffer.from('月份,销售额\n1月,505\n'),
-        media_type: 'text/csv',
-        kind: 'csv',
-      });
-      const projectDir = join(dir, p.project_id);
-      expect(existsSync(projectDir)).toBe(true);
-      await store.deleteProject(p.project_id);
-      expect(existsSync(projectDir)).toBe(false);
-      expect(await store.getProject(p.project_id)).toBeNull();
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe('材料原件与哈希（F02 基础）', () => {
-  it('保存来源：原件落盘、sha256 一致、可重新读取', async () => {
+  it('材料资产：保存/列表/读取/派生/删除', async () => {
     const { store, dir } = tempStore();
     try {
       const p = await store.createProject({ title: '材料' });
-      const content = Buffer.from('# 结论\n\n销售额下降。', 'utf-8');
       const asset = await store.saveSourceAsset(p.project_id, {
-        filename: 'conclusion.md',
-        content,
-        media_type: 'text/markdown',
-        kind: 'markdown',
+        filename: '结论.md', content: Buffer.from('# 结论'), media_type: 'text/markdown', kind: 'markdown', logical_key: 'source:local:结论',
       });
-      const expected = createHash('sha256').update(content).digest('hex');
-      expect(asset.file_hash).toBe(expected);
-      const read = await store.readSourceContent(p.project_id, asset.source_id);
-      expect(read.toString('utf-8')).toContain('销售额下降');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
+      expect(asset.parse_status).toBe('pending');
+      expect((await store.listSourceAssets(p.project_id))).toHaveLength(1);
+      expect((await store.readSourceContent(p.project_id, asset.source_id)).toString()).toContain('结论');
 
-describe('修订与导出记录（F10/F11 基础）', () => {
-  it('保存修订 → 新进程（新 store 实例）读回完整状态（重启恢复）', async () => {
-    const { store, dir } = tempStore();
-    try {
-      const p = await store.createProject({ title: '恢复测试' });
-      await store.saveSourceAsset(p.project_id, {
-        filename: 'a.md', content: Buffer.from('材料'), media_type: 'text/markdown', kind: 'markdown',
-      });
-      await store.saveRevision(p.project_id, trendPageSpec, '初稿');
-      await store.saveExport(p.project_id, {
-        revision_id: 'rev_001',
-        format: 'pdf',
-        artifact: Buffer.from('%PDF-fake'),
-        checks: { issues: 0 },
-        is_draft: false,
-      });
+      await store.saveDerivedAssets(p.project_id, asset.source_id, { claims: [1, 2, 3] });
+      expect((await store.readDerivedAssets(p.project_id, asset.source_id))!.claims).toHaveLength(3);
 
-      // 模拟重启：新实例读回
-      const store2 = new WorkspaceStore(dir);
-      const loaded = await store2.getProject(p.project_id);
-      expect(loaded!.title).toBe('恢复测试');
-      const revs = await store2.listRevisions(p.project_id);
-      expect(revs.length).toBe(1);
-      expect(revs[0]!.spec.report_id).toBe(trendPageSpec.report_id);
-      const exportsList = await store2.listExports(p.project_id);
-      expect(exportsList.length).toBe(1);
-      const sources = await store2.listSourceAssets(p.project_id);
-      expect(sources.length).toBe(1);
+      await store.deleteSourceAsset(p.project_id, asset.source_id);
+      expect((await store.listSourceAssets(p.project_id))).toHaveLength(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('新修订不改写旧修订；新导出不改写旧导出记录', async () => {
+  it('导出记录：保存/列表/读取；新导出不改写旧记录', async () => {
     const { store, dir } = tempStore();
     try {
-      const p = await store.createProject({ title: '版本冻结' });
-      const r1 = await store.saveRevision(p.project_id, trendPageSpec, '初稿');
-      const modified = structuredClone(trendPageSpec);
-      const originalHeadline = trendPageSpec.pages[0]!.headline;
-      modified.pages[0]!.headline = '改后的封面';
-      await store.saveRevision(p.project_id, modified, '改标题');
-      const readBack = await store.getRevision(p.project_id, r1.revision_id);
-      expect(readBack!.spec.pages[0]!.headline).toBe(originalHeadline); // 旧修订未漂移
+      const p = await store.createProject({ title: '导出' });
+      const r1 = await store.saveExport(p.project_id, { revision_id: 'deck', format: 'pptx', artifact: Buffer.from('PK-first'), checks: { qa: true }, is_draft: false, export_scope: 'internal' });
+      const r2 = await store.saveExport(p.project_id, { revision_id: 'deck', format: 'html', artifact: Buffer.from('<html>'), checks: {}, is_draft: false, export_scope: 'internal' });
+      expect(r1.export_id).not.toBe(r2.export_id);
+      expect((await store.listExports(p.project_id))).toHaveLength(2);
+      expect((await store.getExport(p.project_id, r1.export_id))!.format).toBe('pptx');
+      expect((await store.getExport(p.project_id, 'exp_99'))).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
-      const e1 = await store.saveExport(p.project_id, {
-        revision_id: r1.revision_id, format: 'pdf',
-        artifact: Buffer.from('%PDF-1'), checks: { issues: 0 }, is_draft: false,
-      });
-      const before = JSON.stringify(await store.getExport(p.project_id, e1.export_id));
-      await store.saveExport(p.project_id, {
-        revision_id: r1.revision_id, format: 'pptx',
-        artifact: Buffer.from('PK-fake'), checks: { issues: 0 }, is_draft: false,
-      });
-      expect(JSON.stringify(await store.getExport(p.project_id, e1.export_id))).toBe(before);
+  it('复制项目：独立副本（sources 随拷，互不影响）', async () => {
+    const { store, dir } = tempStore();
+    try {
+      const p = await store.createProject({ title: '原' });
+      await store.saveSourceAsset(p.project_id, { filename: 'a.md', content: Buffer.from('x'), media_type: 'text/markdown', kind: 'markdown' });
+      const copy = await store.copyProject(p.project_id, '副本');
+      expect(copy.project_id).not.toBe(p.project_id);
+      expect((await store.listSourceAssets(copy.project_id))).toHaveLength(1);
+      await store.deleteSourceAsset(copy.project_id, (await store.listSourceAssets(copy.project_id))[0]!.source_id);
+      expect((await store.listSourceAssets(p.project_id))).toHaveLength(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

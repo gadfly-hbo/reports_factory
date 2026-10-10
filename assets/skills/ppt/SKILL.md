@@ -211,3 +211,42 @@ await pptx.writeFile({ fileName: 'page_04.pptx' });
 - 结构化任务只输出请求的 JSON / 代码，不附加解释或 markdown 围栏（除非工具说明要求）。
 - 字段完整：schema 里每个字段都给出（不确定的用空串/空数组/uncovered 标注，不省略键）。
 - 渲染失败时：读 stderr → 定位错误 → 改代码 → 再渲染，直到成功或确认无法修复（不超预算）。
+
+## 五、框架梳理（工作流阶段纪律）
+
+- 读完**全部**材料（materials.json 索引 + sources/*.extract.md 提取文本）后，调用 `propose_outline` 工具提出页面框架提案；**用户确认前不要开始写页面代码**。
+- 提案要求：页数克制（6–12 页，硬边界 2–24）；title 直接陈述该页结论（不写「关于XX的分析」式空标题）；intent 一句话说明该页意图；source_hint 用材料主题标签标注素材来源；另列 ≤3 个需要用户澄清的问题（材料缺口/口径/受众）。
+- 材料未覆盖的主题不要设页；不编造内容。
+- 用户在提案卡编辑或在对话里给意见后：按意见**重新调用 propose_outline 出新版本**，不要自行开始生成。
+- 只有宿主注入的「用户已确认框架」消息才算确认；确认后按确认页序自主生成，页面代码改动必须 render_deck 重渲染。
+
+
+## 六、deck 工件组织（生成阶段）
+
+- 分页：`deck/pages/page_01.mjs` 起（.mjs 保证 ESM）。每页导出构建函数：
+
+```js
+import pptxgen from 'pptxgenjs';
+export function buildSlide(pptx) {
+  const slide = pptx.addSlide();
+  // ……版式代码（见 §二 模板与 §三 案例；页面 13.33×7.5in 已由 deck.mjs 统一定义）
+  return slide;
+}
+```
+
+- 汇总：`deck/deck.mjs`——import 全部分页，定义版式后依次 buildSlide，最后输出：
+
+```js
+import pptxgen from 'pptxgenjs';
+import { buildSlide as p01 } from './pages/page_01.mjs';
+// import … 每页一行
+const pptx = new pptxgen();
+pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
+pptx.layout = 'W';
+p01(pptx);
+// p02(pptx); …
+await pptx.writeFile({ fileName: 'deck/deck.pptx' });
+```
+
+- 预览：每页同时写 `deck/pages/page_01.html`（与该页同布局的静态 HTML，1280×720，内联 CSS，同色板）。漏写预览用户无法审页。
+- 纪律：写完即调 `render_deck`；stderr 有错 → edit 修正 → 重渲染；slide 数须与确认框架一致；数字逐字来自材料。

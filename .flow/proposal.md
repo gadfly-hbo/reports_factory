@@ -1,56 +1,57 @@
-# 提案：第二次重构——收敛为纯 PPT 报告生成器（M10）
+# Proposal：Report Studio 对话式自主 PPT Agent 全面重构
 
-> 状态机 spec 源（root spec source）。来源：用户 2026-10-07 方向指令（KA-1 式回访以用户直接给方向的方式完成）。dev-flow gated 模式 + 大改造动工审批门（2026-10-05 约定）。本文件取代 M9 提案（其内容已交付并推送 78f3b83/6246838，git 历史可查）。
+来源：2026-10-10 用户重构需求讨论 + 方案 v2.1（经用户裁决修正接入路径）。本文件是本 flow 的规范事实源；PRD/任务/审查均以此为根。
 
-## 一、背景与判定史（为何重构）
+## 用户原始需求（2026-10-10，接近原文）
 
-- **M6 判定「重构失败」**（2026-10-06）：模版驱动一键生成流程压对，但产物是确定性组装的骨架式 deck（大量「待补充」页），成品感/完整度不对。
-- **M9 判定「还不是我想要的」**（2026-10-07）：MD/文本+提示词→PPTX 一站式切片，机械链路全通（MD→PPTX 端到端、0 emoji、原生可编辑、围栏全生效、249 测试绿），但用户整体仍不认可——形态层连错两次后，用户直接给出第二次重构方向（本提案），并裁定**形态级重构**。
-- 外部调研（docs/research-ai-ppt-2026-10.md）：行业标准 = 材料→大纲可改→直出完整 PPT；单页 AI 修改普及（对话式/按钮式）；导出后断链与内容审批真空是行业痛点。我们的审批工作流是差异化，保留。
-- 已排除原因（勿再怀疑）：机械链路、围栏、测试全通。缺口在设计美学/模板质量/页型结构/整体形态，用户已用本提案裁决。
+1. **前端 UI 全面重构**：读取全局设计规则 `/Users/huangbo/.agents/ui-design/DESIGN.md`（中文优先、浅色工作台、克制绿色、紧凑布局、按需展开及真实状态规则）。参考样例：`~/.agents/ui-design/examples/planning/2026-10-09/change005-v1.3-autonomous-analysis/clickable/index.html`。
+2. **功能需要大改**：
+   1) 引入最新的 pi-sdk；pi 将具有自主能力，类似 pi-coding-agent，**不再限制 agent 自由发挥**；
+   2) 整个页面入口是类似 coding agent（如 Kimi Work）的窗口：可上传附件、描述清楚需要做的 PPT 内容即可；**但需要加入帮助用户理清 PPT 框架的能力，这块需要开发，与普通 agent 不一样**；
+   3) PPT 好了以后可以进行**逐页编辑修改，也是与 agent 对话**；
+   4) 调研 Kimi 的产品 PPT 生成能力和 PPT skill（已完成，见 §调研结论）。
+3. **流程约束（2026-10-10 用户补充）**：pi-sdk 接入完成后，后续任务走 `/dev-flow` 开发流程。
 
-## 二、用户决策（close to verbatim，约束级，后续阶段不得推翻）
+## 关键裁决（用户已定，约束后续所有阶段）
 
-### D1 产品收敛
-**只做 PPT 报告生成器，其余非相关的全部删除掉。**
-- 删除范围 = 一切不以「材料→PPT」为主路径服务的功能（具体清单由 PRD/GRILL 盘点确认）。
-- 报告（docx/md 报告产物）、五阶段编排壳层、多交付物体检等非 PPT 面向用户的功能删除；底层围栏/传输/审计资产按 D3 与标准保留判断。
+- **接入路径**：经本机共享包 `pi-agent-runtime@0.4.1`（vendored tgz + hash 固定），不直用 npm `@earendil-works/*` 1.1.0，不采用 0.5.0 候选。裁决依据：AGENT-RUNTIME 标准第 1 条（产品不得直接 import Pi 包）+ RELEASE-v0.4.1「版本按用户决定使用 0.4.1」。
+- **自主度**：删除三线预算阻断；采用 0.4.1 `cumulative:'unlimited'` + 单次保护（maxOutputTokens/modelTimeoutMs/toolTimeoutMs/controlTimeoutMs 必填）+ `modelRecovery:{extraAttempts:1}`（native retry 关闭）。
+- **隐私**：沿 2026-10-07 用户裁决，默认 allow_external；出站批准门删除；导出前隐私检查降级为建议性 QA 输出。
+- **旧产品处置**：六步向导（M10）与 worker 渲染路径删除；旧项目数据保留但列表隐藏（沿 M10 G6 先例）。
+- **前端**：自研 React 工作台（不用 pi-web-ui），严格按 DESIGN.md token 与参考样例布局。
 
-### D2 生成发布主流程（用户定义，顺序不可变）
-1. **上传资料**：md、word、pdf、图片等，格式不限；
-2. **读取并理解资料**；
-3. **与用户确认 PPT 框架**（大纲确认是显式环节，非可选）；
-4. **根据框架自己组织材料并生成 PPT**（agent 自主组织，非确定性组装）;
-5. **逐页可编辑**：手工改文字内容 **或** 自然语言描述给 agent 改；
-6. **审核发布**：可导出 **PPTX、HTML、PDF** 三种格式。
+## 调研结论（已完成，作为需求输入）
 
-### D3 技术形态
-**全程用 pi-agent-core 及 skill 等来完成。**
-- 撤销 M8 偏差 D-1（此前不引 pi-agent-core）；pi-ai 已在依赖中（0.86.1），pi-agent-core 需引入（0.86.x 钉版）。
-- PPT skill 已调研：GordenSun/GordenPPTSkill 17 套中文 MIT 模板（detail.json 协议已记录）+ Z.AI/anthropics 守则思想层（已入 ai-ppt-prompt.ts）。
-- 如需其他 harness 能力开发或安装，授权进行；自研前必须先查 pi-agent-core 导出面（标准 §6）。
+- Kimi Slides：一句话+附件直出、在线编辑器+多轮对话逐页修改、感知手改；技术路线 = LLM 产中间格式（PPTD/YAML DSL）→ 真实可编辑 PPTX；原生可编辑图表；导出前多模态视觉质检（逐页截图查遮挡/溢出/对比度）；社区已逆向完整 skill（github.com/Binaryify/open-kimi-ppt-skill）。
+- Kimi Work：桌面自主 agent（任务窗口+附件+权限确认，自动调用 Slides skill）。
+- 本仓现状缺口：最终 PPTX 从 ReportSpec 重渲染，agent 逐页产物不进成品——重构后 agent 拥有 deck 工件并直接交付。
 
-## 三、延续性约束（不因重构而失效）
+## 方案 v2.1 决策表（详细设计，已获用户确认方向）
 
-1. **AGENT-RUNTIME 标准 v1.3 全程强制**：P1–P6、§4 架构强制（适配层/工具注册表/确认门/预算双线/审计/上下文装配/沙箱）、§5 决策矩阵（模式选择）、§10 坑表逐条规避、§11 合规清单为验收门、§7.5 真实单轮+多轮联调为准入硬卡点。
-2. **围栏资产延续**：写操作过门、预算三线封顶（次数/墙钟/轮次；成本线不作阻断依据）、出站白名单 fail-closed、批准持久化、审计留痕、fail-closed 默认——这些是 harness 架构事实，不删。
-3. **全局 UI 设计规范** `~/.zcode/design/DESIGN.md`（JuanerAI 蓝图 v4.2 契约版：暖灰纸感底 #f7f6f3 + 白面板 + 铁锈橘 #b44626 + 深藏青 #263442，mono 编号/分段控件/原则横条）为 UI 基线。
-4. **工程约定**：verify = `npm run verify`（typecheck+vitest+build+vite build，构建后需显式 tsc 产出 dist）；TS 5.9 勿升；pptxgenjs v4 ChartType 实例 API；双机同步拓扑（dataSync 模式）延续。
-5. **默认链**：minimax-cn/MiniMax-M3 主 + xiaomi mimo-v2.6-flash 备（§3.4/§3.4A reverse config 已沉淀于 pi-transport.ts resolveModelFor）。
+| # | 决策 |
+|---|---|
+| D1 | 依赖 `pi-agent-runtime@0.4.1`（vendor tgz），`src/agent/` 为唯一 SDK 触达点 |
+| D2 | `createSessionRuntime`：每项目一个持续会话，JSONL 存 `data/<proj>/session/`，压缩开启，重启恢复 |
+| D3 | 模型链：minimax-cn/MiniMax-M3 主（anthropic-messages）+ xiaomi mimo-v2.6-flash 备（openai-completions 反向配置）；密钥宿主发现（env + `~/.pi/agent/auth.json`，含小米条目）显式传入 |
+| D4 | `limits={cumulative:'unlimited',maxOutputTokens,modelTimeoutMs:600s,toolTimeoutMs,controlTimeoutMs}` + modelRecovery 1 次；预算配置字段保留但默认不阻断 |
+| D5 | 授权：本地单用户预授权——模型调用/受限环境内 read/write/edit/bash（含 bash external 效果，沙箱内）放行；其余 external 拒绝；publish 放行（结果交付本地用户） |
+| D6 | 审计：零内容 JSONL（audit.ts），append 即持久确认，失败关准入 |
+| D7 | 自定义工具：`propose_outline` / `render_deck` / `qa_deck` / `export_deck` + 原生四工具 |
+| D8 | deck 工件：agent 拥有 `data/<proj>/deck/`（pages/page_XX.js + deck.js）→ render_deck 出 deck.pptx + 每页 HTML 预览；导出直接交付 agent 工件（pptx=工件直出；html=页面 HTML 合集；pdf=Playwright 打印） |
+| D9 | 框架梳理（核心差异化）：读完资料先 `propose_outline`（页列表+意图+来源标签+≤3 待澄清问题）→ 前端可编辑大纲卡 → 用户确认 → agent 全自主推进；人确认点在对话流内 |
+| D10 | 逐页修改：选中页 → 消息注入页上下文 → agent edit page_XX.js → render_deck 重渲 → 预览刷新；生成中插话 steer / 排队 followUp |
+| D11 | 删除：六步 workbench/路由、agent-loop/recording/LlmStageClient 体系、render/{pptx,deck-html,deck-pdf}、六步与报告工厂 schema、对应测试与前端视图；保留改造：ingest/*、storage（裁剪）、checks/privacy（qa 用）、template（风格预设）、page-preview（改读 deck 目录） |
+| D12 | 前端：React 工作台 = 侧栏（项目/会话）+ 主区（线程+大纲卡+deck 工作区）+ 右抽屉（运行详情/审计/成本）+ composer（附件+发送/停止）；真实状态渲染，无假进度；DESIGN.md token |
 
-## 四、被否决的备选（本轮裁定）
+## 当前进度（flow 之前，已完成并验证）
 
-- **模板+版式增强**（保留现有管线扩模板，2–3 天）：否——用户选形态级。
-- **保留多功能报告工厂**：否——D1 明确删除。
-- **M9 快速 PPT 原样扩展**：否——两次判定证明形态不对；其资产（ai-ppt-prompt 守则、render/pptx.ts、pi-transport）视新方向可复用或替换。
+- **S1 接入基线**：vendor tgz + model.ts/budget-store.ts/audit.ts/authorize.ts + probe 双供应商真调 PASS + verify 108 用例全绿。
+- **S2 会话宿主**：session-host.ts（createSessionRuntime 装配/send-steer/history/事件）+ server 路由（chat/status/result/history/events SSE/stop）+ 7 个新测试；verify 115 用例全绿。
+- 已知 SDK 合同坑（已固化注释）：无 purposes 时 run 不得传 purpose；bash 工具 effect=external（沙箱内放行）；空闲会话 snapshot 需队列属主。
 
-## 五、开放问题（留给 PRD/GRILL，不在此裁决）
+## 边界与未验证项
 
-- 删除清单的精确边界（哪些底层模块随功能删、哪些因被 PPT 主路径复用而留）。
-- 「读取并理解资料」的 agent 形态：工人模式单发 vs 拴绳主导工具循环（标准 §5 决策矩阵裁决）；图片理解的多模态支持范围。
-- PPT 框架确认的交互形态（整表确认 vs 逐页确认）与数据结构（page_plan 演进还是新 schema）。
-- 逐页编辑 agent 的工具面与门禁（改哪些字段、哪些过确认门）。
-- HTML/PDF 导出实现路径（现有 render/html.ts、pdf.ts 能否复用；HTML 导出是网页版还是单文件）。
-- GordenSun 模板/版式接入方式（借 detail.json 协议自研 vs 引 skill 包）。
-- pi-agent-core skills 机制如何承载 PPT skill（pi 内置 skills 导出面调研后定）。
-- 旧项目数据兼容策略（data/ 下现有 report 项目如何处置）。
+- npm pi 1.1.0 / pi-coding-agent 直用：不做（标准禁止；如需须用户明示豁免）。
+- 多会话/fork UI、模板市场、移动端、旧项目数据迁移：本期不做。
+- 页面 HTML 预览 ≠ 最终 pptx 视觉：预览明示「近似」；QA 以结构校验为主、视觉为增强。
+- 账本 FileBudgetStore：单进程 JSON 原子写，多进程并发不支持（本地单用户产品，明示局限）。

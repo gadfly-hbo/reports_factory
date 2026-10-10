@@ -2,22 +2,17 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  ConflictResolutionRecordSchema,
   ProjectSchema,
-  ReportRevisionSchema,
   SourceAssetSchema,
   ExportRecordSchema,
   type ExportRecord,
   type Project,
-  type ReportRevisionMeta,
   type SourceAsset,
 } from '../schema/project.js';
-import { ReportSpecSchema, type ReportSpec } from '../schema/report-spec.js';
 
 /**
- * 本地 workspace 存储（proposal §9.1：结构化文件 + 轻量索引）。
- * 布局：<root>/<project_id>/{project.json, sources/, revisions/, exports/}
- * 修订与导出记录一经写入不被改写（冻结快照的基础）。
+ * 本地 workspace 存储：结构化文件 + 轻量索引。
+ * 布局：<root>/<project_id>/{project.json, sources/, exports/, deck/, session/, materials.json}
  */
 
 function nowIso(): string {
@@ -28,22 +23,14 @@ function shortId(prefix: string): string {
   return `${prefix}_${randomUUID().slice(0, 8)}`;
 }
 
-interface RevisionFile extends ReportRevisionMeta {
-  spec: ReportSpec;
-}
-
 export interface SaveSourceInput {
   filename: string;
   content: Buffer;
   media_type: string;
   kind: SourceAsset['kind'];
   sensitivity?: SourceAsset['sensitivity'];
-  replaces?: string;
   has_data?: boolean;
-  /** M4：来源版本（bundle=result_revision）与逻辑身份；缺省沿用 v1 */
-  version?: string;
   logical_key?: string;
-  snapshot_id?: string;
 }
 
 export interface SaveExportInput {
@@ -86,13 +73,9 @@ export class WorkspaceStore {
     return join(this.root, projectId);
   }
 
-  // ---- 布局收口：派生资产 / 工作状态 / 冲突解决（此前路径知识泄漏在 persist/app/workbench 三处） ----
-
+  /** 派生资产（ingest 解析产物）：sources/<id>.assets.json */
   async saveDerivedAssets(projectId: string, sourceId: string, derived: unknown): Promise<void> {
-    await writeFile(
-      join(this.projectDir(projectId), 'sources', `${sourceId}.assets.json`),
-      JSON.stringify(derived, null, 2),
-    );
+    await writeFile(join(this.projectDir(projectId), 'sources', `${sourceId}.assets.json`), JSON.stringify(derived, null, 2), 'utf-8');
   }
 
   async readDerivedAssets(projectId: string, sourceId: string): Promise<Record<string, unknown> | null> {
@@ -103,191 +86,12 @@ export class WorkspaceStore {
     }
   }
 
-  async readWorkState(projectId: string): Promise<Record<string, unknown> | null> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'state.json'), 'utf-8'));
-    } catch {
-      return null;
-    }
-  }
-
-  async writeWorkState(projectId: string, state: unknown): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'state.json'), JSON.stringify(state, null, 2));
-  }
-
-  /** M4 待复核更新（bundle 版本升级的影响数据）：持久化，重启不丢（§5.2） */
-  async readPendingUpdates(projectId: string): Promise<unknown[]> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'pending-updates.json'), 'utf-8'));
-    } catch {
-      return [];
-    }
-  }
-
-  async writePendingUpdates(projectId: string, updates: unknown[]): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'pending-updates.json'), JSON.stringify(updates, null, 2));
-  }
-
-  /** M4 变更提案审计（§12.1）：append-only，聊天记录不承载变更历史 */
-  async readProposals(projectId: string): Promise<unknown[]> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'proposals.json'), 'utf-8'));
-    } catch {
-      return [];
-    }
-  }
-
-  async appendProposal(projectId: string, proposal: unknown): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    const existing = await this.readProposals(projectId);
-    existing.push(proposal);
-    await writeFile(join(dir, 'proposals.json'), JSON.stringify(existing, null, 2));
-  }
-
-  /** M5 出站日志（§13.3/§14：可审计、零内容）：provider/条数/字节/成本/阻断标记，随 data 同步入库 */
-  async appendOutboundLog(
-    projectId: string,
-    entry: { at: string; stage: string; provider: string; modelId: string; mode: string; itemCount: number; bytes: number; cost: number; blocked?: boolean },
-  ): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    const path = join(dir, 'outbound-log.json');
-    let log: unknown[] = [];
-    try {
-      log = JSON.parse(await readFile(path, 'utf-8'));
-    } catch {
-      log = [];
-    }
-    log.push(entry);
-    await writeFile(path, JSON.stringify(log, null, 2));
-  }
-
-  async readOutboundLog(
-    projectId: string,
-  ): Promise<Array<{ at: string; stage: string; provider: string; modelId: string; mode: string; itemCount: number; bytes: number; cost: number; blocked?: boolean }>> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'outbound-log.json'), 'utf-8'));
-    } catch {
-      return [];
-    }
-  }
-
-  /** S5 出站批准持久化（`projectId|mode` + 批准时间；重启不失效，随数据同步） */
-  async readOutboundApprovals(projectId: string): Promise<Record<string, string>> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'outbound-approvals.json'), 'utf-8'));
-    } catch {
-      return {};
-    }
-  }
-
-  async writeOutboundApprovals(projectId: string, approvals: Record<string, string>): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'outbound-approvals.json'), JSON.stringify(approvals, null, 2));
-  }
-
-  /** S5 审计事件流（零内容：阶段/调用/门决策元数据，P5 可回放） */
-  async appendAuditLog(
-    projectId: string,
-    entry: { at: string; kind: string; stage: string; status: string; detail?: Record<string, unknown> },
-  ): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    const path = join(dir, 'audit-log.json');
-    let log: unknown[] = [];
-    try {
-      log = JSON.parse(await readFile(path, 'utf-8'));
-    } catch {
-      log = [];
-    }
-    log.push(entry);
-    await writeFile(path, JSON.stringify(log, null, 2));
-  }
-
-  async readAuditLog(
-    projectId: string,
-  ): Promise<Array<{ at: string; kind: string; stage: string; status: string; detail?: Record<string, unknown> }>> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'audit-log.json'), 'utf-8'));
-    } catch {
-      return [];
-    }
-  }
-
-  /** M4 补证请求（§11.2）：持久化生命周期，request_id 幂等去重 */
-  async readEvidenceRequests(projectId: string): Promise<unknown[]> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'evidence-requests.json'), 'utf-8'));
-    } catch {
-      return [];
-    }
-  }
-
-  async writeEvidenceRequests(projectId: string, requests: unknown[]): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'evidence-requests.json'), JSON.stringify(requests, null, 2));
-  }
-
-  /** M4 编审状态（决定/任务书）：结构化持久化，聊天记录不承载编审状态（§5.2/附录B） */
-  async readEditorial(projectId: string): Promise<Record<string, unknown> | null> {
-    try {
-      return JSON.parse(await readFile(join(this.projectDir(projectId), 'work', 'editorial.json'), 'utf-8'));
-    } catch {
-      return null;
-    }
-  }
-
-  async writeEditorial(projectId: string, state: unknown): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'editorial.json'), JSON.stringify(state, null, 2));
-  }
-
-  async readConflictResolutions(projectId: string): Promise<Record<string, { resolution: string; adopted_value?: number }>> {
-    const path = join(this.projectDir(projectId), 'work', 'conflict-resolutions.json');
-    let raw: string;
-    try {
-      raw = await readFile(path, 'utf-8');
-    } catch {
-      return {}; // 文件不存在 = 无历史解决记录
-    }
-    // 文件存在但损坏：显式报错，不得静默丢弃用户已做的解决决定
-    try {
-      return ConflictResolutionRecordSchema.parse(JSON.parse(raw));
-    } catch {
-      throw new Error(`冲突解决记录已损坏：${path}（请检查后删除重建）`);
-    }
-  }
-
-  async writeConflictResolutions(
-    projectId: string,
-    records: Record<string, { resolution: string; adopted_value?: number }>,
-  ): Promise<void> {
-    const dir = join(this.projectDir(projectId), 'work');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'conflict-resolutions.json'), JSON.stringify(records, null, 2));
-  }
-
-  async createProject(input: {
-    title: string;
-    purpose?: string;
-    brand?: Project['brand'];
-    template_id?: string;
-  }): Promise<Project> {
+  async createProject(input: { title: string; purpose?: string }): Promise<Project> {
     const project = ProjectSchema.parse({
       project_id: shortId('proj'),
-      kind: 'ppt', // M10：产品收敛后新建项目均为 PPT 项目（旧数据无 kind，列表过滤隐藏）
+      kind: 'ppt',
       title: input.title,
       purpose: input.purpose,
-      brand: input.brand,
-      template_id: input.template_id,
       created_at: nowIso(),
       updated_at: nowIso(),
     });
@@ -332,7 +136,7 @@ export class WorkspaceStore {
 
   async updateProject(
     projectId: string,
-    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy' | 'stage' | 'brand' | 'template_id' | 'budget'>>,
+    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy'>>,
   ): Promise<Project> {
     const p = await this.getProject(projectId);
     if (!p) throw new Error(`project not found: ${projectId}`);
@@ -345,7 +149,7 @@ export class WorkspaceStore {
     const src = await this.getProject(projectId);
     if (!src) throw new Error(`project not found: ${projectId}`);
     const copy = await this.createProject({ title: newTitle ?? `${src.title}（副本）`, purpose: src.purpose });
-    await this.updateProject(copy.project_id, { privacy_policy: src.privacy_policy, stage: src.stage });
+    await this.updateProject(copy.project_id, { privacy_policy: src.privacy_policy });
     const srcDir = this.projectDir(projectId);
     const copyDir = this.projectDir(copy.project_id);
     for (const sub of ['sources', 'revisions', 'exports']) {
@@ -376,9 +180,8 @@ export class WorkspaceStore {
     await writeFile(join(dir, stored), input.content);
     const asset = SourceAssetSchema.parse({
       source_id: sourceId,
-      version: input.version ?? 'v1',
+      version: 'v1',
       logical_key: input.logical_key,
-      snapshot_id: input.snapshot_id,
       filename: input.filename,
       media_type: input.media_type,
       kind: input.kind,
@@ -387,7 +190,6 @@ export class WorkspaceStore {
       imported_at: nowIso(),
       sensitivity: input.sensitivity,
       parse_status: 'pending',
-      replaces: input.replaces,
       has_data: input.has_data ?? true,
     });
     await writeFile(join(dir, `${sourceId}.json`), JSON.stringify(asset, null, 2));
@@ -448,53 +250,6 @@ export class WorkspaceStore {
     await this.touch(projectId);
   }
 
-  async saveRevision(projectId: string, spec: ReportSpec, note?: string): Promise<ReportRevisionMeta> {
-    ReportSpecSchema.parse(spec); // 写入前校验，坏 spec 不落盘
-    const existing = await this.listRevisions(projectId);
-    const seq = String(existing.length + 1).padStart(3, '0');
-    const revision: RevisionFile = {
-      revision_id: `rev_${seq}`,
-      parent_revision: existing.at(-1)?.meta.revision_id,
-      created_at: nowIso(),
-      note,
-      spec: { ...spec, revision_id: `rev_${seq}` },
-    };
-    const dir = join(this.projectDir(projectId), 'revisions');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, `${revision.revision_id}.json`), JSON.stringify(revision, null, 2));
-    await this.touch(projectId);
-    const { spec: _omit, ...meta } = revision;
-    return meta;
-  }
-
-  async listRevisions(projectId: string): Promise<{ meta: ReportRevisionMeta; spec: ReportSpec }[]> {
-    const dir = join(this.projectDir(projectId), 'revisions');
-    let files: string[];
-    try {
-      files = await readdir(dir);
-    } catch {
-      return [];
-    }
-    const out: { meta: ReportRevisionMeta; spec: ReportSpec }[] = [];
-    for (const f of files.filter((x) => x.endsWith('.json')).sort()) {
-      const raw = JSON.parse(await readFile(join(dir, f), 'utf-8')) as RevisionFile;
-      const { spec, ...meta } = raw;
-      out.push({ meta: ReportRevisionSchema.parse(meta), spec: ReportSpecSchema.parse(spec) });
-    }
-    return out;
-  }
-
-  async getRevision(projectId: string, revisionId: string): Promise<ReportRevisionMeta & { spec: ReportSpec } | null> {
-    try {
-      const raw = JSON.parse(
-        await readFile(join(this.projectDir(projectId), 'revisions', `${revisionId}.json`), 'utf-8'),
-      ) as RevisionFile;
-      return raw;
-    } catch {
-      return null;
-    }
-  }
-
   async saveExport(projectId: string, input: SaveExportInput): Promise<ExportRecord> {
     const dir = join(this.projectDir(projectId), 'exports');
     await mkdir(dir, { recursive: true });
@@ -538,25 +293,4 @@ export class WorkspaceStore {
       return null;
     }
   }
-
-  /** T24：新修订正式发布后，旧正式记录标 superseded（只改元数据，工件与哈希不动；同批导出除外） */
-  async markFormalExportsSuperseded(projectId: string, exceptExportIds: string[]): Promise<void> {
-    const except = new Set(exceptExportIds);
-    const dir = join(this.projectDir(projectId), 'exports');
-    let files: string[];
-    try {
-      files = await readdir(dir);
-    } catch {
-      return;
-    }
-    for (const f of files.filter((x) => x.endsWith('.json'))) {
-      const path = join(dir, f);
-      const record = ExportRecordSchema.parse(JSON.parse(await readFile(path, 'utf-8')));
-      if (record.delivery_status === 'formal' && !except.has(record.export_id)) {
-        record.delivery_status = 'superseded';
-        await writeFile(path, JSON.stringify(record, null, 2));
-      }
-    }
-  }
 }
-  // 追加在 markSourceParse 之后

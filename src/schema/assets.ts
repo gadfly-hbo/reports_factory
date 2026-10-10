@@ -2,6 +2,38 @@ import { z } from 'zod';
 
 /** 导入层资产（proposal §9.1 EvidenceRef + 表格材料的结构化形态）。 */
 
+/** 主张（自 report-spec 迁入，ingest 域类型）。 */
+export const ClaimKindSchema = z.enum([
+  'fact_statement',
+  'computed_statement',
+  'inference',
+  'recommendation',
+  'user_supplement',
+  'data_note',
+]);
+
+export const VerificationStateSchema = z.enum([
+  'unverified',
+  'bound_to_source',
+  'arithmetic_checked',
+  'needs_review',
+  'conflict',
+  'source_updated',
+]);
+
+export const ClaimSchema = z.object({
+  claim_id: z.string().min(1),
+  logical_key: z.string().optional(),
+  kind: ClaimKindSchema,
+  text: z.string().min(1),
+  metric_refs: z.array(z.string()).optional().default([]),
+  evidence_refs: z.array(z.string()).optional().default([]),
+  verification_state: VerificationStateSchema,
+  source_truth_verified: z.boolean().optional().default(false),
+  uncertainty: z.string().optional(),
+});
+export type Claim = z.infer<typeof ClaimSchema>;
+
 export const EvidenceRefSchema = z.object({
   evidence_id: z.string().min(1),
   source_id: z.string().min(1),

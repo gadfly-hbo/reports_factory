@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Report Studio · 对话式自主 PPT 工作台（原型）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主区</a>
+
+<div class="mock-banner"><strong>原型演示 · 合成数据，不是实现证据</strong>　本页不连接任何后端；所有消息、工具事件、产物与导出记录均为演示数据，由下方「演示场景 / 推进演示事件」控件推进。</div>
+<div class="review-controls">
+  <label for="scene">演示场景（非生产控件）</label>
+  <select id="scene">
+    <option value="empty">空态 · 新项目</option>
+    <option value="chat">首轮对话 · 附件已传</option>
+    <option value="outline">大纲提案卡 · v2 待确认</option>
+    <option value="generating">生成进行态 · 真实事件流</option>
+    <option value="deck">成果 · deck 工作区</option>
+    <option value="exported">成果 · 已导出</option>
+    <option value="fail">失败态 · 模型不可用</option>
+    <option value="partial">部分页失败</option>
+    <option value="restart">服务重启 · 会话恢复</option>
+    <option value="settings">设置页 · 模型链</option>
+  </select>
+  <button type="button" class="btn btn-sm" id="advance">推进演示事件</button>
+  <span class="fine" id="scene-hint"></span>
+</div>
+
+<div class="window">
+  <header class="titlebar">
+    <div class="tb-title">
+      <span class="brand-name">Report Studio</span>
+      <span class="fine">对话式自主 PPT 工作台</span>
+      <span class="tb-tag">原型 v0.1 · UI-GATE 待审</span>
+    </div>
+    <div class="tb-project fine" id="tb-project"></div>
+  </header>
+
+  <div class="topbar">
+    <div class="mode-switch" role="group" aria-label="主区视图">
+      <button type="button" class="mode-btn" id="tab-chat" aria-pressed="true">对话</button>
+      <button type="button" class="mode-btn" id="tab-deck" aria-pressed="false">成果</button>
+      <button type="button" class="mode-btn" id="tab-settings" aria-pressed="false">设置</button>
+    </div>
+    <span class="fine" id="run-state-note" role="status" aria-live="polite"></span>
+    <div class="topbar-right">
+      <button type="button" class="btn btn-sm" id="drawer-toggle" aria-expanded="false" aria-controls="drawer">运行详情</button>
+    </div>
+  </div>
+
+  <div class="app">
+    <nav class="sidebar" aria-label="项目">
+      <button type="button" class="btn btn-sm sb-new" id="new-project">＋ 新建项目</button>
+      <h2 class="sb-h">项目</h2>
+      <div class="sb-list" id="project-list"></div>
+      <div id="session-entry"></div>
+      <div class="sidebar-note">
+        <p class="fine">每个项目一个持续会话，服务重启后自动恢复。</p>
+        <p class="fine">旧版六步项目已隐藏，数据仍保留在本机。</p>
+      </div>
+    </nav>
+
+    <main class="main" id="main" tabindex="-1">
+      <!-- 对话视图 -->
+      <section class="surface" id="view-chat">
+        <div id="gen-status"></div>
+        <div class="thread" id="thread" aria-live="polite"></div>
+        <form class="composer-wrap" id="composer">
+          <div class="page-badge-row" id="page-badge-row" hidden></div>
+          <div class="attach-list" id="attach-list"></div>
+          <label class="sr-only" for="msg">消息输入</label>
+          <textarea id="msg" rows="2" placeholder="描述你要做的 PPT，或补充材料、提出修改……"></textarea>
+          <div class="composer-foot">
+            <button type="button" class="btn btn-sm" id="attach-btn">附件</button>
+            <input type="file" id="file-input" class="sr-only" multiple
+                   accept=".md,.markdown,.docx,.pdf,.csv,.xlsx,.png,.jpg,.jpeg,.webp">
+            <span class="fine" id="composer-hint">支持 md / docx / pdf / csv / xlsx / 图片；也可以先不传材料直接描述</span>
+            <span class="foot-right">
+              <button type="button" class="btn btn-sm btn-danger-outline" id="stop-btn" hidden>停止</button>
+              <button type="submit" class="btn btn-primary btn-sm" id="send-btn">发送</button>
+            </span>
+          </div>
+        </form>
+      </section>
+
+      <!-- 成果视图 -->
+      <section class="surface" id="view-deck" hidden>
+        <header class="workspace-header">
+          <h2 id="deck-title">成果</h2>
+          <span class="fine" id="deck-sub"></span>
+          <span style="margin-left:auto"></span>
+          <button type="button" class="btn btn-sm" id="back-chat">返回对话</button>
+        </header>
+        <div class="workspace-body" id="deck-body"></div>
+      </section>
+
+      <!-- 设置视图 -->
+      <section class="surface" id="view-settings" hidden>
+        <div class="settings-wrap">
+          <div class="settings-inner">
+            <h2>设置</h2>
+            <div class="panel-card">
+              <h3 style="margin:0 0 4px;font-size:0.95rem">模型链</h3>
+              <div class="model-row">
+                <span class="model-dot st-ok" aria-hidden="true">●</span>
+                <div class="mr-main"><b>主模型 · MiniMax-M3</b><div class="fine">minimax-cn · anthropic-messages</div></div>
+                <span class="ready st-ok">密钥已就绪</span>
+              </div>
+              <div class="model-row">
+                <span class="model-dot st-ok" aria-hidden="true">●</span>
+                <div class="mr-main"><b>备用模型 · mimo-v2.6-flash</b><div class="fine">xiaomi · openai-completions（反向配置）</div></div>
+                <span class="ready st-ok">密钥已就绪</span>
+              </div>
+              <p class="fine" style="margin:8px 0 0">密钥由宿主环境提供（环境变量 / ~/.pi/agent/auth.json）；本界面不显示、不接受任何密钥内容。主模型不可用时自动切换备用模型。</p>
+              <p class="fine" style="margin:6px 0 0">模型未就绪时：在宿主环境配置密钥后重启服务，此处状态即更新。</p>
+            </div>
+            <div class="panel-card">
+              <h3 style="margin:0 0 4px;font-size:0.95rem">会话与数据</h3>
+              <p class="fine" style="margin:0">每个项目一个持续会话，保存在本机 data/&lt;项目&gt;/session/，服务重启后自动恢复历史。产物（页面代码、预览、导出文件）保存在项目目录内。旧版六步项目数据保留，但不再显示在列表中。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="drawer" id="drawer" aria-label="运行详情" hidden>
+      <header class="drawer-head">
+        <strong>运行详情</strong>
+        <button type="button" class="btn btn-sm" id="drawer-close">关闭</button>
+      </header>
+      <div class="detail-tabs" role="tablist" aria-label="运行详情分类">
+        <button type="button" role="tab" id="tab-timeline" aria-selected="true" aria-controls="detail-timeline">时间线</button>
+        <button type="button" role="tab" id="tab-audit" aria-selected="false" aria-controls="detail-audit">审计与成本</button>
+      </div>
+      <div class="detail-content" id="detail-timeline" role="tabpanel" tabindex="0"></div>
+      <div class="detail-content" id="detail-audit" role="tabpanel" tabindex="0" hidden></div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="dlg"><div class="dialog-inner" id="dlg-inner"></div></dialog>
+
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lb-panel" role="dialog" aria-modal="true" aria-label="页面大图">
+    <div class="lb-head">
+      <strong id="lb-title"></strong>
+      <span class="fine">近似预览 · 非最终 PPTX 视觉</span>
+      <button type="button" class="btn btn-sm" id="lb-close">关闭</button>
+    </div>
+    <div class="lb-canvas"><div class="tc-title" id="lb-canvas-title"></div><div class="tc-body" id="lb-canvas-body"></div></div>
+    <div class="lb-src fine" id="lb-src"></div>
+    <div class="lb-foot" id="lb-foot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
