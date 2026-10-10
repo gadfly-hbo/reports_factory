@@ -28,6 +28,8 @@ import { localAuthorize, LOCAL_POLICY_VERSION } from './authorize.js';
 import type { JsonValue } from 'pi-agent-runtime';
 import { proposeOutlineTool } from './tools/outline-tool.js';
 import { renderDeckTool } from './tools/render-deck-tool.js';
+import { lookPageTool } from './tools/look-page-tool.js';
+import { createNetworkExecutionEnvironment } from './exec-env.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -132,21 +134,19 @@ export class SessionHost {
       console.error(`[skills] ${d.kind}: ${d.path}`);
     }
 
-    // 受限执行环境 + 原生文件/进程工具（目录边界 = 项目数据根；macOS 单进程 sandbox，禁网络/fork）
-    const env = await createLocalExecutionEnvironment({
+    // 联网执行环境（flow-2 U4，运行条件对齐 C4）：exec 无网络沙箱（可装库/取素材），
+    // 文件面仍限项目根；授权/审计/单次超时保持（对齐 pi-coding-agent 的 bash 自由度）
+    const env = await createNetworkExecutionEnvironment({
       root: opts.projectRoot,
-      policyVersion: LOCAL_POLICY_VERSION,
-      exclusiveWorkspace: true,
-      maxFileBytes: 20_000_000,
-      maxOutputBytes: 200_000,
-      timeoutMs: UNLIMITED_LIMITS.toolTimeoutMs,
-      processes: true,
+      policyVersion: 'report-studio-net-v1',
+      execTimeoutMs: UNLIMITED_LIMITS.toolTimeoutMs,
     });
     const nativeTools = createExecutionTools(env, ['read', 'write', 'edit', 'bash']);
     const outlineTool = proposeOutlineTool(opts.projectRoot);
     const renderDeck = renderDeckTool(opts.projectRoot);
     const qaTool = qaDeckTool(opts.projectRoot);
     const exportTool = exportDeckTool(opts.projectRoot);
+    const lookPage = lookPageTool(opts.projectRoot);
     // 宿主软化策略（P2/P3）：文件类工具失败转 JSON 错误文本回模型自纠，不终止整轮
     // （SDK 默认 after_tool 对 isError 直接 TOOL_FAILED 杀运行——对 read 路径猜测失败这类可自纠错误过严）。
     // 授权/预算/审计仍发生在每次准入边界，软化不绕过任何护栏。
@@ -224,7 +224,7 @@ export class SessionHost {
       },
     });
 
-    const host = new SessionHost(runtime, taskId, [outlineTool, renderDeck, qaTool, exportTool, ...nativeTools].map(soft));
+    const host = new SessionHost(runtime, taskId, [outlineTool, renderDeck, qaTool, exportTool, lookPage, ...nativeTools].map(soft));
     hostRef = host;
     host.session = await host.findOrCreateSession();
     return host;
@@ -266,6 +266,7 @@ export class SessionHost {
       system,
       tools: this.tools,
       limits: UNLIMITED_LIMITS,
+      thinkingLevel: 'medium', // flow-2 U2：对齐 pi-coding-agent 运行条件（U0 双链 probe 实证）
       modelRecovery: { extraAttempts: 1 },
     });
     this.activeRun = run;

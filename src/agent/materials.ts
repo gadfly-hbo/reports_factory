@@ -21,6 +21,8 @@ export interface MaterialEntry {
   kind: SourceAsset['kind'];
   status: 'ready' | 'failed';
   extract_file: string;
+  /** 原件路径（项目根相对；图片页 addImage 直接引用它） */
+  original_file: string;
   chars: number;
   updated_at: string;
   error?: string;
@@ -104,6 +106,7 @@ export async function indexMaterial(input: {
     kind: asset.kind,
     status: 'ready',
     extract_file: `sources/${asset.source_id}.extract.md`,
+    original_file: `sources/${asset.source_id}__${asset.filename}`,
     chars: 0,
     updated_at: new Date().toISOString(),
   };

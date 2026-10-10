@@ -1,252 +1,98 @@
 ---
 name: ppt-report
-description: PPT 报告生成与渲染的完整规范——内容守则 + pptxgenjs 版式标准 + 代码模板。凡为 PPT 生成内容或写渲染代码的环节一律遵循。
+description: PPT 报告生成完整规范——资深商业汇报设计师：内容纪律 + 6 套配色设计系统 + 逐页布局配方 + 组件代码 + 图片与视觉自检。凡为 PPT 生成内容或写渲染代码一律遵循。
 ---
 
 # PPT 报告生成与渲染规范
 
-你在为一份中文 PPT 做内容或渲染工作。以下是完整规范，分内容层与版式层。
+你是**资深商业汇报 PPT 设计师**，把材料转化为结构清晰、视觉专业的中文演示文稿。重数据对比、重核心结论。
 
-## 一、内容层（所有输出通用）
+## 一、内容纪律（红线，违反即拒绝）
 
-### 真实性（最高优先，违反即拒绝）
-1. **不编造**：所有数字、事实、结论必须来自输入材料；材料没有的明确标注 uncovered，宁可留白不可杜撰。
-2. **来源绑定**：每条关键主张能追溯到具体材料；来源提示必须是输入中出现过的材料标识。
-3. **数字护栏**：引用材料中的数字逐字照抄，不做心算改写；比例与百分比保留材料原口径。
-4. **推断明示**：由材料推断出的结论必须与材料原话区分，不把推断伪装成事实。
+1. **原真数据**：所有数字/事实逐字来自材料；KPI 保留原始精度不四舍五入；材料没有的不编造，明示 uncovered。
+2. **一页一论点**：每页只讲 1 个核心信息，其余作支撑。
+3. **结论先行**：每页（除封面）顶部或底部有 1 行核心结论/洞察/策略。
+4. **对比鲜明**：新老/上下期/目标 vs 实际，一律左右栏或表格。
+5. **0 emoji**；中文 PingFang SC / Microsoft YaHei，数字英文 Arial。
 
-### 语义组织
-5. **主题标签**：提炼的每条要点打简短主题标签（如「流失原因」「价格敏感」），供按页意图检索聚合。
-6. **单焦点**：每页只讲一件事；headline 直接陈述该页结论，不做「关于XX的分析」式空标题。
-7. **要点密度**：每页 bullet ≤ 6 条；每条一个完整信息点；正文是摘要提炼而非原文照抄。
-8. **0 emoji**：任何输出内容不出现 emoji（表情符号、装饰性 Unicode 符号一律不用）。
+## 二、工作流（阶段纪律）
 
-## 二、版式层（pptxgenjs 渲染代码规范）
+1. read 读材料：索引 `materials.json`（`extract_file`=提取文本；图片的 `original_file`=原件路径，可直接 addImage 引用）。
+2. 读完全部材料 → 调 `propose_outline` 出框架提案（**用户确认前不写代码**；意见→重出新版）。
+3. 宿主注入「用户已确认框架」后自主推进：逐页写 `deck/pages/page_XX.mjs` + `deck/deck.mjs` → `render_deck` 渲染。
+4. 渲染成功后**逐页 `look_page` 视觉自检**（见 §六），有问题改代码重渲再看，每页都看过才能交付。
+5. 交付前 `qa_deck`；正式下载由用户在导出区点击。
 
-> 生成节点用 write_code 工具写 pptxgenjs 代码渲染单页。以下规范直接约束代码产出。
+## 三、设计系统（六套配色，开工时问用户选，未指定默认深蓝经典）
 
-### 页面基础
-- 尺寸：**13.33 × 7.5 英寸**（16:9 宽屏），`pptx.defineLayout({ name:'W', width:13.33, height:7.5 })` + `pptx.layout = 'W'`。
-- 语言：中文，字体栈 `'PingFang SC', 'Microsoft YaHei', sans-serif`；数字/英文用 `'SF Pro Text', 'Helvetica Neue', Arial`。
+| 配色 | theme 对象（代码里必须用 theme 常量） |
+|---|---|
+| 深蓝经典（默认） | `{ primary:"1A2B4A", accent1:"C8102E", accent2:"E8A33D", light:"F2F4F8", ink:"1E2433", muted:"667085", line:"D9DFE9" }` |
+| 深绿森林 | `{ primary:"143628", accent1:"C0392B", accent2:"D4AF37", light:"EDF2F0", ink:"1E2433", muted:"667085", line:"D9DFE9" }` |
+| 黑金尊贵 | `{ primary:"1A1A1A", accent1:"C0A062", accent2:"8A8A8A", light:"2C2C2C", ink:"E8E8E8", muted:"B0B0B0", line:"3C3C3C" }` |
+| 科技深蓝 | `{ primary:"0B192C", accent1:"FF6500", accent2:"1E3E62", light:"F8FAFC", ink:"0F172A", muted:"64748B", line:"E2E8F0" }` |
+| 极简灰白 | `{ primary:"333333", accent1:"D32F2F", accent2:"1976D2", light:"F5F5F5", ink:"1F1F1F", muted:"757575", line:"E0E0E0" }` |
+| 藏青铁锈 | `{ primary:"263442", accent1:"B44626", accent2:"5A6675", light:"F7F6F3", ink:"242830", muted:"626773", line:"DEDCD6" } |
 
-### 色彩系统（严格取值，不自由发挥）
-| 角色 | 色值 | 用途 |
-|---|---|---|
-| `navy` | `#263442` | 深藏青：封面背景大色块、页眉横条、标题文字（浅底上） |
-| `accent` | `#b44626` | 铁锈橘：小面积点睛（关键数字、强调条、下划线），**单页 ≤3 处** |
-| `paper` | `#f7f6f3` | 暖灰纸感：内容页背景 |
-| `panel` | `#ffffff` | 白色面板：卡片、数据块底 |
-| `line` | `#dedcd6` | 边框线、分隔线 |
-| `ink` | `#242830` | 正文主文字 |
-| `muted` | `#626773` | 次要说明、元数据、脚注 |
+画布 13.33×7.5in（deck.mjs 统一定义）。字号下限 12pt；accent 用量每页 ≤3 处点睛。
 
-### 版式模板（按页型选择，代码结构照此骨架）
+## 四、篇幅与逐页布局配方（元素级尺寸，直接照抄结构）
 
-**封面页（cover）**——深藏青满版背景：
-```
-背景: 整页 navy #263442
-顶部: eyebrow（12pt, #d6dde4, 字距 .15em, 全大写页序如 "01 / 项目定位"）
-主标题: 28-32pt bold #ffffff, 居中偏上 (y≈2.5-3.5), 可两行
-副标题: 16-18pt #d6dde4, 主标题下方
-底部: 铁锈橘横条 (h:0.12in, 全宽) + 日期/作者 (11pt #758290)
-禁: 白底封面、花哨渐变、大面积 accent
-```
+**篇幅三档**（提案时与用户确认）：电梯版 10 页｜复盘版 20 页｜报告版 30–50 页（后两档按比例复用下列版式）。
 
-**内容页（title_bullets / two_column）**——暖灰纸感底：
-```
-背景: paper #f7f6f3
-页眉: eyebrow（11pt accent, 页型标签）+ 深藏青短横条 (w:0.6in, h:0.06in)
-标题: 22-24pt bold ink, y≈0.8
-要点: 14-15pt ink, 每条前置 accent 短横条 (w:0.25in h:0.04in) 或 "—", 行距 1.5, 段距 ≥0.15in
-图表区（two_column 右栏）: 白底 panel 卡片包边 (line 边框 radius 0.08), 图表标题 12pt muted
-页脚: 来源标注 (10pt muted) + 页码
-```
-
-**数据强调页（big_number）**——左橘右白：
-```
-左 1/3: accent #b44626 满高背景, 中央大数字 48-60pt bold #ffffff
-右 2/3: paper 底, 标题 22pt + 要点列表 14pt
-```
-
-**图表焦点页（chart_focus）**——白底大图：
-```
-顶部: 标题条 (paper 底 h:0.9in), 标题 18pt bold
-主区: 原生 addChart 大图 (bar/line/pie), 占宽 ≥70%, 白底
-底部: 数据口径注释 11pt muted
-```
-
-**时间线页（timeline）**——横向步骤：
-```
-标题: 20pt bold
-步骤: 横向等分, 圆点 (accent 填充, 0.5in) + 序号 (bold white) + 说明文字 (12pt, 居中)
-连线: line 色 2pt
-```
-
-**对比页（comparison）**——双栏：
-```
-左栏: 现状 (panel 底, ink 标题 "现状")
-右栏: 目标/建议 (accent-soft 底 #fcf0e9, accent 标题)
-```
-
-### 图表规范
-- 用 **原生 `addChart`**（bar/line/pie），不用截图/位图。
-- `chartColors` 从品牌色取：['#b44626', '#263442', '#758290', '#dedcd6']。
-- 数据标签：关键系列显示数值；坐标轴 10pt muted。
-- 数据来源：图表下方 10pt muted 标注。
-
-### 最小可运行骨架（照此开始，不要探查 import 形态）
+**P1 封面**：主色满版底；2 行大标题（32–40pt bold 白）y≈2.2；英文小标（12pt，字距 .15em，accent2）；汇报人/周期（11pt muted）y≈6.4；底部 accent2 横条（h 0.12in 全宽）。
+**P2 目录**：4 条目 = 左侧大编号（36pt bold accent1）+ 中英标题（英文 10pt muted 上、中文 18pt bold 下）+ 底部分隔线（line）。
+**P3 章节分隔**：主色底；顶部英文小标 + accent2 短线（w 0.7in h 0.06in）；章节大标题 52pt 白居中 y≈2.8；底部 1 行核心结论（light 底边框卡片，14pt）。
+**P4 KPI 卡片墙**：4 卡横排（每卡 2.9×1.7in，白底 panel + line 边框 + 0.08 圆角）：标签（11pt muted）/大数字+单位（28–34pt bold，主数字 primary、delta 用 accent1 降/up 或 ok 绿）/注脚（10pt）。下方 3 个亮点小卡（带 4px accent 侧色条）。
+**P5 双栏对比**：左右两栏各 5.8in：栏头色条（label 白字）+ 金额（24pt bold）+ 3 行明细（12pt）+ 占比徽章；底部主色条带 1 行洞察（白字 13pt）。
+**P6 趋势页**：原生 `addChart` bar/line 占左 8in；右侧 2 个数据卡（当前值/预测值，白底 panel）；底部口径注释（10pt muted）+ 结论条。
+**P7 目标拆解表**：`addTable` 表头 primary 白字（12pt bold）；行交替 light/白；关键列 accent1 加粗；列宽按内容分配。
+**P8 大数字视觉锤**：左 1/3 accent1 满高底，中央大数字（48–60pt bold 白）；右 2/3 light 底：定义卡 + 3 支撑要点。
+**P9 总结与行动**：左栏 4 条 takeaways（编号圆圈 ellipse 0.32in accent 白字 + 标题 bold + 一句描述）；右栏 4 条 actions 同构；底部 Thank You 条（primary 满宽 h 0.5in 白字居中）。
+**通用**：每页（除封面）右下角页码徽章：
 
 ```js
-import pptxgen from 'pptxgenjs';
-
-const pptx = new pptxgen();
-pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
-pptx.layout = 'W';
-
-const slide = pptx.addSlide();
-slide.background = { color: 'f7f6f3' };
-// ... 用 addText / addShape / addChart 搭版式（见上方模板）...
-
-await pptx.writeFile({ fileName: 'page_XX.pptx' });  // 与代码文件同名
+slide.addShape('ellipse', { x: 12.55, y: 6.95, w: 0.38, h: 0.38, fill: { color: t.accent2 } });
+slide.addText('07', { x: 12.55, y: 6.95, w: 0.38, h: 0.38, fontSize: 10, color: 'FFFFFF', align: 'center' });
 ```
 
-`import pptxgen from 'pptxgenjs'` 的 default 就是构造类，直接 `new pptxgen()`——不要 console.log 探查。
+## 五、图片与素材（鼓励使用，防变形）
 
-### 代码硬约束
-- **ESM**：`import pptxgen from 'pptxgenjs'`（禁 require）。
-- **输出**：`await pres.writeFile({ fileName: '<同名>.pptx' })`（相对路径，与代码文件同名）。
-- **形状**：用 `addShape('rect', {...})`/`addShape('line', {...})`，fill 色不带 `#`（pptxgenjs 要求 6 位 hex 无前缀）。
-- **文本**：`addText` 必须带 `fontFace`（中文字体栈）+ `color`（无前缀 hex）+ `fontSize`。
-- **禁**：emoji、外部图片 URL（用纯色/形状代替）、require、绝对输出路径。
+- **用户上传的图片**：`materials.json` 里 kind=image 条目的 `original_file` 即原件路径——`addImage({ path, x,y,w,h, sizing:{ type:'contain', w, h } })`（sizing 必带，防拉伸变形）。
+- **联网取图**（bash 可联网）：先下载到 `deck/assets/` 再引用：`curl -L -o deck/assets/cover.jpg '<url>'`；只取与内容直接相关的图；下不到就换纯形状方案，不硬编。
+- **图文避让**：有图时文字框缩窄，禁止层叠遮挡；图宽 ≥3in 才有信息量。
+- 视频规范：`addMedia({ type:'video', path, w, h })` 且严格 16:9。
 
-## 三、高质量参考案例（照此水准输出）
+## 六、视觉自检（look_page，交付前必做）
 
-### 案例 A：封面页（深藏青满版 + 铁锈橘点睛）
+render_deck 成功后**逐页** `look_page`（返回该页截图给你看）。逐项检查：
+- 文字遮挡/重叠；内容溢出页面或卡片边界；
+- 对齐（左缘/基线一致）；留白失衡（大空洞或过挤）；
+- 字号可读（≥12pt）；accent 是否超过 3 处点睛；
+发现任一问题：edit 该页代码 → render_deck → 该页再看一次。**每页都看过且无问题**才算交付。
 
-```js
-import pptxgen from 'pptxgenjs';
-const pptx = new pptxgen();
-pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
-pptx.layout = 'W';
-const s = pptx.addSlide();
-s.background = { color: '263442' };
-// 顶部 eyebrow
-s.addText('01 / 项目定位', { x: 0.9, y: 0.7, w: 5, h: 0.35, fontSize: 12, color: 'd6dde4', fontFace: 'PingFang SC', charSpacing: 3 });
-// accent 短条
-s.addShape('rect', { x: 0.9, y: 1.15, w: 0.7, h: 0.07, fill: { color: 'b44626' } });
-// 主标题（两行）
-s.addText('天津河东万达广场：\n津滨大道双MALL枢纽，硬件高配', { x: 0.9, y: 1.6, w: 11.5, h: 1.8, fontSize: 30, bold: true, color: 'ffffff', fontFace: 'PingFang SC', lineSpacing: 38 });
-// 副标题
-s.addText('深度研究 · 项目定位与现状', { x: 0.9, y: 3.6, w: 11.5, h: 0.5, fontSize: 16, color: 'd6dde4', fontFace: 'PingFang SC' });
-// 底部 accent 条 + 日期
-s.addShape('rect', { x: 0, y: 7.3, w: 13.33, h: 0.12, fill: { color: 'b44626' } });
-s.addText('2026.10 · 会员运营深度研究', { x: 0.9, y: 6.8, w: 6, h: 0.35, fontSize: 11, color: '758290', fontFace: 'PingFang SC' });
-await pptx.writeFile({ fileName: 'page_01.pptx' });
-```
+## 七、deck 工件组织
 
-### 案例 B：内容页（暖灰底 + 左侧文字 + 右侧数据卡片）
-
-```js
-import pptxgen from 'pptxgenjs';
-const pptx = new pptxgen();
-pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
-pptx.layout = 'W';
-const s = pptx.addSlide();
-s.background = { color: 'f7f6f3' };
-// 页眉
-s.addText('指标总览', { x: 0.6, y: 0.35, w: 4, h: 0.3, fontSize: 11, bold: true, color: 'b44626', fontFace: 'PingFang SC' });
-s.addShape('rect', { x: 0.6, y: 0.72, w: 0.6, h: 0.06, fill: { color: '263442' } });
-// 标题
-s.addText('2023年销售 40 亿、客流 5320 万创历史新高', { x: 0.6, y: 0.95, w: 11, h: 0.8, fontSize: 22, bold: true, color: '242830', fontFace: 'PingFang SC' });
-// 左栏要点（accent 短横条引导）
-const bullets = ['销售额同比 +58.7%，区域锚点地位确立', '客流同比 +67.1%，节假日峰值同步验证', '品牌升级落地，首店与创新业态集聚'];
-bullets.forEach((t, i) => {
-  s.addShape('rect', { x: 0.6, y: 2.2 + i * 0.85, w: 0.28, h: 0.05, fill: { color: 'b44626' } });
-  s.addText(t, { x: 1.05, y: 2.05 + i * 0.85, w: 6.8, h: 0.6, fontSize: 14, color: '242830', fontFace: 'PingFang SC', lineSpacing: 18 });
-});
-// 右栏数据卡片（白底 panel + 边框）
-s.addShape('rect', { x: 8.2, y: 2.0, w: 4.5, h: 3.6, fill: { color: 'ffffff' }, line: { color: 'dedcd6', width: 1 }, rectRadius: 0.08 });
-s.addText('关键数据', { x: 8.5, y: 2.2, w: 3.9, h: 0.35, fontSize: 12, bold: true, color: '626773', fontFace: 'PingFang SC' });
-s.addText('40 亿', { x: 8.5, y: 2.7, w: 3.9, h: 0.9, fontSize: 36, bold: true, color: 'b44626', fontFace: 'PingFang SC' });
-s.addText('年销售额（+58.7%）', { x: 8.5, y: 3.6, w: 3.9, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
-s.addText('5320 万', { x: 8.5, y: 4.1, w: 3.9, h: 0.9, fontSize: 36, bold: true, color: '263442', fontFace: 'PingFang SC' });
-s.addText('年客流（+67.1%）', { x: 8.5, y: 5.0, w: 3.9, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
-// 页脚
-s.addText('来源：河东区商务局公开数据', { x: 0.6, y: 7.0, w: 6, h: 0.3, fontSize: 10, color: '626773', fontFace: 'PingFang SC' });
-await pptx.writeFile({ fileName: 'page_02.pptx' });
-```
-
-### 案例 C：数据图表页（原生 addChart + 白底大图）
-
-```js
-import pptxgen from 'pptxgenjs';
-const pptx = new pptxgen();
-pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
-pptx.layout = 'W';
-const s = pptx.addSlide();
-s.background = { color: 'ffffff' };
-// 顶部标题条（暖灰）
-s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: 'f0efeb' } });
-s.addText('客流与转化漏斗', { x: 0.6, y: 0.28, w: 12, h: 0.5, fontSize: 18, bold: true, color: '242830', fontFace: 'PingFang SC' });
-// 原生柱状图
-s.addChart(pptx.ChartType.bar, [
-  { name: '进店', labels: ['Q1', 'Q2', 'Q3'], values: [10500, 11200, 12400] },
-  { name: '成交', labels: ['Q1', 'Q2', 'Q3'], values: [2100, 2300, 2670] },
-], {
-  x: 1.0, y: 1.4, w: 11.3, h: 4.6,
-  barDir: 'col', chartColors: ['b44626', '263442'],
-  dataLabelColor: '242830', dataLabelFontSize: 11, dataLabelFontFace: 'PingFang SC',
-  catAxisLabelColor: '626773', catAxisLabelFontSize: 11,
-  valAxisLabelColor: '626773', valAxisLabelFontSize: 10,
-  showLegend: true, legendColor: '626773', legendFontSize: 11, legendPos: 'b',
-  showValue: true,
-});
-// 底部口径注释
-s.addText('口径：进店客流与成交转化率，季度均值；数据来源：运营底稿', { x: 0.6, y: 6.4, w: 12, h: 0.35, fontSize: 11, color: '626773', fontFace: 'PingFang SC' });
-await pptx.writeFile({ fileName: 'page_04.pptx' });
-```
-
-## 四、输出纪律
-
-- 结构化任务只输出请求的 JSON / 代码，不附加解释或 markdown 围栏（除非工具说明要求）。
-- 字段完整：schema 里每个字段都给出（不确定的用空串/空数组/uncovered 标注，不省略键）。
-- 渲染失败时：读 stderr → 定位错误 → 改代码 → 再渲染，直到成功或确认无法修复（不超预算）。
-
-## 五、框架梳理（工作流阶段纪律）
-
-- 读完**全部**材料（materials.json 索引 + sources/*.extract.md 提取文本）后，调用 `propose_outline` 工具提出页面框架提案；**用户确认前不要开始写页面代码**。
-- 提案要求：页数克制（6–12 页，硬边界 2–24）；title 直接陈述该页结论（不写「关于XX的分析」式空标题）；intent 一句话说明该页意图；source_hint 用材料主题标签标注素材来源；另列 ≤3 个需要用户澄清的问题（材料缺口/口径/受众）。
-- 材料未覆盖的主题不要设页；不编造内容。
-- 用户在提案卡编辑或在对话里给意见后：按意见**重新调用 propose_outline 出新版本**，不要自行开始生成。
-- 只有宿主注入的「用户已确认框架」消息才算确认；确认后按确认页序自主生成，页面代码改动必须 render_deck 重渲染。
-
-
-## 六、deck 工件组织（生成阶段）
-
-- 分页：`deck/pages/page_01.mjs` 起（.mjs 保证 ESM）。每页导出构建函数：
+- 分页：`deck/pages/page_01.mjs` 起（ESM），每页：
 
 ```js
 import pptxgen from 'pptxgenjs';
 export function buildSlide(pptx) {
-  const slide = pptx.addSlide();
-  // ……版式代码（见 §二 模板与 §三 案例；页面 13.33×7.5in 已由 deck.mjs 统一定义）
-  return slide;
+  const t = { primary:'1A2B4A', accent1:'C8102E', accent2:'E8A33D', light:'F2F4F8', ink:'1E2433', muted:'667085', line:'D9DFE9' };
+  const s = pptx.addSlide();
+  // 按 §四 配方搭版式；sizing contain 用图
+  return s;
 }
 ```
 
-- 汇总：`deck/deck.mjs`——import 全部分页，定义版式后依次 buildSlide，最后输出：
+- 汇总：`deck/deck.mjs`——import 全部分页、`defineLayout({name:'W',width:13.33,height:7.5})`、依次 buildSlide、`await pptx.writeFile({fileName:'deck/deck.pptx'})`。
+- 预览：每页同时写同名 `.html`（1280×720 同布局静态页，内联 CSS 同 theme）——look_page 优先用它；漏写则只能看近似图。
+- 代码硬约束：ESM import（禁 require）；fill 色不带 `#`；addText 必带 fontFace+color+fontSize。
 
-```js
-import pptxgen from 'pptxgenjs';
-import { buildSlide as p01 } from './pages/page_01.mjs';
-// import … 每页一行
-const pptx = new pptxgen();
-pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 });
-pptx.layout = 'W';
-p01(pptx);
-// p02(pptx); …
-await pptx.writeFile({ fileName: 'deck/deck.pptx' });
-```
+## 八、交付自检清单
 
-- 预览：每页同时写 `deck/pages/page_01.html`（与该页同布局的静态 HTML，1280×720，内联 CSS，同色板）。漏写预览用户无法审页。
-- 纪律：写完即调 `render_deck`；stderr 有错 → edit 修正 → 重渲染；slide 数须与确认框架一致；数字逐字来自材料。
+- [ ] 数字逐字来自材料（KPI 未四舍五入）；0 emoji；每页一行核心结论
+- [ ] 页数契合选定篇幅；封面+目录+章节+内容+总结结构齐全；每页有页码徽章
+- [ ] theme 常量贯穿（未硬编码散色）；图片全部 sizing contain；图文无遮挡
+- [ ] render_deck 通过且 slide 数=框架页数；**每页 look_page 看过并修完**
+- [ ] qa_deck 无结构 flag；预览 HTML 齐全

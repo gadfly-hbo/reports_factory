@@ -1,87 +1,26 @@
-# PRD：Report Studio 对话式自主 PPT Agent（S3–S6 收尾）
+# PRD：放开 Agent 自由度四项（flow-2，auto：对 proposal 纯增量细化）
 
-来源：`.flow/proposal.md`（规范事实源）+ 红队 `.flow/red-team.md`。无 issue tracker，按降级路径发布于本文件。
-
-## Problem Statement
-
-用户想把已有材料变成一份专业的中文 PPT，但现在的产品是一条固定的六步向导：上传→理解→框架→生成→编辑→发布，每步都被流程和预算围栏限制。用户无法像对着一个能干的助手那样直接说「帮我把这份材料做成一份 Q3 复盘 PPT」，不能在生成过程中插话调整，生成结果的质量也不由 AI 对最终产物负责（导出时会被重新渲染，AI 写的页面内容可能丢失）。
-
-## Solution
-
-一个对话式自主 PPT 工作台：入口是一个聊天窗口（类 Kimi Work），上传附件、说清需求，AI 自主读材料、**先提出页面框架提案供用户确认修改**，然后自主写代码渲染出真正可编辑的 PPTX 工件；完成后用户可以**选中任何一页继续对话修改**，最后一键导出 pptx/html/pdf。AI 对最终产物负责——导出的就是 AI 生成并自检过的工件本身。
-
-## User Stories
-
-1. 作为用户，我想在聊天窗口用一句话描述要做的 PPT 并上传附件，这样我不需要学习任何表单流程。
-2. 作为用户，我想上传 md/docx/pdf/csv/xlsx/图片等常见格式，这样任何材料都能直接用。
-3. 作为用户，我想让 AI 读完材料后**先给我一份页面框架提案**（每页标题/页型/意图/材料来源），这样我能在生成前把控结构。
-4. 作为用户，我想在框架提案卡上直接改标题、删页、加页、调序，这样不需要打字描述每个调整。
-5. 作为用户，我想让 AI 在提案里列出它需要我澄清的问题（≤3 个），这样框架不是它瞎猜的。
-6. 作为用户，我想在聊天里用自然语言回复对提案的意见（如「第 3 页换成对比」），让 AI 重新出提案，这样修改方式自然。
-7. 作为用户，我想点「按此框架生成」后 AI 全自主推进，不再逐步确认，这样省心。
-8. 作为用户，我想在 AI 工作时看到真实进度（正在读文件/写代码/渲染），这样知道它在干什么、没有假进度。
-9. 作为用户，我想在 AI 工作时插话补充要求（steer），这样不用等它跑完再说。
-10. 作为用户，我想随时停止 AI（abort），这样失控时能接管。
-11. 作为用户，我想看到生成好的每一页的预览图，这样不导出也能检查。
-12. 作为用户，我想选中某一页、用对话让它修改那一页，这样修改精确且不打扰其他页。
-13. 作为用户，我想让 AI 改完后自动重渲染并刷新预览，这样改完即见。
-14. 作为用户，我想导出真正的 PPTX（原生可编辑文本/表格/图表），这样能在 PowerPoint/WPS 里继续加工。
-15. 作为用户，我想导出 HTML 和 PDF 版本，这样方便分发与打印。
-16. 作为用户，我想在导出前看到 QA 结果（结构完整性 + 建议性隐私/视觉提示），这样交付有底。
-17. 作为用户，我想打开「运行详情」抽屉看 AI 用了哪些工具、调了哪个模型、花了多少，这样透明可信。
-18. 作为用户，我想关掉服务再打开后继续之前的对话，这样工作是连续的。
-19. 作为用户，我想侧栏看到历史项目并新建/删除项目，这样多任务并行。
-20. 作为用户，我想在设置页看到模型链状态（主备模型、密钥是否就绪），这样知道 AI 能不能用。
-21. 作为用户，我想看到失败的真实原因（模型不可用/预算外失败/工具错误）和可行的下一步（重试/换材料），这样失败不迷茫。
-22. 作为用户，我不想再看到逐步向导和每步确认弹窗，这样体验是「使唤助手」而不是「填表」。
-23. 作为用户，我想旧的六步项目数据保留但不出现在列表里，这样历史不丢、界面不乱。
+## User Stories（增量）
+24. 作为用户，我要 agent 带思考工作（thinking medium），让排版决策有推理质量。
+25. 作为用户，我要 agent 拥有专业级设计配方（多配色/逐页布局模板/KPI 卡墙/页码徽章等组件代码），产出不再是裸矩形堆砌。
+26. 作为用户，我要 PPT 能用我上传的图片素材，且 agent 可联网取图（存本地后引用、防变形），视觉密度对齐商业成品。
+27. 作为用户，我要 agent 交付前逐页「看」自己的排版（视觉自检）并修正遮挡/溢出/层级问题。
+28. 作为用户，我要模型 bash 具备联网能力（装库/取素材），同时授权、审计、项目根路径边界不放松。
 
 ## Implementation Decisions
-
-1. **运行层**：`pi-agent-runtime@0.4.1`（vendored tgz）`createSessionRuntime`；每项目一个持续会话（JSONL，重启恢复）；S1/S2 已落地并验证（宿主/预算/审计/授权/运输五输入齐备）。
-2. **框架梳理（S3 核心）**：自定义工具 `propose_outline`——参数为页数组（title/page_type/intent/source_hint）+ 待澄清问题数组（≤3）；宿主把提案存为项目状态（含版本号与确认态）；系统提示词守则要求：读完材料先提案，确认前不生成；确认由用户显式消息触发（宿主在确认后给 agent 注入继续指令）。
-3. **deck 工件（S4 核心）**：约定 `deck/pages/page_XX.js`（ESM，导出 `buildSlide(pptx)`）+ `deck/deck.js`（按序 import 并成 deck）；自定义工具 `render_deck`（node 执行 → 校验 zip 头/slide 数 → 每页 HTML 预览路径返回）；`qa_deck`（结构校验 + checks/privacy 精简建议性输出）；`export_deck`（pptx=deck 工件直出；html=页面 HTML 合集；pdf=Playwright 打印合集）。导出记录沿用现有 exports 存储。
-4. **逐页修改**：前端选中页后发送的消息由宿主注入页上下文前缀（页号/标题/文件路径）；agent 用 edit 工具改 page_XX.js 后被守则要求调 render_deck 重渲。
-5. **系统提示词**：PPT skill（现有 assets/skills/ppt/SKILL.md）扩展：deck 分页组织规范、QA 守则、框架梳理守则（先提案后生成、数字逐字来自材料、0 emoji）。
-6. **前端（S5 核心）**：React 工作台按 DESIGN.md token（bg #f5f6f8 / brand #28674e / ink #1d2433 / line #dfe3ea…）+ 参考样例布局：侧栏（新建/项目列表）· 主区（对话线程 + 大纲提案卡 + deck 工作区切换）· 右抽屉（运行详情/审计）· composer（附件 + 发送/停止）。真实状态渲染（运行中/等待/失败可辨，进度来自 SSE 真实事件，无编造百分比）。
-7. **API**：S2 已有 chat/status/result/history/events(SSE)/stop + ai/status；S3 增 outline 读写/确认路由；S4 增 deck 页列表/预览 PNG/导出记录路由。
-8. **删除（S6，最后执行）**：六步 workbench 与路由、LlmStageClient/recording/agent-loop、render/{pptx,deck-html,deck-pdf}、六步 schema 与前端视图、对应测试。**硬约束：S6 删除必须在 S5 前端验收通过之后**（红队 #5）。
-9. **兼容**：旧 ppt 项目列表隐藏；`data/` 双机 git 同步机制不变（session/ 目录纳入同步）。
+1. U2 thinking：run 传 `thinkingLevel:'medium'`；probe 实测定备链（v2.6-flash thinking 不行则切 v2.5-pro 或单链）。
+2. U1 skill：重写 SKILL.md（保留红线与 deck 工件纪律），吸收 ppt-generator 配方；禁图条款废除，改「图片规范」。
+3. U3 look_page：effect='read'，output='content' 返回页 PNG（deck/pages HTML 优先，fallback 近似图）；skill 增视觉自检节。
+4. U4 执行环境：`src/agent/exec-env.ts` 自定义 ExecutionEnvironment（exec 无沙箱网络；resolvePath 限项目根；read/write/stat 常规；超时 120s/输出 2MB）；替换 createLocalExecutionEnvironment 装配；authorize/审计不变。
+5. U5 验证：probe（M3 thinking/mimo thinking）→ e2e 同材料 → 与用户 pi 产物并排截图留证（.flow/freedom-run.md）。
 
 ## Testing Decisions
-
-- 只测外部行为：工具入参→落盘产物、路由状态码与响应形状、会话恢复语义；不测内部调用序列。
-- **主缝 = SessionHost**（S2 已建立）：合成 ModelTransport 注入即可离线驱动全链（propose_outline 调用、确认流、steer、恢复）。新工具测试沿此缝：合成 assistant 回复带 toolCall → 断言工具落盘产物与返回给模型的内容。
-- 工具单测：render_deck/qa_deck/export_deck 在临时目录直接构造 page js / deck 产物断言校验逻辑与失败负例（坏 zip、缺 slide、路径越界）。
-- API 测试：fastify inject（沿 tests/api.test.ts 先例），覆盖 outline 确认流 409/422 负例与导出路由。
-- 预算/授权负例：沿 tests/agent-budget.test.ts 先例补「活动 lease 重启」负例（红队 #2）。
-- 真调冒烟（不进 CI）：scripts/ 下端到端脚本，S4 与 S6 各跑一轮（红队 #1 的最便宜测试）。
+- Seam 沿用 SessionHost（合成 transport）+ 工具单测 + inject。
+- 新增：exec-env 单测（联网 exec 可达外网 DNS 解析或 HTTP HEAD；路径越界拒绝；超时生效）；look_page 单测（返回 content 含 image 块）；skill 文本断言（配方关键词/图片规范/自检清单存在，禁图条款不存在）。
+- thinking：probe 真调验证（不进 CI）；离线断言 run 请求含 thinkingLevel=medium。
 
 ## Out of Scope
+UI 变更；视频嵌入（skill 记规范不实现工具）；共享 SDK 接入；多会话。
 
-npm pi 1.1.0 / pi-coding-agent 直用（标准禁止）；多会话/fork UI；模板市场；移动端/响应式完备；旧项目数据迁移；真实外发通道（邮件/上传）；共享 pi-agent-runtime SDK 化（本项目直用共享包 tgz）。
-
-## Further Notes
-
-- 红队 top3 已内化为测试/门：deck 真调样张（S4 首片）、账本崩溃恢复负例（S3 前）、提案卡交互进 UI-GATE 原型。
-- 全局 DESIGN.md 为 UI 事实源；项目无独立 DESIGN.md，UI-GATE 时以全局基线 + 参考样例为准。
-- 语言：界面与文案简体中文；产品名/模型名/代码保留原名。
-
-## GRILL Self-Grill 决议（2026-10-10，用户预授权「全部按推荐」；proposal 已裁事项为约束不重开）
-
-| # | 开放问题 | 决议（推荐即答案） | 理由 |
-|---|---|---|---|
-| G1 | 框架确认后是否锁定（六步语义） | **不锁定**。确认进入生成后，页集合增删改=普通对话编辑（agent 改 pages 文件+render_deck），审计留痕 | 自主对话形态下锁定仪式与自由编辑冲突；红队无异议 |
-| G2 | 不传附件直接说需求的对话 | **允许**。无材料时 AI 先反问要材料，或用户确认「无数据版」（纯文字框架）；数字红线不变：无来源数字禁止；QA 标注「无材料来源」 | 产品红线（不编造）优先于功能便利 |
-| G3 | 材料读取路径 | **上传路由保留并扩展**：上传时文本提取落盘（pdf/docx/xlsx→提取文本；md/csv 原文直读），agent 用 read 工具读提取文本；**图片**走 vision 预理解→文字描述落盘（复用 minimax vision），agent 读描述 | agent 的 read 读不了二进制；vision 不进工具面，保持工具面克制 |
-| G4 | 提案轮次与版本 | 卡片编辑保存=用户定稿可直接确认；聊天回复意见→agent 出新提案（版本+1）；轮次无上限 | 两种修改路径都自然 |
-| G5 | 压缩参数 | 维持文档示例值（reserve 4096/keep 8192），真调触发压缩后再调 | 低风险，记账 |
-| G6 | 多项目并行会话 | 允许（每项目独立 host/runtime），无额外开发 | 单进程内天然隔离 |
-| G7 | S5 期间旧六步视图 | S5 重写路由后旧视图即不可达；文件删除归 S6 一并 | 避免双入口混乱 |
-| G8 | 导出分级与审批 | 无审批、无内外分级；qa_deck 建议性输出展示但不阻断（proposal 已裁，此处确认落地） | 2026-10-07 隐私解除裁决延续 |
-
-## R1 审查回写（2026-10-10）
-
-- outline 确认流负例实现为 **404（无提案）/422（非法页）**；原 PRD 写 409 系六步锁定语义残留——G1「确认后不锁定」使 409 语义消失，以实现为准。
-- 密钥发现链补记：`.zcode/v2/config.json`（xiaomimimo baseURL 回退）在 `~/.pi/agent/auth.json` 缺小米条目时生效（`src/agent/model.ts`）。
-- R1 补齐项：设置页（US20/W8）、失败三分类与恢复会话入口（W9.2）、空页可行动提示（W9.3）、历史恢复分隔线（W9.4）、运行详情用量页签（W7）。
+## R1 审查回写（沿承）
+outline 404/422；.zcode 密钥回退；W7 双页签豁免。

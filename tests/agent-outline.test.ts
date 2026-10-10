@@ -110,6 +110,6 @@ describe('框架提案（T2）', () => {
   it('守则存在：skill 与系统提示词含框架梳理约束（确认前不生成）', async () => {
     const skill = await readFile('assets/skills/ppt/SKILL.md', 'utf-8');
     expect(skill).toContain('propose_outline');
-    expect(skill).toContain('确认前不要开始写页面代码');
+    expect(skill).toContain('用户确认前不写代码');
   });
 });

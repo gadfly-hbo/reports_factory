@@ -74,7 +74,8 @@ export const MINIMAX_M3: ModelConfig = {
 };
 
 /** 备模型：小米 mimo-v2.6-flash，openai-completions 协议（§3.4 反向配置端点）。
- *  thinking 未验证：不声明 reasoning（候选须显式声明已验证能力）。 */
+ *  thinking 已验证（flow-2 U0 probe 真调 medium 通过；pi 注册表全系 reasoning=true、
+ *  用户 pi 日常以 medium 跑 mimo-v2.5-pro）——链上候选齐备，可开 thinkingLevel。 */
 export const MIMO_FLASH: ModelConfig = {
   provider: 'xiaomi-token-plan-cn',
   id: 'mimo-v2.6-flash',
@@ -82,6 +83,7 @@ export const MIMO_FLASH: ModelConfig = {
   endpoint: 'https://token-plan-cn.xiaomimimo.com/v1',
   contextWindow: 128_000,
   maxOutputTokens: 16_384,
+  reasoning: true,
   input: ['text'],
 };
 

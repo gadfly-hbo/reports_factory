@@ -160,10 +160,25 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`,
     }
   });
 
-  it('skill 含 deck 组织规范（.mjs/buildSlide/render_deck 纪律）', async () => {
+  it('skill 含 deck 组织规范 + 自由度配方（flow-2 U1）', async () => {
     const skill = await readFile('assets/skills/ppt/SKILL.md', 'utf-8');
+    // 工件纪律保留
     expect(skill).toContain('deck/pages/page_01.mjs');
     expect(skill).toContain('buildSlide');
     expect(skill).toContain('render_deck');
+    // U1 设计配方
+    expect(skill).toContain('深蓝经典');
+    expect(skill).toContain('KPI 卡片墙');
+    expect(skill).toContain('大数字视觉锤');
+    expect(skill).toContain('页码徽章');
+    expect(skill).toContain('sizing');
+    // U3 视觉自检 / 图片放开
+    expect(skill).toContain('look_page');
+    expect(skill).toContain('original_file');
+    expect(skill).toContain('联网取图');
+    // 禁图条款废除 / 红线保留
+    expect(skill).not.toContain('外部图片 URL（用纯色/形状代替）');
+    expect(skill).toContain('逐字来自材料');
+    expect(skill).toContain('0 emoji');
   });
 });

@@ -15,9 +15,10 @@ export function localAuthorize(): (action: Authorization, signal: AbortSignal) =
       case 'model':
         return true; // 会话内模型调用已随任务创建授权（用户发起对话即授权）
       case 'tool':
-        // read/write 由 ExecutionEnvironment 目录边界隔离；
-        // bash 被原生工厂标为 external 效果，但实际运行在受限单进程 sandbox（禁网络/fork、
-        // 根=项目数据目录），按项目内进程工具放行；其余 external（真实出网）一律拒绝
+        // read/write 由 ExecutionEnvironment 目录边界隔离（限项目根）；
+        // bash 被原生工厂标为 external 效果——flow-2 U4 起运行在联网执行环境（exec-env.ts：
+        // /bin/bash -c、可联网装库取素材，单次超时/输出上限，文件面仍限根），按本地单用户
+        // 预授权放行（对齐 pi-coding-agent 自由度）；审计逐次留痕；其余 external 默认拒绝
         if (action.effect === 'external') return action.name === 'bash';
         return action.effect === 'read' || action.effect === 'write';
       case 'publish':

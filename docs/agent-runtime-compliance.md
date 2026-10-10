@@ -20,6 +20,9 @@
 ## 二、运行形态
 
 - `createSessionRuntime`（`session-host.ts`）：每项目一个持续会话（JSONL，重启恢复）；原生 skills（`assets/skills/ppt/`）+ 自动压缩；steer/followUp（对话式插话）。
+- **thinkingLevel: medium**（flow-2 U2）：对齐 pi-coding-agent 运行条件；双链 reasoning 已实证（M3 真调带思考块；mimo-v2.6-flash probe 通过；pi 注册表全系 reasoning=true、用户 pi 日常 medium 跑 mimo-v2.5-pro）。
+- **联网执行环境**（flow-2 U4，`src/agent/exec-env.ts`）：exec 无网络沙箱（可装库/取素材，对齐 pi bash 自由度）；文件面仍限项目根（resolvePath 越界拒绝）；单次超时/输出上限保留；授权（bash external 放行）与零内容审计逐次生效。
+- **look_page 视觉自检**（flow-2 U3）：output:'content' 工具把页截图（JPEG q80）回给模型（vision），skill 要求交付前逐页自看。
 - **软失败策略**（宿主决策，P2/P3 依据）：文件类工具失败转 JSON 错误文本回模型自纠，不终止整轮（SDK 默认 after_tool 一票否决对 read 路径误伤过严）；授权/预算/审计仍逐次生效。
 - 事件：审计 + harness 观察事件 → 环形缓冲 → SSE（零内容）；UI 真实状态渲染，无假进度。
 
@@ -27,6 +30,7 @@
 
 - FileBudgetStore 单进程实现（本地单用户）；多进程并发不支持。
 - 压缩参数沿文档示例值（4096/8192），真实长任务触发后再调。
+- 联网 exec 的安全边界：本地单用户产品 + 审计 + 授权下放开；模型可访问任意 URL（下载恶意/超大文件风险由 skill 规范「仅取内容相关素材入 deck/assets/」+ 单次超时/输出上限约束），多用户部署前须重审。
 - 空闲会话 snapshot 需队列属主（SDK 合同）；运行中快照可用（UI 进度路径）。
 - npm pi 1.1.0 / pi-coding-agent 直用不采用（标准第 1 条；如需须用户明示豁免）。
 

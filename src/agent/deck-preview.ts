@@ -5,6 +5,19 @@ export async function renderHtmlFilePng(htmlPath: string): Promise<Buffer> {
   return shootHtml(await (await import('node:fs/promises')).readFile(htmlPath, 'utf-8'));
 }
 
+/** 视觉自检用：JPEG q80（体积≈PNG 的 1/5~1/10，控制多页进上下文的 token 成本）。 */
+export async function shootHtmlJpeg(html: string): Promise<Buffer> {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.setContent(html, { waitUntil: 'load', timeout: 15_000 });
+    await page.waitForTimeout(150);
+    return await page.screenshot({ clip: { x: 0, y: 0, width: 1280, height: 720 }, type: 'jpeg', quality: 80 });
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function shootHtml(html: string): Promise<Buffer> {
   const browser = await chromium.launch();
   try {

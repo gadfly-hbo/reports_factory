@@ -14,11 +14,14 @@ const server = spawn('node', ['dist/server/start.js'], {
   env: { ...process.env, REPORT_STUDIO_HOME: home, PORT: String(port), REPORT_STUDIO_NO_SYNC: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+const serverErrPath = '/tmp/probe-server.err';
+import('node:fs').then(({ createWriteStream }) => { server.stderr.pipe(createWriteStream(serverErrPath)); });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('server start timeout')), 20000);
   server.stdout.on('data', (d) => { if (String(d).includes(String(port))) { clearTimeout(t); resolve(); } });
 });
-const fail = (msg) => { console.error(`FAIL: ${msg}`); server.kill(); process.exit(1); };
+const serverErrTail = async () => { try { const { readFile } = await import('node:fs/promises'); return (await readFile(serverErrPath, 'utf-8')).slice(-1200); } catch { return '(stderr 未捕获)'; } };
+const fail = async (msg) => { console.error(`FAIL: ${msg}`); const tail = await serverErrTail(); if (tail.trim()) console.error('--- server stderr tail ---\n' + tail); server.kill(); process.exit(1); };
 const api = async (path, init) => {
   const r = await fetch(`http://127.0.0.1:${port}${path}`, init);
   const body = await r.json().catch(() => ({}));
@@ -29,9 +32,19 @@ const post = (path, body) => api(path, { method: 'POST', headers: { 'content-typ
 // 等待本轮结束（最长 ms）；期间报告 deck 产物出现
 async function waitResult(pid, label, maxMs) {
   const started = Date.now();
+  let netFails = 0;
   for (;;) {
-    if (Date.now() - started > maxMs) fail(`${label} 超时（${Math.round(maxMs / 1000)}s）`);
-    const { body } = await api(`/api/projects/${pid}/agent/result`);
+    if (Date.now() - started > maxMs) await fail(`${label} 超时（${Math.round(maxMs / 1000)}s）`);
+    let body;
+    try {
+      body = (await api(`/api/projects/${pid}/agent/result`)).body;
+      netFails = 0;
+    } catch (e) {
+      netFails += 1;
+      if (netFails >= 3) await fail(`${label} 服务失联：${String(e).slice(0, 120)}`);
+      await new Promise((r) => setTimeout(r, 3000));
+      continue;
+    }
     const deck = await api(`/api/projects/${pid}/deck`);
     if (deck.body.pptx) console.log(`  [${label}] deck.pptx 出现（${Math.round(deck.body.pptx.bytes / 1024)}KB，${Math.round((Date.now() - started) / 1000)}s）`);
     if (!body.active) return body;
@@ -50,33 +63,33 @@ try {
   console.log('PASS 材料上传并提取就绪');
 
   const sent = await post(`/api/projects/${pid}/chat`, { text: '根据材料做一份零售门店 Q3 经营复盘 PPT（5 页左右），先给我框架提案。' });
-  if (!sent.body.ok) fail(`chat 失败：${JSON.stringify(sent.body)}`);
+  if (!sent.body.ok) await fail(`chat 失败：${JSON.stringify(sent.body)}`);
   let r1 = await waitResult(pid, '框架轮', 8 * 60_000);
-  if (r1.status !== 'succeeded') fail(`框架轮失败：${r1.reason}`);
+  if (r1.status !== 'succeeded') await fail(`框架轮失败：${r1.reason}`);
 
   let outline = (await api(`/api/projects/${pid}/outline`)).body;
   // 模型非确定性兜底：没调 propose_outline 时显式重提（等同真实用户追问「先给框架」），最多 2 次
   for (let attempt = 0; attempt < 2 && !outline.current; attempt++) {
     const again = await post(`/api/projects/${pid}/chat`, { text: '请调用 propose_outline 工具提交框架提案（2–24 页，title 为结论式页题），不要直接开始生成。' });
-    if (!again.body.ok) fail(`重提失败：${JSON.stringify(again.body)}`);
+    if (!again.body.ok) await fail(`重提失败：${JSON.stringify(again.body)}`);
     r1 = await waitResult(pid, `框架重提${attempt + 1}`, 8 * 60_000);
-    if (r1.status !== 'succeeded') fail(`框架重提失败：${r1.reason}`);
+    if (r1.status !== 'succeeded') await fail(`框架重提失败：${r1.reason}`);
     outline = (await api(`/api/projects/${pid}/outline`)).body;
   }
-  if (!outline.current) fail('重提 2 次后仍无框架提案');
+  if (!outline.current) await fail('重提 2 次后仍无框架提案');
   console.log(`PASS 框架提案 v${outline.current.version}（${outline.current.pages.length} 页）: ${outline.current.pages.map((p) => p.title).join(' / ').slice(0, 120)}`);
   if (outline.current.questions.length) console.log(`  澄清问题：${outline.current.questions.join(' | ')}（无人值守 probe → 直接确认）`);
 
   const confirm = await post(`/api/projects/${pid}/outline/confirm`);
-  if (!confirm.body.confirmed) fail('确认失败');
-  if (!confirm.body.injected) fail(`确认注入失败：${confirm.body.inject_error}`);
+  if (!confirm.body.confirmed) await fail('确认失败');
+  if (!confirm.body.injected) await fail(`确认注入失败：${confirm.body.inject_error}`);
   console.log('PASS 确认注入，agent 自主生成中…');
 
   const r2 = await waitResult(pid, '生成轮', 20 * 60_000);
-  if (r2.status !== 'succeeded') fail(`生成轮失败：${r2.reason}`);
+  if (r2.status !== 'succeeded') await fail(`生成轮失败：${r2.reason}`);
 
   const deck = (await api(`/api/projects/${pid}/deck`)).body;
-  if (!deck.pptx) fail('生成轮结束但无 deck.pptx');
+  if (!deck.pptx) await fail('生成轮结束但无 deck.pptx');
   const JSZip = (await import('jszip')).default;
   const zip = await JSZip.loadAsync(await readFile(join(home, pid, 'deck', 'deck.pptx')));
   const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
@@ -86,7 +99,7 @@ try {
     texts.push(...[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]));
   }
   const emoji = texts.filter((t) => /\p{Extended_Pictographic}/u.test(t));
-  if (emoji.length) fail(`发现 emoji：${emoji[0]}`);
+  if (emoji.length) await fail(`发现 emoji：${emoji[0]}`);
   console.log(`PASS deck.pptx 校验：${slides.length} slide / ${texts.length} 文本框 / 0 emoji / ${deck.pages.filter((p) => p.preview_ready).length} 页预览`);
 
   // 视觉抽查：截图第一页预览（若有）
@@ -102,26 +115,26 @@ try {
   // ---- 逐页修改（T4 语义）----
   const editPrompt = '把第一页的标题改为「Q3 经营复盘：分化中的结构性机会」，只改这一页。';
   const sentEdit = await post(`/api/projects/${pid}/chat`, { text: editPrompt, page: 'page_01' });
-  if (!sentEdit.body.ok) fail(`改页 chat 失败：${JSON.stringify(sentEdit.body)}`);
+  if (!sentEdit.body.ok) await fail(`改页 chat 失败：${JSON.stringify(sentEdit.body)}`);
   const r3 = await waitResult(pid, '改页轮', 15 * 60_000);
-  if (r3.status !== 'succeeded') fail(`改页轮失败：${r3.reason}`);
+  if (r3.status !== 'succeeded') await fail(`改页轮失败：${r3.reason}`);
   const deckAfter = (await api(`/api/projects/${pid}/deck`)).body;
-  if (!deckAfter.pptx) fail('改页后无 deck.pptx');
+  if (!deckAfter.pptx) await fail('改页后无 deck.pptx');
   console.log(`PASS 逐页修改 → deck.pptx 重生成（${Math.round(deckAfter.pptx.bytes / 1024)}KB）`);
 
   // ---- 三格式导出（T5）----
   const exp = await post(`/api/projects/${pid}/export`, { formats: ['pptx', 'html', 'pdf'] });
-  if (!exp.body.ok) fail(`导出失败：${JSON.stringify(exp.body).slice(0, 200)}`);
-  if (exp.body.exports.length !== 3) fail(`导出数 ${exp.body.exports.length} ≠ 3`);
+  if (!exp.body.ok) await fail(`导出失败：${JSON.stringify(exp.body).slice(0, 200)}`);
+  if (exp.body.exports.length !== 3) await fail(`导出数 ${exp.body.exports.length} ≠ 3`);
   const eid = exp.body.exports.find((e) => e.format === 'pptx').export_id;
   const file = await fetch(`http://127.0.0.1:${port}/api/projects/${pid}/exports/${eid}/file`);
   const buf = Buffer.from(await file.arrayBuffer());
-  if (buf[0] !== 0x50 || buf[1] !== 0x4b) fail('导出 pptx 非 zip');
+  if (buf[0] !== 0x50 || buf[1] !== 0x4b) await fail('导出 pptx 非 zip');
   console.log(`PASS 三格式导出（pptx ${Math.round(buf.length / 1024)}KB 下载校验通过，qa.ok=${exp.body.qa.ok}）`);
 
   console.log('T7 端到端 ALL PASS');
 } catch (e) {
-  fail(String(e).slice(0, 300));
+  await fail(String(e).slice(0, 300));
 } finally {
   server.kill();
 }

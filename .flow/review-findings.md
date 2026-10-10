@@ -28,3 +28,11 @@ F3 recover 无 ledger 500 → releaseActive 幂等化
 F4 证据计数笔误（smoke 实为 14 项非 16）→ 以此为准
 F5 清单/预览正则不一致 + localeCompare 乱序 → 正则统一放宽 + numeric 排序
 F6 W7 形态偏差（chips+单时间线 vs 合同双页签）与 W9.4 分隔线时间戳 → 分隔线已补时间；双页签形态记**明示豁免**（信息等价到达：工具/模型/用量/事件计数与时间线均在抽屉，独立页签仅布局差异）
+
+
+---
+
+# flow-2 REVIEW（2026-10-10）
+
+Round 1 **FAIL**：F1 HIGH look_page 错误路径裸 JsonValue 被 SDK output:'content' 校验拒杀整轮（实证复现）；F2 authorize 注释失真；F3 测试绑裸契约；F4 JPEG/PNG、F5 original_file 存量缺口（INFO 记档）。
+Round 2 **PASS**：F1/F2/F3 修复实证（SDK 级复跑 run 存活、模型收到错误文本自纠）；verify 亲跑 exit 0；无新回归。
