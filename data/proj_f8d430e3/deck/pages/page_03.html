@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P3 Gender & Age</title>
+<style>
+  body{margin:0;background:#222;font-family:'Microsoft YaHei',sans-serif;}
+  .slide{width:1280px;height:720px;background:#fff;position:relative;margin:0 auto;overflow:hidden;}
+  .topline{position:absolute;left:0;top:0;width:100%;height:6px;background:#B44626;}
+  .en-label{position:absolute;left:60px;top:38px;font-size:12px;letter-spacing:6px;color:#B44626;font-weight:700;font-family:Arial;}
+  .h-title{position:absolute;left:60px;top:70px;font-size:24px;font-weight:700;color:#263442;}
+  .sec-h{position:absolute;left:60px;top:148px;font-size:15px;font-weight:700;color:#242830;}
+  .col-card{position:absolute;top:188px;width:300px;}
+  .col-head{height:38px;background:#263442;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;font-family:Arial;letter-spacing:4px;}
+  .col-body{padding:14px 18px 0 18px;background:#fff;}
+  .col-body .lab{font-size:12px;color:#626773;}
+  .col-body .fem{font-size:42px;font-weight:700;font-family:Arial;line-height:1;margin-top:6px;}
+  .col-body .bar-bg{height:10px;background:#DEDCD6;margin-top:10px;border-radius:0;}
+  .col-body .bar-fg{height:10px;background:#B44626;}
+  .col-body .male{font-size:22px;font-weight:700;color:#263442;font-family:Arial;margin-top:14px;}
+  .col-body .bar-bg2{height:8px;background:#DEDCD6;margin-top:6px;}
+  .col-body .bar-fg2{height:8px;background:#5A6675;}
+  .delta-sep{position:absolute;left:670px;top:230px;width:4px;height:155px;background:#DEDCD6;}
+  .delta-blk{position:absolute;left:688px;top:225px;}
+  .delta-blk .lab{font-size:11px;color:#626773;font-family:Arial;letter-spacing:4px;font-weight:700;}
+  .delta-blk .v1{font-size:18px;color:#B44626;font-weight:700;font-family:Arial;margin-top:8px;}
+  .delta-blk .v2{font-size:18px;color:#263442;font-weight:700;font-family:Arial;margin-top:6px;}
+  .delta-blk .d{font-size:12px;color:#626773;margin-top:8px;}
+  .divider{position:absolute;left:60px;top:385px;width:1160px;height:2px;background:#DEDCD6;}
+  .tbl-h{position:absolute;left:60px;top:400px;font-size:12px;color:#626773;font-weight:700;}
+  table{border-collapse:collapse;font-size:13px;}
+  .row{height:25px;}
+  .row.alt{background:#F7F6F3;}
+  .col-age{width:130px;color:#242830;font-weight:400;padding-left:10px;}
+  .col-age.hl{color:#B44626;font-weight:700;}
+  .col-a25{width:160px;text-align:center;color:#626773;}
+  .col-a26{width:160px;text-align:center;color:#263442;font-weight:700;}
+  .col-a26.hl{color:#B44626;}
+  .col-d{width:120px;text-align:center;font-weight:700;}
+  .col-bar{width:480px;padding-left:10px;}
+  .col-bar .b{height:8px;background:#263442;}
+  .col-bar .b.accent{background:#B44626;}
+  .col-bar .label{font-size:10px;color:#626773;margin-bottom:8px;letter-spacing:1px;}
+  .conclu{position:absolute;left:60px;top:670px;width:1160px;height:30px;background:#263442;color:#fff;display:flex;align-items:center;padding:0 14px;font-size:13px;}
+  .page-no{position:absolute;right:30px;bottom:60px;width:36px;height:36px;border-radius:50%;background:#B44626;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700;}
+  .head-row{position:absolute;left:60px;top:435px;width:1160px;display:flex;font-size:11px;color:#626773;font-weight:700;letter-spacing:2px;}
+  .head-row .h1{width:130px;} .head-row .h2{width:160px;text-align:center;} .head-row .h3{width:160px;text-align:center;} .head-row .h4{width:120px;text-align:center;} .head-row .h5{width:480px;padding-left:10px;}
+  .rows-wrap{position:absolute;left:60px;top:465px;width:1160px;}
+</style></head>
+<body><div class="slide">
+  <div class="topline"></div>
+  <div class="en-label">SECTION  ·  GENDER  &  AGE</div>
+  <div class="h-title">女性占比进一步上升至 85.87%，主力人群仍为 24-30 岁</div>
+  <div class="sec-h">性别结构</div>
+
+  <div class="col-card" style="left:60px;">
+    <div class="col-head">2025.09</div>
+    <div class="col-body">
+      <div class="lab">女性</div>
+      <div class="fem" style="color:#5A6675;">83.19%</div>
+      <div class="bar-bg"><div class="bar-fg" style="width:83.19%;background:#5A6675;"></div></div>
+      <div class="male">16.81%</div>
+      <div class="bar-bg2"><div class="bar-fg2" style="width:16.81%;"></div></div>
+    </div>
+  </div>
+
+  <div class="col-card" style="left:370px;">
+    <div class="col-head">2026.09</div>
+    <div class="col-body">
+      <div class="lab">女性</div>
+      <div class="fem" style="color:#B44626;">85.87%</div>
+      <div class="bar-bg"><div class="bar-fg" style="width:85.87%;"></div></div>
+      <div class="male">14.13%</div>
+      <div class="bar-bg2"><div class="bar-fg2" style="width:14.13%;"></div></div>
+    </div>
+  </div>
+
+  <div class="delta-sep"></div>
+  <div class="delta-blk">
+    <div class="lab">YoY Δ</div>
+    <div class="v1">女 +2.68pp</div>
+    <div class="v2">男 -2.68pp</div>
+    <div class="d">女性主导进一步强化</div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="tbl-h">年龄段占比分布</div>
+
+  <div class="head-row">
+    <div class="h1">年龄段</div><div class="h2">2025.09</div><div class="h3">2026.09</div><div class="h4">YoY Δ</div><div class="h5">26.09 占比可视化</div>
+  </div>
+  <div class="rows-wrap">
+    <div class="row"><div style="display:flex;"><div class="col-age">18-19</div><div class="col-a25">1.13%</div><div class="col-a26">2.57%</div><div class="col-d" style="color:#B44626;">+1.44pp</div><div class="col-bar"><div class="b" style="width:7.7%;"></div></div></div></div>
+    <div class="row alt"><div style="display:flex;"><div class="col-age">20-23</div><div class="col-a25">10.34%</div><div class="col-a26">13.21%</div><div class="col-d" style="color:#B44626;">+2.87pp</div><div class="col-bar"><div class="b" style="width:39.5%;"></div></div></div></div>
+    <div class="row"><div style="display:flex;"><div class="col-age hl">24-30</div><div class="col-a25">31.11%</div><div class="col-a26 hl">31.77%</div><div class="col-d" style="color:#B44626;">+0.66pp</div><div class="col-bar"><div class="b accent" style="width:100%;"></div></div></div></div>
+    <div class="row alt"><div style="display:flex;"><div class="col-age">31-35</div><div class="col-a25">17.42%</div><div class="col-a26">16.98%</div><div class="col-d" style="color:#263442;">-0.44pp</div><div class="col-bar"><div class="b" style="width:53.5%;"></div></div></div></div>
+    <div class="row"><div style="display:flex;"><div class="col-age hl">36-40</div><div class="col-a25">25.13%</div><div class="col-a26 hl">22.65%</div><div class="col-d" style="color:#263442;">-2.48pp</div><div class="col-bar"><div class="b accent" style="width:71.3%;"></div></div></div></div>
+    <div class="row alt"><div style="display:flex;"><div class="col-age">41-45</div><div class="col-a25">7.53%</div><div class="col-a26">6.66%</div><div class="col-d" style="color:#263442;">-0.87pp</div><div class="col-bar"><div class="b" style="width:21.0%;"></div></div></div></div>
+    <div class="row"><div style="display:flex;"><div class="col-age">46-50</div><div class="col-a25">4.45%</div><div class="col-a26">3.87%</div><div class="col-d" style="color:#263442;">-0.58pp</div><div class="col-bar"><div class="b" style="width:12.2%;"></div></div></div></div>
+    <div class="row alt"><div style="display:flex;"><div class="col-age">51+</div><div class="col-a25">2.90%</div><div class="col-a26">2.29%</div><div class="col-d" style="color:#263442;">-0.61pp</div><div class="col-bar"><div class="b" style="width:7.2%;"></div></div></div></div>
+  </div>
+
+  <div class="conclu">洞察：成交人群进一步「年轻化 + 女性化」，20-23 岁年轻段是核心增量来源</div>
+
+  <div class="page-no">03</div>
+</div></body></html>

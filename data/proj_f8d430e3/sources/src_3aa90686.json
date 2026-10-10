@@ -1,0 +1,14 @@
+{
+  "source_id": "src_3aa90686",
+  "version": "v1",
+  "logical_key": "source:local:202509森马品牌成交画像数据",
+  "filename": "202509森马品牌成交画像数据.csv",
+  "media_type": "text/csv",
+  "kind": "csv",
+  "file_hash": "fc054aee097d53bb3707b6c9397543494c96d7dba93acf6d5e48075e0eb4dd1c",
+  "size": 197332,
+  "imported_at": "2026-10-10T15:10:59.762Z",
+  "parse_status": "failed",
+  "has_data": true,
+  "parse_error": "CSV 解析失败：Invalid Record Length: columns length is 4, got 6 on line 669"
+}

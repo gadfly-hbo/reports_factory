@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>P5 Consumer Groups</title>
+<style>
+  body{margin:0;background:#222;font-family:'Microsoft YaHei',sans-serif;}
+  .slide{width:1280px;height:720px;background:#fff;position:relative;margin:0 auto;overflow:hidden;}
+  .topline{position:absolute;left:0;top:0;width:100%;height:6px;background:#B44626;}
+  .en-label{position:absolute;left:60px;top:38px;font-size:12px;letter-spacing:6px;color:#B44626;font-weight:700;font-family:Arial;}
+  .h-title{position:absolute;left:60px;top:70px;font-size:24px;font-weight:700;color:#263442;}
+  .table-hd{position:absolute;left:60px;top:155px;width:1160px;height:36px;background:#263442;color:#fff;display:flex;align-items:center;font-size:11px;font-weight:700;font-family:Arial;letter-spacing:2px;}
+  .table-hd .h{padding:0 10px;height:36px;display:flex;align-items:center;}
+  .h-name{width:175px;} .h-a25{width:155px;justify-content:center;} .h-a26{width:155px;justify-content:center;}
+  .h-d{width:130px;justify-content:center;} .h-tgi{width:145px;justify-content:center;} .h-bar{width:400px;}
+  .rows-wrap{position:absolute;left:60px;top:191px;width:1160px;}
+  .row{height:42px;display:flex;align-items:center;font-size:13px;position:relative;}
+  .row.alt{background:#F7F6F3;}
+  .row .key::before{content:"";position:absolute;left:0;top:0;width:6px;height:42px;background:#B44626;}
+  .cell{padding:0 10px;height:42px;display:flex;align-items:center;}
+  .cell-name{width:175px;font-weight:700;color:#242830;padding-left:18px;}
+  .cell-name.key{color:#B44626;}
+  .cell-a25{width:155px;justify-content:center;color:#626773;font-family:Arial;}
+  .cell-a26{width:155px;justify-content:center;color:#263442;font-weight:700;font-family:Arial;font-size:14px;}
+  .cell-d{width:130px;justify-content:center;font-weight:700;font-family:Arial;}
+  .cell-tgi{width:145px;justify-content:center;color:#626773;font-family:Arial;font-size:12px;}
+  .cell-bar{width:400px;}
+  .bar{height:10px;background:#263442;}
+  .bar.accent{background:#B44626;}
+  .reco-card{position:absolute;top:560px;height:140px;}
+  .core{left:60px;width:580px;background:#263442;color:#fff;padding:14px 18px;}
+  .core .l{font-size:11px;letter-spacing:4px;color:#5A6675;font-weight:700;font-family:Arial;}
+  .core .h{font-size:17px;font-weight:700;margin-top:6px;}
+  .core .list{font-size:12px;line-height:1.7;margin-top:10px;}
+  .core .list span.accent{color:#B44626;font-weight:700;}
+  .actions{left:660px;width:560px;background:#F7F6F3;border:0.5px solid #DEDCD6;padding:14px 18px 14px 24px;position:relative;}
+  .actions::before{content:"";position:absolute;left:0;top:0;width:6px;height:140px;background:#B44626;}
+  .actions .l{font-size:11px;letter-spacing:4px;color:#B44626;font-weight:700;font-family:Arial;}
+  .actions .h{font-size:15px;color:#263442;font-weight:700;margin-top:6px;}
+  .actions .list{font-size:11px;line-height:1.7;margin-top:8px;color:#242830;}
+  .actions .list b{color:#B44626;}
+  .page-no{position:absolute;right:30px;bottom:18px;width:36px;height:36px;border-radius:50%;background:#B44626;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700;}
+</style></head>
+<body><div class="slide">
+  <div class="topline"></div>
+  <div class="en-label">SECTION  ·  CONSUMER GROUPS  &  TAKEAWAYS</div>
+  <div class="h-title">八大消费群体：GenZ 占比跃升 3.84pp，精致妈妈小幅回调</div>
+
+  <div class="table-hd">
+    <div class="h h-name">消费群体</div>
+    <div class="h h-a25">2025.09</div>
+    <div class="h h-a26">2026.09</div>
+    <div class="h h-d">YoY Δ</div>
+    <div class="h h-tgi">TGI 26.09</div>
+    <div class="h h-bar">26.09 占比可视化</div>
+  </div>
+
+  <div class="rows-wrap">
+    <div class="row"><div class="cell cell-name">小镇青年</div><div class="cell cell-a25">23.43%</div><div class="cell cell-a26">23.60%</div><div class="cell cell-d" style="color:#B44626;">+0.17pp</div><div class="cell cell-tgi">146.4</div><div class="cell cell-bar"><div class="bar" style="width:100%;"></div></div></div>
+    <div class="row alt key"><div class="cell cell-name key">精致妈妈</div><div class="cell cell-a25">21.36%</div><div class="cell cell-a26">20.90%</div><div class="cell cell-d" style="color:#263442;">-0.46pp</div><div class="cell cell-tgi">766.8</div><div class="cell cell-bar"><div class="bar accent" style="width:88.6%;"></div></div></div>
+    <div class="row"><div class="cell cell-name">新锐白领</div><div class="cell cell-a25">18.67%</div><div class="cell cell-a26">18.23%</div><div class="cell cell-d" style="color:#263442;">-0.44pp</div><div class="cell cell-tgi">252.9</div><div class="cell cell-bar"><div class="bar" style="width:77.2%;"></div></div></div>
+    <div class="row alt key"><div class="cell cell-name key">GenZ</div><div class="cell cell-a25">11.98%</div><div class="cell cell-a26">15.82%</div><div class="cell cell-d" style="color:#B44626;">+3.84pp</div><div class="cell cell-tgi">135.3</div><div class="cell cell-bar"><div class="bar accent" style="width:67.0%;"></div></div></div>
+    <div class="row"><div class="cell cell-name">都市蓝领</div><div class="cell cell-a25">12.88%</div><div class="cell cell-a26">11.39%</div><div class="cell cell-d" style="color:#263442;">-1.49pp</div><div class="cell cell-tgi">101.4</div><div class="cell cell-bar"><div class="bar" style="width:48.3%;"></div></div></div>
+    <div class="row alt"><div class="cell cell-name">资深中产</div><div class="cell cell-a25">6.28%</div><div class="cell cell-a26">5.50%</div><div class="cell cell-d" style="color:#263442;">-0.78pp</div><div class="cell cell-tgi">146.2</div><div class="cell cell-bar"><div class="bar" style="width:23.3%;"></div></div></div>
+    <div class="row"><div class="cell cell-name">小镇中老年</div><div class="cell cell-a25">3.71%</div><div class="cell cell-a26">3.19%</div><div class="cell cell-d" style="color:#263442;">-0.52pp</div><div class="cell cell-tgi">25.6</div><div class="cell cell-bar"><div class="bar" style="width:13.5%;"></div></div></div>
+    <div class="row alt"><div class="cell cell-name">都市银发</div><div class="cell cell-a25">1.72%</div><div class="cell cell-a26">1.38%</div><div class="cell cell-d" style="color:#263442;">-0.34pp</div><div class="cell cell-tgi">9.1</div><div class="cell cell-bar"><div class="bar" style="width:5.8%;"></div></div></div>
+  </div>
+
+  <div class="reco-card core">
+    <div class="l">CORE  TAKEAWAYS</div>
+    <div class="h">人群年轻化  ·  品类美妆化  ·  内容时尚化</div>
+    <div class="list">
+      <span class="accent">· </span>成交人群从「妈妈主导」转向「年轻 + 妈妈」双核<br>
+      <span class="accent">· </span>GenZ 增量与女性主导力同步提升<br>
+      <span class="accent">· </span>中部省份 + 美妆品类是新的增量组合
+    </div>
+  </div>
+
+  <div class="reco-card actions">
+    <div class="l">RECOMMENDED ACTIONS</div>
+    <div class="h">四条行动建议</div>
+    <div class="list">
+      <b>① </b>内容侧增加 GenZ 与时尚向比重<br>
+      <b>② </b>品类端加码女装/彩妆/美妆护肤<br>
+      <b>③ </b>地域预算向中部省份倾斜<br>
+      <b>④ </b>保留精致妈妈心智沟通不缩减
+    </div>
+  </div>
+
+  <div class="page-no">05</div>
+</div></body></html>

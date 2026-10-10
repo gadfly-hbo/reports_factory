@@ -1,0 +1,27 @@
+{
+ "version": 1,
+ "materials": [
+  {
+   "source_id": "src_3aa90686",
+   "filename": "202509森马品牌成交画像数据.csv",
+   "kind": "csv",
+   "status": "ready",
+   "extract_file": "sources/src_3aa90686.extract.md",
+   "original_file": "sources/src_3aa90686__202509森马品牌成交画像数据.csv",
+   "chars": 121635,
+   "size": 197332,
+   "updated_at": "2026-10-10T15:10:59.777Z"
+  },
+  {
+   "source_id": "src_9d55c5b8",
+   "filename": "202609森马品牌成交画像数据.csv",
+   "kind": "csv",
+   "status": "ready",
+   "extract_file": "sources/src_9d55c5b8.extract.md",
+   "original_file": "sources/src_9d55c5b8__202609森马品牌成交画像数据.csv",
+   "chars": 121716,
+   "size": 197413,
+   "updated_at": "2026-10-10T15:10:59.801Z"
+  }
+ ]
+}
