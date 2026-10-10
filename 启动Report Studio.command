@@ -1,6 +1,6 @@
 #!/bin/bash
 # 一键启动 Report Studio（双端通用：macmini / MacBook）
-# 流程：清理旧进程 → 同步代码 → 装依赖 → 构建 → 注入密钥 → 验证 → 起本机服务 → 打开浏览器。
+# 流程：清理旧进程 → 同步代码与数据 → 装依赖 → 构建 → 注入密钥 → 验证 → 起本机服务 → 打开浏览器；退出时回推项目数据。
 set -e
 cd "$(dirname "$0")"
 
@@ -38,19 +38,38 @@ if [ ! -f web-dist/index.html ] || [ -n "$(find web/src -newer web-dist/index.ht
   npm run build:web
 fi
 
-echo "[密钥] 注入模型密钥…"
-MM=$(python3 -c "import json,os;a=json.load(open(os.path.expanduser('~/.pi/agent/auth.json')));print(a.get('minimax-cn',{}).get('key',''))" 2>/dev/null || true)
-[ -n "$MM" ] && export MINIMAX_CN_API_KEY="$MM"
-XM=$(python3 - <<'PY' 2>/dev/null || true
+echo "[密钥] 注入模型密钥（与 src/agent/model.ts 发现链一致：auth.json 优先，zcode 回退）…"
+MM=$(python3 - <<'PY' 2>/dev/null || true
 import json,os
-cfg=json.load(open(os.path.expanduser('~/.zcode/v2/config.json')))
-for p in (cfg.get('provider') or {}).values():
-    opts=p.get('options') or {}
-    if 'xiaomimimo' in str(opts.get('baseURL','')):
-        print(opts.get('apiKey','')); break
+try:
+    a=json.load(open(os.path.expanduser('~/.pi/agent/auth.json')))
+    print(a.get('minimax-cn',{}).get('key') or a.get('minimax',{}).get('key') or '')
+except Exception:
+    print('')
 PY
 )
-[ -n "$XM" ] && export XIAOMI_TOKEN_PLAN_CN_API_KEY="$XM"
+if [ -n "$MM" ]; then export MINIMAX_CN_API_KEY="$MM"; else echo "[密钥] MiniMax 未发现（服务可用性以 /api/ai/status 为准）"; fi
+XM=$(python3 - <<'PY' 2>/dev/null || true
+import json,os
+def from_auth():
+    try:
+        a=json.load(open(os.path.expanduser('~/.pi/agent/auth.json')))
+        return a.get('xiaomi-token-plan-cn',{}).get('key') or ''
+    except Exception:
+        return ''
+def from_zcode():
+    try:
+        cfg=json.load(open(os.path.expanduser('~/.zcode/v2/config.json')))
+        for p in (cfg.get('provider') or {}).values():
+            if 'xiaomimimo' in str((p.get('options') or {}).get('baseURL','')):
+                return (p.get('options') or {}).get('apiKey') or ''
+    except Exception:
+        pass
+    return ''
+print(from_auth() or from_zcode())
+PY
+)
+if [ -n "$XM" ]; then export XIAOMI_TOKEN_PLAN_CN_API_KEY="$XM"; else echo "[密钥] 小米未发现（备链缺位时主链仍可用）"; fi
 
 echo "[自检] npm run verify…"
 if ! npm run verify; then
@@ -58,7 +77,11 @@ if ! npm run verify; then
   exit 1
 fi
 
-cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
+cleanup() {
+  kill "$SERVER_PID" 2>/dev/null || true
+  echo "[数据] 回推项目数据（data-sync：提交本机 data/ → rebase → push；冲突保本机）…"
+  npm run data-sync || echo "[数据] 回推失败（网络/冲突）——本机数据保留，联网后可手动 npm run data-sync" >&2
+}
 trap cleanup EXIT
 
 PORT=${PORT:-8787}
