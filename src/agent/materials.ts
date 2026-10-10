@@ -24,6 +24,8 @@ export interface MaterialEntry {
   /** 原件路径（项目根相对；图片页 addImage 直接引用它） */
   original_file: string;
   chars: number;
+  /** 原件大小（字节；W2.2 附件行展示） */
+  size: number;
   updated_at: string;
   error?: string;
 }
@@ -94,7 +96,7 @@ export async function extractToText(input: {
 /** 为一份已入库材料生成提取文件并更新 manifest（upload 路由与重试共用）。 */
 export async function indexMaterial(input: {
   projectRoot: string;
-  asset: Pick<SourceAsset, 'source_id' | 'filename' | 'kind'>;
+  asset: Pick<SourceAsset, 'source_id' | 'filename' | 'kind' | 'size'>;
   content: Buffer;
   mediaType?: string;
   vision?: { transport: ModelTransport; model: ModelConfig };
@@ -108,6 +110,7 @@ export async function indexMaterial(input: {
     extract_file: `sources/${asset.source_id}.extract.md`,
     original_file: `sources/${asset.source_id}__${asset.filename}`,
     chars: 0,
+    size: asset.size ?? 0,
     updated_at: new Date().toISOString(),
   };
   try {

@@ -71,11 +71,11 @@ export function OutlineCard(props: {
       <div className="wb-outline-head">
         <strong>框架提案 v{current.version}</strong>
         {outline.confirmed ? <span className="chip chip-ok">已确认（后续可直接对话修改）</span> : <span className="chip">待确认</span>}
-        <span className="fine">{current.origin === 'agent' ? 'AI 提出' : '用户编辑'} · {current.pages.length} 页</span>
+        <span className="fine">{current.origin === 'agent' ? 'AI 提出' : '用户编辑'} · {current.pages.length} 页{dirty ? ' · 已手动编辑（保存后确认生效）' : ''}</span>
       </div>
       {error && <p className="wb-outline-error" role="alert">{error}</p>}
       <table className="wb-outline-tbl">
-        <thead><tr><th style={{ width: 34 }}>#</th><th>页题（结论式）</th><th style={{ width: 150 }}>页型</th><th>意图</th>{!outline.confirmed && <th style={{ width: 96 }}></th>}</tr></thead>
+        <thead><tr><th style={{ width: 34 }}>#</th><th>页题（结论式）</th><th style={{ width: 130 }}>页型</th><th>意图</th><th style={{ width: 130 }}>来源</th>{!outline.confirmed && <th style={{ width: 96 }}></th>}</tr></thead>
         <tbody>
           {draft.map((p, i) => (
             <tr key={i}>
@@ -86,6 +86,9 @@ export function OutlineCard(props: {
                        onChange={(e) => update(i, { page_type: e.target.value })} />
               </td>
               <td><input value={p.intent ?? ''} disabled={outline.confirmed || busy} placeholder="该页要回答什么" onChange={(e) => update(i, { intent: e.target.value })} /></td>
+              <td><input value={(p.source_hint ?? []).join('、')} disabled={outline.confirmed || busy}
+                         placeholder={((p.source_hint ?? []).length === 0 ? '无材料来源' : '')}
+                         onChange={(e) => update(i, { source_hint: e.target.value.split('、').map((x) => x.trim()).filter(Boolean) })} /></td>
               {!outline.confirmed && (
                 <td className="wb-outline-ops">
                   <button type="button" className="btn btn-ghost btn-sm" aria-label="上移" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
@@ -126,6 +129,7 @@ export function OutlineCard(props: {
           <button type="button" className="btn btn-primary btn-sm" disabled={saving || busy} onClick={() => void confirm()}>
             {saving ? '处理中…' : `按此框架生成（v${current.version}${dirty ? '·含修改' : ''}）`}
           </button>
+          <p className="fine">有意见？直接在下方对话回复（如「第 3 页换成对比」），AI 会重新出提案，版本 +1。</p>
         </div>
       )}
     </div>

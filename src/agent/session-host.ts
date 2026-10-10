@@ -195,8 +195,13 @@ export class SessionHost {
       return 'ready';
     };
 
+    // 工具耗时（W2.1 工具动作卡「完成（含耗时）」）：admitted 记起点，finished 配对算差
+    const toolStart = new Map<string, number>();
     const onAudit = (e: Readonly<AuditEvent>) => {
-      hostRef?.recordEvent({ at: e.at, kind: e.kind, detail: { provider: e.provider, model: e.model, toolName: e.toolName, reason: e.reason, attempt: e.attempt, failed: e.toolFailed } });
+      if (e.kind === 'tool.admitted') toolStart.set(e.toolName ?? '', Date.parse(e.at));
+      const durationMs = e.kind === 'tool.finished' && toolStart.has(e.toolName ?? '') ? Date.parse(e.at) - (toolStart.get(e.toolName ?? '') ?? 0) : undefined;
+      if (e.kind === 'tool.finished') toolStart.delete(e.toolName ?? '');
+      hostRef?.recordEvent({ at: e.at, kind: e.kind, detail: { provider: e.provider, model: e.model, toolName: e.toolName, reason: e.reason, attempt: e.attempt, failed: e.toolFailed, ...(durationMs !== undefined ? { durationMs } : {}) } });
     };
     let hostRef: SessionHost | null = null;
 

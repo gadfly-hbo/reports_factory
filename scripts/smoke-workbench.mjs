@@ -34,14 +34,35 @@ try {
   console.log('PASS 新建项目并激活');
 
   await page.setInputFiles('input[type=file]', { name: '结论.md', mimeType: 'text/markdown', buffer: Buffer.from('# 结论\n销售额 880 万，同比 -7.1%') });
-  await page.waitForSelector('.chip-ok', { timeout: 10000 });
-  const chip = await page.textContent('.chip-ok');
-  if (!chip.includes('就绪')) fail(`附件状态非就绪：${chip}`);
-  console.log(`PASS 上传解析状态流转 → ${chip.trim().slice(0, 40)}`);
+  await page.waitForSelector('.att-row.st-ok', { timeout: 10000 });
+  const chip = await page.textContent('.att-row.st-ok');
+  if (!chip.includes('已提取')) fail(`附件状态缺提取字数：${chip.slice(0, 60)}`);
+  console.log(`PASS 附件行（名/状态/已提取 N 字）→ ${chip.trim().slice(0, 44)}`);
 
   const empty = await page.textContent('.wb-thread-empty');
   if (!empty.includes('框架')) fail('空态引导文案缺失');
   console.log('PASS 空态引导呈现');
+
+  // B4 插话按钮语义（H1 防回归）：busy 态主按钮文案为「插话」且可点（无模型调用，只验控件语义）
+  // 用 route 拦截伪造一次 busy 结果：/agent/result 恒 active:true → busy 卡渲染 → 断言按钮
+  await page.route('**/api/projects/*/agent/result', (route) => route.fulfill({ json: { active: true } }));
+  await page.route('**/api/projects/*/chat', (route) => route.fulfill({ json: { ok: true, mode: 'steer', sessionId: 'x' } }));
+  await page.fill('.wb-composer textarea', '运行中补一句');
+  await page.click('.wb-composer button[type=submit]'); // 触发 busy（chat 被 stub，result 恒 active）
+  await page.waitForSelector('.wb-msg.pending', { timeout: 5000 });
+  const steerBtn = await page.textContent('.wb-composer .wb-composer-foot .btn-primary');
+  if (!steerBtn.includes('插话')) fail(`busy 主按钮非「插话」：${steerBtn}`);
+  await page.fill('.wb-composer textarea', '插话内容');
+  await page.click('.wb-composer .wb-composer-foot .btn-primary'); // 点插话
+  await page.waitForSelector('.wb-msg.assistant:not(.pending):not(.divider)', { timeout: 5000 });
+  const lastAssistant = await page.$$eval('.wb-msg.assistant:not(.pending):not(.divider)', (els) => els.at(-1)?.textContent ?? '');
+  if (!lastAssistant.includes('已作为插话发送')) fail(`插话无送达反馈：${lastAssistant.slice(0, 40)}`);
+  console.log('PASS 插话语义（busy 主按钮=插话 + 送达反馈）');
+  await page.unroute('**/api/projects/*/agent/result');
+  await page.unroute('**/api/projects/*/chat');
+  // 恢复非 busy：reload 清前端态（材料/项目已在服务端）
+  await page.reload();
+  await page.waitForSelector('.wb-sidebar', { timeout: 5000 });
 
   // 提案卡（T2）：种子提案 → 渲染 → 内联编辑保存 → 确认（202 尽力路径）
   const { proposeOutline } = await import('../dist/agent/outline.js');
@@ -69,7 +90,7 @@ try {
   if (!notes.some((t) => t.includes('注入失败'))) fail('202 尽力路径提示缺失');
   console.log('PASS 确认流（无密钥 202 + 明示注入失败 + 确认徽标）');
 
-  // deck 工作区（W5，T4）：种子 deck → 网格/近似标记/大图/页标记
+  // deck 工作区（W5）：种子第二页 → 回对话视图验证页标记词条，再回成果
   const { mkdir, writeFile } = await import('node:fs/promises');
   const pagesDir = join(home, pid, 'deck', 'pages');
   await mkdir(pagesDir, { recursive: true });
@@ -79,6 +100,7 @@ try {
   await mk('page_01.html', '<html><body style="width:1280px;height:720px">第一页预览</body></html>');
   await writeFile(join(home, pid, 'deck', 'deck.mjs'), "import pptxgen from 'pptxgenjs'; const x = new pptxgen(); await x.writeFile({ fileName: 'deck/empty.pptx' });");
   await page.reload();
+  await page.click('.wb-seg-btn:nth-child(2)');
   await page.waitForSelector('.wb-thumb', { timeout: 5000 });
   const thumbs = await page.$$('.wb-thumb');
   if (thumbs.length !== 2) fail(`缩略图数量 ${thumbs.length} ≠ 2`);
@@ -88,10 +110,11 @@ try {
 
   await page.click('.wb-thumb:nth-child(2)');
   await page.waitForSelector('.wb-figure img', { timeout: 15000 });
+  await page.click('.wb-seg-btn:nth-child(1)'); // 回对话视图：页标记应跟随
   await page.waitForSelector('.wb-composer .chip-accent', { timeout: 3000 });
   const chipTxt = await page.textContent('.wb-composer .chip-accent');
-  if (!chipTxt.includes('page_02')) fail(`页标记错误：${chipTxt}`);
-  console.log('PASS 选中页 → 大图 + composer 页标记');
+  if (!/第 2 页/.test(chipTxt)) fail(`页标记非词条式：${chipTxt}`);
+  console.log(`PASS 选中页跨视图保留 → 页标记词条「${chipTxt.trim().slice(0, 22)}」`);
 
   await page.click('.wb-chip-x');
   await page.waitForTimeout(200);
@@ -99,7 +122,7 @@ try {
   if (still) fail('取消选中失效');
   console.log('PASS 取消页选中');
 
-  // QA + 导出（W6，T5）：deck.mjs 种子 → render 出 pptx → 质检卡 + 导出记录
+  // QA + 导出（W6）：先渲染出 pptx，切到成果视图再质检/导出/网格（flow-3 双视图）
   await writeFile(join(home, pid, 'deck', 'deck.mjs'), `import pptxgen from 'pptxgenjs';
 import { buildSlide as p01 } from './pages/page_01.mjs';
 const pptx = new pptxgen();
@@ -111,6 +134,10 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`);
   const rr = await renderDeckTool(join(home, pid)).execute({}, new AbortController().signal);
   if (!rr.ok) fail(`smoke 渲染失败：${rr.error}`);
   await page.reload();
+  await page.waitForSelector('.wb-seg-btn:nth-child(2):not([disabled])', { timeout: 5000 });
+  await page.click('.wb-seg-btn:nth-child(2)');
+  await page.waitForSelector('.wb-deck .wb-deck-bar', { timeout: 5000 });
+  console.log('PASS 双视图切换（对话/成果）');
   await page.waitForSelector('.wb-deck-bar .btn-primary', { timeout: 5000 });
   await page.click('.wb-deck-bar .btn-ghost'); // 质检
   await page.waitForSelector('.wb-qa', { timeout: 8000 });
@@ -127,7 +154,7 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`);
   console.log('PASS 导出 + 记录表 + 下载链接');
 
   // 运行详情抽屉（W7，T6）：开关 + 空态明示
-  await page.click('.wb-header .btn-ghost');
+  await page.click('.wb-topbar-right .btn-ghost:first-of-type');
   await page.waitForSelector('.wb-drawer', { timeout: 3000 });
   const tl = await page.textContent('.wb-timeline');
   if (!tl.includes('暂无运行事件')) fail(`抽屉空态缺失：${tl.slice(0, 40)}`);
@@ -137,7 +164,7 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`);
   console.log('PASS 运行详情抽屉（空态明示 + 开关）');
 
   // 设置页（W8/US20，R1-1 补齐）：模型链状态呈现（零密钥内容）
-  await page.click('.wb-sidebar .btn-ghost:last-of-type'); // 设置
+  await page.click('.wb-topbar-right .btn-ghost:last-of-type'); // 设置
   await page.waitForSelector('.wb-settings-card table', { timeout: 5000 });
   const srows = await page.$$('.wb-settings-card tbody tr');
   if (srows.length !== 2) fail(`模型链行数 ${srows.length} ≠ 2`);
