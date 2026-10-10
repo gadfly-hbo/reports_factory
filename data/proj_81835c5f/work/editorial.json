@@ -1,0 +1,11 @@
+{
+  "status": "blueprint_review",
+  "brief": {
+    "audience": "经营负责人",
+    "purpose": "分享",
+    "page_budget": 8,
+    "deliverable_type": "meeting_deck",
+    "language": "zh-CN"
+  },
+  "decisions": {}
+}

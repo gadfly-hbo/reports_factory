@@ -1,0 +1,32 @@
+[
+  {
+    "at": "2026-10-09T06:22:11.354Z",
+    "stage": "understand",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 9445,
+    "cost": 0.0019312799999999998
+  },
+  {
+    "at": "2026-10-09T06:22:13.278Z",
+    "stage": "understand",
+    "provider": "minimax-cn",
+    "modelId": "MiniMax-M3",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 9646,
+    "cost": 0.0019831799999999998
+  },
+  {
+    "at": "2026-10-09T06:22:34.665Z",
+    "stage": "framework",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 1,
+    "bytes": 0,
+    "cost": 0
+  }
+]

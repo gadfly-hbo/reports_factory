@@ -1,0 +1,14 @@
+{
+  "understanding": {
+    "src_e4ea533a": {
+      "points": [],
+      "uncovered": true,
+      "gist": "该xlsx文件提取到的为二进制压缩流数据，无法解析出可读内容。"
+    },
+    "src_abaa7cec": {
+      "points": [],
+      "uncovered": true,
+      "gist": "文件名为26年.xlsx，但提供的文本仅为xlsx压缩包的二进制/ZIP编码字节流，无法解析出任何可读的工作表内容，因此无可提炼要点。"
+    }
+  }
+}

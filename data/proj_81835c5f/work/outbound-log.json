@@ -1,0 +1,24 @@
+[
+  {
+    "at": "2026-10-07T00:50:38.757Z",
+    "stage": "draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  },
+  {
+    "at": "2026-10-07T00:50:50.505Z",
+    "stage": "draft",
+    "provider": "none",
+    "modelId": "",
+    "mode": "authorized-summary",
+    "itemCount": 0,
+    "bytes": 0,
+    "cost": 0,
+    "blocked": true
+  }
+]

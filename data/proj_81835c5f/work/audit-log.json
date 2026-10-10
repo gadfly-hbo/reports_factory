@@ -1,0 +1,125 @@
+[
+  {
+    "at": "2026-10-07T00:41:00.797Z",
+    "kind": "generation_stage",
+    "stage": "outline",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:41:00.802Z",
+    "kind": "generation_stage",
+    "stage": "outline",
+    "status": "done"
+  },
+  {
+    "at": "2026-10-07T00:41:00.802Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:41:00.803Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "fallback",
+    "detail": {
+      "reason": "local_only"
+    }
+  },
+  {
+    "at": "2026-10-07T00:41:00.804Z",
+    "kind": "generation_stage",
+    "stage": "assemble",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:41:00.814Z",
+    "kind": "generation_stage",
+    "stage": "assemble",
+    "status": "done"
+  },
+  {
+    "at": "2026-10-07T00:41:00.815Z",
+    "kind": "generation_stage",
+    "stage": "checks",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:41:00.817Z",
+    "kind": "generation_stage",
+    "stage": "checks",
+    "status": "done"
+  },
+  {
+    "at": "2026-10-07T00:50:38.750Z",
+    "kind": "generation_stage",
+    "stage": "outline",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:38.755Z",
+    "kind": "generation_stage",
+    "stage": "outline",
+    "status": "done"
+  },
+  {
+    "at": "2026-10-07T00:50:38.755Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:50.504Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:53.433Z",
+    "kind": "outbound_approval",
+    "stage": "gate",
+    "status": "approved",
+    "detail": {
+      "mode": "authorized-summary"
+    }
+  },
+  {
+    "at": "2026-10-07T00:50:53.437Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:53.438Z",
+    "kind": "generation_stage",
+    "stage": "draft",
+    "status": "fallback",
+    "detail": {
+      "reason": "model_unavailable"
+    }
+  },
+  {
+    "at": "2026-10-07T00:50:53.439Z",
+    "kind": "generation_stage",
+    "stage": "assemble",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:53.449Z",
+    "kind": "generation_stage",
+    "stage": "assemble",
+    "status": "done"
+  },
+  {
+    "at": "2026-10-07T00:50:53.450Z",
+    "kind": "generation_stage",
+    "stage": "checks",
+    "status": "started"
+  },
+  {
+    "at": "2026-10-07T00:50:53.452Z",
+    "kind": "generation_stage",
+    "stage": "checks",
+    "status": "done"
+  }
+]
