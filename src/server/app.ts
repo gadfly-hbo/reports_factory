@@ -18,6 +18,7 @@ import { qaDeck } from '../agent/qa-deck.js';
 import { listDeckPages } from '../agent/deck-files.js';
 import { listFamilies } from '../agent/families.js';
 import { snapshotDeck, listVersions, diffVersions } from '../agent/deck-versions.js';
+import { readLockedPages, writeLockedPages } from '../agent/locked-pages.js';
 import { buildDeckExports } from '../agent/export-deck.js';
 
 
@@ -212,6 +213,21 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     } catch (e) {
       throw httpError(404, `导出文件丢失：${(e as Error).message}`);
     }
+  });
+
+  // 页锁定（flow-10 P2-2）
+  app.get('/api/projects/:id/locked-pages', async (req) => {
+    const { id } = req.params as { id: string };
+    return { locked: await readLockedPages(resolve(store.root, id)) };
+  });
+
+  app.put('/api/projects/:id/locked-pages', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const body = parseBody(z.object({ locked: z.array(z.string().regex(/^page_[\w-]+$/)) }), req.body);
+      await writeLockedPages(resolve(store.root, id), body.locked);
+      return { ok: true, locked: body.locked };
+    } catch (e) { return replyGateError(reply, e as Error & { statusCode?: number }); }
   });
 
   // 版本（flow-9 P1-2）

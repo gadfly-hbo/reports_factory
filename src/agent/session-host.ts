@@ -32,6 +32,7 @@ import { lookPageTool } from './tools/look-page-tool.js';
 import { createNetworkExecutionEnvironment } from './exec-env.js';
 import { familyContent } from './families.js';
 import { logReadPath } from './read-log.js';
+import { readLockedPages, isLockedPath } from './locked-pages.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -159,10 +160,23 @@ export class SessionHost {
       ...t,
       execute: async (args, signal, invocation) => {
         try {
+          // 页锁定防御（flow-10 P2-2）：write/edit 不能碰锁定页
+          if (t.name === 'write' || t.name === 'edit') {
+            const p = (args as { path?: unknown }).path;
+            if (typeof p === 'string') {
+              const locked = await readLockedPages(opts.projectRoot);
+              if (isLockedPath(locked, p)) {
+                const errPayload = { ok: false, error: `该页已锁定（用户手工定稿），不可修改：${p}。请只修改未锁定的页。` };
+                return t.output === 'content'
+                  ? { content: [{ kind: 'text', text: JSON.stringify(errPayload) }], details: null }
+                  : errPayload;
+              }
+            }
+          }
           const out = await t.execute(args, signal, invocation);
           if (t.name === 'read') {
-            const p = (args as { path?: unknown }).path;
-            if (typeof p === 'string') void logReadPath(opts.projectRoot, p); // 覆盖门数据源（D2）
+            const p2 = (args as { path?: unknown }).path;
+            if (typeof p2 === 'string') void logReadPath(opts.projectRoot, p2); // 覆盖门数据源（D2）
           }
           return out;
         } catch (e) {
@@ -269,7 +283,8 @@ export class SessionHost {
     // 场景家族（flow-7）+ 企业 VI（flow-9）：并入 system（每 run 注入；降级不阻断）
     const family = opts.system ? '' : await this.projectFamily();
     const brand = opts.system ? '' : await this.projectBrand();
-    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim()].filter(Boolean).join('\n\n');
+    const locked = opts.system ? '' : await this.projectLocked();
+    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim(), locked.trim()].filter(Boolean).join('\n\n');
     if (this.closed) throw new Error('宿主已关闭');
     if (this.activeRun) {
       await this.control({ kind: 'steer', text });
@@ -310,6 +325,13 @@ export class SessionHost {
   /** 最近一次已结束的结果（R1-2：停止/快速失败后前端退出 busy 的依据；无则 null）。 */
   outcome(): RunResult<string> | null {
     return this.lastOutcome;
+  }
+
+  /** 锁定页指令（locked-pages；手工定稿页不可修改）。 */
+  private async projectLocked(): Promise<string> {
+    const locked = await readLockedPages(this.projectRootDir);
+    if (locked.length === 0) return '';
+    return `【页锁定】以下页已由用户锁定为手工定稿，禁止修改其代码文件：${locked.join('、')}。重新生成/改写时跳过这些页（render_deck 仍渲染全部，锁定页文件不变即结果不变）。`;
   }
 
   /** 企业 VI 指令（brand；主色替换 theme.primary、Logo 引用、字体覆盖）。 */

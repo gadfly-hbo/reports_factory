@@ -173,3 +173,5 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica 
 .wb-ver-diff .ver-added { color: var(--wb-ok); }
 .wb-ver-diff .ver-removed { color: var(--wb-fail); }
 .wb-ver-diff .ver-changed { color: var(--wb-run, #b7791f); }
+.wb-lock-icon { margin-left: 4px; font-size: .72rem; }
+.wb-locked-btn { opacity: .45; }

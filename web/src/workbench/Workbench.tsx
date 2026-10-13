@@ -84,6 +84,7 @@ export function Workbench() {
   const [versions, setVersions] = useState<DeckVersion[]>([]);
   const [versionDiff, setVersionDiff] = useState<PageDiff[] | null>(null);
   const [diffPair, setDiffPair] = useState<{ a: number; b: number } | null>(null);
+  const [lockedPages, setLockedPages] = useState<string[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const lastUserText = useRef('');
@@ -108,6 +109,7 @@ export function Workbench() {
     setExportList((await api<{ exports: ExportRec[] }>(`/api/projects/${id}/exports`).catch(() => ({ exports: [] }))).exports);
     setVersions((await api<{ versions: DeckVersion[] }>(`/api/projects/${id}/deck/versions`).catch(() => ({ versions: [] }))).versions);
     setVersionDiff(null); setDiffPair(null);
+    setLockedPages((await api<{ locked: string[] }>(`/api/projects/${id}/locked-pages`).catch(() => ({ locked: [] }))).locked);
   }, []);
 
   const refreshUsage = useCallback(async (id: string) => {
@@ -311,6 +313,15 @@ export function Workbench() {
   const openSettings = async () => {
     setShowSettings(true);
     try { setAiStatus(await api<AiStatus>('/api/ai/status')); } catch (e) { setError(errMsg(e)); }
+  };
+
+  const toggleLock = async (page: string) => {
+    if (!activeId) return;
+    const next = lockedPages.includes(page) ? lockedPages.filter((p) => p !== page) : [...lockedPages, page];
+    try {
+      await put(`/api/projects/${activeId}/locked-pages`, { locked: next });
+      setLockedPages(next);
+    } catch (e) { setError(errMsg(e)); }
   };
 
   const runQa = async () => {
@@ -582,6 +593,7 @@ export function Workbench() {
                           title={p.preview_ready ? p.name : `${p.name}（近似预览）`}
                           onClick={() => setSelectedPage(p.name)}>
                     <span className="num">{String(i + 1).padStart(2, '0')}</span> · {pageTitle(p.name)}
+                    {lockedPages.includes(p.name) && <span className="wb-lock-icon" title="已锁定（手工定稿）">🔒</span>}
                   </button>
                 ))}
               </div>
@@ -606,11 +618,16 @@ export function Workbench() {
                 <form className="wb-composer wb-page-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
                   <div className="page-badge-row">
                     <span className="chip chip-accent">修改 {pageLabel}</span>
-                    <button type="button" className="btn btn-ghost btn-sm wb-regen" disabled={busy}
-                            title="依据材料重新产出这一页（风格与全套一致）"
+                    <button type="button" className={`btn btn-ghost btn-sm wb-regen ${lockedPages.includes(selectedPage) ? 'wb-locked-btn' : ''}`}
+                            disabled={busy || lockedPages.includes(selectedPage)}
+                            title={lockedPages.includes(selectedPage) ? '该页已锁定（解锁后可重新生成）' : '依据材料重新产出这一页（风格与全套一致）'}
                             onClick={() => void regeneratePage()}>↻ 重新生成本页</button>
+                    <button type="button" className="btn btn-ghost btn-sm"
+                            title={lockedPages.includes(selectedPage) ? '解锁此页（恢复 AI 可编辑）' : '锁定此页（保护手工定稿，AI 不再修改）'}
+                            onClick={() => void toggleLock(selectedPage)}>{lockedPages.includes(selectedPage) ? '🔓 解锁' : '🔒 锁定'}</button>
                   </div>
-                  <textarea rows={2} placeholder={`直接对话修改${pageLabel}（如：标题改成结论式 / 换个图表）……`} value={input}
+                  <textarea rows={2} placeholder={lockedPages.includes(selectedPage) ? '该页已锁定——解锁后可对话修改' : `直接对话修改${pageLabel}（如：标题改成结论式 / 换个图表）……`}
+                             disabled={lockedPages.includes(selectedPage)} value={input}
                              onChange={(e) => setInput(e.target.value)}
                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
                   <div className="wb-composer-foot">

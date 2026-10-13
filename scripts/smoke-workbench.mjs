@@ -128,6 +128,33 @@ try {
   const pcBtn = await page.textContent('.wb-page-composer .wb-composer-foot .btn-primary');
   if (!pcBtn.includes('发送修改')) fail(`页级 composer 按钮错误：${pcBtn}`);
   console.log(`PASS 成果视图内嵌页级 composer → ${pcBadge.trim().slice(0, 20)}`);
+  // flow-10：页锁定（选中页→锁定→按钮/输入框禁用→解锁恢复）
+  await page.click('.wb-page-tab:nth-child(2)');
+  await page.waitForSelector('.wb-figure img', { timeout: 15000 });
+  // flow-10：页锁定
+  const lockBtns = await page.$$('.wb-page-composer .btn-ghost');
+  let lockBtn = null;
+  for (const b of lockBtns) { const txt = await b.textContent(); if (txt.includes('锁定')) { lockBtn = b; break; } }
+  if (!lockBtn) fail('找不到锁定按钮');
+  await lockBtn.click();
+  await page.waitForTimeout(500);
+  const regenDisabled = await page.$eval('.wb-regen', (el) => el.disabled);
+  if (!regenDisabled) fail('锁定后重生成本页按钮未禁用');
+  const taDisabled = await page.$eval('.wb-page-composer textarea', (el) => el.disabled);
+  if (!taDisabled) fail('锁定后输入框未禁用');
+  const lockIcon = await page.$('.wb-lock-icon');
+  if (!lockIcon) fail('页签缺锁定图标');
+  console.log('PASS 页锁定（锁定→按钮/输入框禁用→页签图标）');
+  const unlockBtns = await page.$$('.wb-page-composer .btn-ghost');
+  let unlockBtn = null;
+  for (const b of unlockBtns) { const txt = await b.textContent(); if (txt.includes('解锁')) { unlockBtn = b; break; } }
+  if (!unlockBtn) fail('找不到解锁按钮');
+  await unlockBtn.click();
+  await page.waitForTimeout(500);
+  const regenBack = await page.$eval('.wb-regen', (el) => el.disabled);
+  if (regenBack) fail('解锁后按钮仍禁用');
+  console.log('PASS 页解锁（按钮恢复）');
+
   // 大图 cache-bust：记录当前 src，改 bytes 后应变化
   const imgBefore = await page.getAttribute('.wb-figure img', 'src');
   const tBefore = new URL(imgBefore, 'http://x').searchParams.get('t');
