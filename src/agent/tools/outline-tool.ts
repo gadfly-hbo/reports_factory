@@ -1,5 +1,6 @@
 import type { JsonValue, Tool } from 'pi-agent-runtime';
 import { proposeOutline, validatePages, validateQuestions, type OutlinePage } from '../outline.js';
+import { unreadMaterials } from '../read-log.js';
 
 /** JSON Schema（中立 Tool 合同：JsonObject）。 */
 const PAGES_SCHEMA = {
@@ -39,6 +40,11 @@ export function proposeOutlineTool(projectRoot: string): Tool {
     resourceUnits: 1,
     replay: 'safe',
     execute: async (args): Promise<JsonValue> => {
+      // 材料覆盖门（flow-8 D2）：读完全部就绪材料才准提案（软失败可自纠）
+      const unread = await unreadMaterials(projectRoot);
+      if (unread.length > 0) {
+        return { ok: false, error: `材料未读全（${unread.length} 份）——请先用 read 工具读取以下提取文本后再提出框架：\n${unread.join('\n')}` };
+      }
       const raw = args as { pages?: unknown; questions?: unknown };
       let pages: OutlinePage[];
       let questions: string[];

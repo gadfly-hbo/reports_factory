@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { listDeckPages } from './deck-files.js';
+import { digitGuard, type DigitGuardReport } from './digit-guard.js';
 
 /**
  * deck 质检（T5，D7/G8）：结构校验 + 隐私建议性输出——全部不阻断，结果给 agent（交付前自检）
@@ -22,6 +23,7 @@ export interface QaReport {
   charts: number;
   empty_slides: string[];
   missing_previews: string[];
+  digit?: DigitGuardReport;
   items: QaItem[];
   message: string;
 }
@@ -48,7 +50,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
       message: '质检失败：deck 工件损坏，请重新 render_deck。',
     };
   }
-  const slideNames = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort();
+  const slideNames = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => Number.parseInt(a.match(/\d+/)![0], 10) - Number.parseInt(b.match(/\d+/)![0], 10));
   const empty: string[] = [];
   let text_boxes = 0;
   for (const n of slideNames) {
@@ -58,6 +60,9 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     if (count === 0) empty.push(n.split('/').pop()!.replace('.xml', ''));
   }
   const charts = Object.keys(zip.files).filter((n) => /^ppt\/charts\/chart\d+\.xml$/.test(n)).length;
+
+  // 数字护栏 v2（flow-8 D1）：slideTexts 供三级判定
+  const slideTexts = await Promise.all(slideNames.map(async (n) => (await zip.files[n].async('string')).match(/<a:t>([^<]*)<\/a:t>/g)?.map((t) => t.replace(/<[^>]+>/g, '')).join(' ') ?? ''));
 
   const missingPreviews = (await listDeckPages(projectRoot)).filter((p) => !p.html).map((p) => p.name);
 
@@ -73,6 +78,15 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     }
   }
 
+  const digit = await digitGuard(projectRoot, slideTexts);
+  const digitItem: QaItem = {
+    item: 'digit_guard',
+    status: digit.violations.length > 0 ? 'flag' : 'pass',
+    detail: digit.violations.length > 0
+      ? `${digit.violations.length} 处数字无出处：${digit.violations.slice(0, 5).map((v) => `第${v.slide}页「${v.number}」`).join('、')}${digit.violations.length > 5 ? ' 等' : ''}——补材料、改回材料原值，或加 // calc: 公式 = 值 声明后重渲`
+      : `数字验证通过：原始 ${digit.raw} + 推导 ${digit.derived}${digit.exempt ? `（豁免结构数/年份 ${digit.exempt}）` : ''}`,
+  };
+
   const items: QaItem[] = [
     { item: 'zip_integrity', status: 'pass', detail: `zip 可解包，${Math.round(buf.length / 1024)}KB` },
     {
@@ -87,6 +101,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
       detail: sensitive.length > 0 ? `敏感标记材料：${sensitive.join(', ')}——外发前需脱敏或确认` : '无敏感标记材料',
     },
     ...(missingPreviews.length > 0 ? [{ item: 'page_preview', status: 'info' as const, detail: `${missingPreviews.length} 页缺 agent HTML 预览（UI 以近似预览展示）` }] : []),
+    digitItem,
   ];
   const hasFlag = items.some((i) => i.status === 'flag');
   return {
@@ -96,6 +111,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     charts,
     empty_slides: empty,
     missing_previews: missingPreviews,
+    digit,
     items,
     message: hasFlag ? '质检有 flag 项（见明细）；建议修复后再导出。' : `结构检查通过：${slideNames.length} 页 / ${text_boxes} 文本框。`,
   };

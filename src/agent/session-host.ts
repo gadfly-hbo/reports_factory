@@ -31,6 +31,7 @@ import { renderDeckTool } from './tools/render-deck-tool.js';
 import { lookPageTool } from './tools/look-page-tool.js';
 import { createNetworkExecutionEnvironment } from './exec-env.js';
 import { familyContent } from './families.js';
+import { logReadPath } from './read-log.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -158,7 +159,12 @@ export class SessionHost {
       ...t,
       execute: async (args, signal, invocation) => {
         try {
-          return await t.execute(args, signal, invocation);
+          const out = await t.execute(args, signal, invocation);
+          if (t.name === 'read') {
+            const p = (args as { path?: unknown }).path;
+            if (typeof p === 'string') void logReadPath(opts.projectRoot, p); // 覆盖门数据源（D2）
+          }
+          return out;
         } catch (e) {
           const error = String(e instanceof Error ? e.message : e).slice(0, 300);
           const payload: JsonValue = { ok: false, error, retry_hint: '工具执行失败：检查路径/参数后重试（read 支持项目根相对路径）' };
