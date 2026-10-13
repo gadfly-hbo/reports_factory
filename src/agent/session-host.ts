@@ -34,6 +34,7 @@ import { familyContent } from './families.js';
 import { logReadPath } from './read-log.js';
 import { readLockedPages, isLockedPath } from './locked-pages.js';
 import { detectDrift } from './data-drift.js';
+import { detectOutlineDrift } from './outline-drift.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -286,7 +287,8 @@ export class SessionHost {
     const brand = opts.system ? '' : await this.projectBrand();
     const locked = opts.system ? '' : await this.projectLocked();
     const drift = opts.system ? '' : await this.projectDrift();
-    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim(), locked.trim(), drift.trim()].filter(Boolean).join('\n\n');
+    const outlineDrift = opts.system ? '' : await this.projectOutlineDrift();
+    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim(), locked.trim(), drift.trim(), outlineDrift.trim()].filter(Boolean).join('\n\n');
     if (this.closed) throw new Error('宿主已关闭');
     if (this.activeRun) {
       await this.control({ kind: 'steer', text });
@@ -336,6 +338,23 @@ export class SessionHost {
     const sources = drift.changed_sources.map((c) => c.filename).join('、');
     const numbers = drift.changed_sources.flatMap((c) => c.changed_numbers).slice(0, 8).join('、');
     return `【数据已更新】以下材料已重新上传且数字有变更：${sources}（变更的数字：${numbers}…）。请用 read 工具重新读取这些材料的最新提取文本，受影响的页（${drift.affected_pages.join('、')}）需用新数据重新生成。`;
+  }
+
+  /** 大纲变更指令（outline-drift，B4）：确认大纲已改 → 受影响页重生成（跳过锁定页）+ 新增章节生成。 */
+  private async projectOutlineDrift(): Promise<string> {
+    const drift = await detectOutlineDrift(this.projectRootDir);
+    if (!drift.changed) return '';
+    const parts: string[] = [];
+    if (drift.changed_pages.length > 0) {
+      parts.push(`以下章节已改题（${drift.changed_pages.map((c) => `${c.page}「${c.old_title}」→「${c.new_title}」`).join('、')}），对应页需按新标题重新生成`);
+    }
+    if (drift.removed_pages.length > 0) {
+      parts.push(`以下章节已从大纲移除（${drift.removed_pages.map((c) => `${c.page}「${c.title}」`).join('、')}），对应页应删除并在 deck.mjs 同步移除 import`);
+    }
+    if (drift.added_titles.length > 0) {
+      parts.push(`大纲新增章节：${drift.added_titles.join('、')}——需新写对应页代码并在 deck.mjs 登记`);
+    }
+    return `【大纲已更新】用户已确认新框架：${parts.join('；')}。受影响页：${drift.affected_pages.length > 0 ? drift.affected_pages.join('、') : '（无既有页，仅新增）'}。重新生成时跳过锁定页，全部改完后 render_deck 并逐页 look_page。`;
   }
 
   /** 锁定页指令（locked-pages；手工定稿页不可修改）。 */

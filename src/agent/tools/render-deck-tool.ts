@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue, Tool } from 'pi-agent-runtime';
 import { listDeckPages } from '../deck-files.js';
+import { snapshotRenderOutline } from '../outline-drift.js';
 
 /**
  * render_deck 工具（T3，D8）：执行 deck/deck.mjs（agent 写的分页 ESM 汇总）→ 校验 deck/deck.pptx
@@ -104,6 +105,9 @@ export function renderDeckTool(projectRoot: string): Tool {
       const pages: DeckPage[] = (await listDeckPages(projectRoot)).map((p) => ({ file: p.code, html_preview: p.html, bytes: p.bytes }));
       const missingPreview = pages.filter((p) => !p.html_preview).length;
       if (missingPreview > 0) warnings.push(`${missingPreview} 页缺少同名 .html 预览（用户看不到该页近似预览）`);
+
+      // 大纲联动基线（flow-15 B4）：记录本次渲染所据大纲——后续确认大纲变更即可检出受影响页
+      try { await snapshotRenderOutline(projectRoot); } catch { /* 快照失败不阻断渲染 */ }
 
       return {
         ok: true,

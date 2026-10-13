@@ -100,7 +100,7 @@ try {
   console.log('PASS 确认流（无密钥 202 + 明示注入失败 + 确认徽标）');
 
   // deck 工作区（W5）：种子第二页 → 回对话视图验证页标记词条，再回成果
-  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { mkdir, writeFile, rm } = await import('node:fs/promises');
   const pagesDir = join(home, pid, 'deck', 'pages');
   await mkdir(pagesDir, { recursive: true });
   const mk = (name, text) => writeFile(join(pagesDir, name), text);
@@ -118,6 +118,22 @@ try {
   const tabText = await page.textContent('.wb-page-tab:nth-child(1)');
   if (!/^01/.test(tabText.trim())) fail(`页签非「01. 标题」形态：${tabText.slice(0, 20)}`);
   console.log(`PASS 文本页签（2 个，「01·标题」形态，近似标注在 title）→ ${tabText.trim().slice(0, 24)}`);
+
+  // flow-15 B4：大纲联动——伪造渲染基线与确认大纲差异 → chip + 一键更新按钮
+  await mkdir(join(home, pid, 'work'), { recursive: true });
+  await writeFile(join(home, pid, 'work', 'render-outline.json'), JSON.stringify({ version: 1, titles: ['Q3 复盘封面（改）', '旧版结论', '行动建议'] }));
+  await page.reload();
+  await page.click('.wb-seg-btn:nth-child(2)');
+  await page.waitForSelector('.wb-page-tab', { timeout: 5000 });
+  const odChip = await page.textContent('text=大纲已变更').catch(() => null);
+  if (!odChip || !odChip.includes('1 页受影响')) fail(`大纲联动 chip 缺失或计数错：${odChip ?? '无'}`);
+  const odBtn = await page.textContent('text=按新大纲更新').catch(() => null);
+  if (!odBtn) fail('「按新大纲更新」按钮缺失（假控件防线）');
+  console.log('PASS 大纲联动 chip（1 页受影响）+ 按新大纲更新按钮');
+  await rm(join(home, pid, 'work', 'render-outline.json'), { force: true });
+  await page.reload();
+  await page.click('.wb-seg-btn:nth-child(2)');
+  await page.waitForSelector('.wb-page-tab', { timeout: 5000 });
 
   await page.click('.wb-page-tab:nth-child(2)');
   await page.waitForSelector('.wb-figure img', { timeout: 15000 });

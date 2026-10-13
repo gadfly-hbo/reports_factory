@@ -17,6 +17,7 @@ interface Brand { primary?: string; logo_path?: string; font_zh?: string }
 interface DeckVersion { n: number; created_at: string; pptx_bytes: number; page_count: number }
 interface PageDiff { file: string; status: 'added' | 'removed' | 'changed' | 'unchanged'; bytes_a?: number; bytes_b?: number }
 interface DriftInfo { changed_sources: Array<{ source_id: string; filename: string; changed_numbers: string[] }>; affected_pages: string[] }
+interface OutlineDriftInfo { changed: boolean; changed_pages: Array<{ page: string; old_title: string; new_title: string }>; removed_pages: Array<{ page: string; title: string }>; added_titles: string[]; affected_pages: string[] }
 interface AiStatus { chain: string[]; providers: Array<{ provider: string; modelId: string; key: boolean }>; modelAvailable: boolean }
 interface Usage { modelCalls: number; toolCalls: number; inputTokens?: number; outputTokens: number; activeMs: number }
 interface ToolCard { name: string; status: 'running' | 'done' | 'failed'; durationMs?: number; reason?: string }
@@ -87,6 +88,7 @@ export function Workbench() {
   const [diffPair, setDiffPair] = useState<{ a: number; b: number } | null>(null);
   const [lockedPages, setLockedPages] = useState<string[]>([]);
   const [drift, setDrift] = useState<DriftInfo | null>(null);
+  const [outlineDrift, setOutlineDrift] = useState<OutlineDriftInfo | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const lastUserText = useRef('');
@@ -113,6 +115,7 @@ export function Workbench() {
     setVersionDiff(null); setDiffPair(null);
     setLockedPages((await api<{ locked: string[] }>(`/api/projects/${id}/locked-pages`).catch(() => ({ locked: [] }))).locked);
     setDrift(await api<DriftInfo>(`/api/projects/${id}/data-drift`).catch(() => null));
+    setOutlineDrift(await api<OutlineDriftInfo>(`/api/projects/${id}/outline-drift`).catch(() => null));
   }, []);
 
   const refreshUsage = useCallback(async (id: string) => {
@@ -345,6 +348,41 @@ export function Workbench() {
     setDrift(null); // 刷新后清提示
   };
 
+  const regenerateOutlinePages = async () => {
+    if (!activeId || !outlineDrift || !outlineDrift.changed || busy) return;
+    const locked = await readLockedPagesSafe(activeId);
+    const removedPages = outlineDrift.removed_pages.filter((c) => !locked.includes(c.page)).map((c) => c.page);
+    const removedSet = new Set(removedPages);
+    const pages = outlineDrift.affected_pages.filter((p) => !locked.includes(p) && !removedSet.has(p)); // 移除页走删除流，不重生成
+    if (pages.length === 0 && removedPages.length === 0 && outlineDrift.added_titles.length === 0) { setError('受影响页均已锁定，请先解锁'); return; }
+    const changeBrief = [
+      outlineDrift.changed_pages.length > 0 ? `改题：${outlineDrift.changed_pages.map((c) => `${c.page}「${c.old_title}」→「${c.new_title}」`).join('、')}` : '',
+      removedPages.length > 0 ? `移除：${removedPages.join('、')}` : '',
+      outlineDrift.added_titles.length > 0 ? `新增：${outlineDrift.added_titles.join('、')}` : '',
+    ].filter(Boolean).join('；');
+    setMessages((m) => [...m, { role: 'assistant', text: `开始按新大纲更新（${pages.length} 页重生成${removedPages.length > 0 ? `，${removedPages.length} 页移除` : ''}${outlineDrift.added_titles.length > 0 ? `，${outlineDrift.added_titles.length} 章新增` : ''}）…` }]);
+    setBusy(true);
+    const targets = [
+      ...pages.map((page) => ({ page: page as string | null, text: `大纲已更新（${changeBrief}）。请按新大纲重新生成此页（风格与全套一致，标题以新大纲为准），完成后 render_deck。` })),
+      ...removedPages.map((page) => ({ page: page as string | null, text: `大纲已更新（${changeBrief}）。此页对应章节已从大纲移除：请删除该页代码文件，并在 deck.mjs 中同步移除其 import，完成后 render_deck。` })),
+      ...outlineDrift.added_titles.map((title) => ({ page: null as string | null, text: `大纲新增章节「${title}」。请新写对应页代码（按大纲顺序确定页号），在 deck.mjs 登记并 render_deck。` })),
+    ];
+    for (const t of targets) {
+      try {
+        await post(`/api/projects/${activeId}/chat`, t.page ? { text: t.text, page: t.page } : { text: t.text });
+        await new Promise((r) => setTimeout(r, 1000));
+        for (;;) {
+          const res = await api<AgentResult>(`/api/projects/${activeId}/agent/result`).catch(() => null);
+          if (!res || !res.active) break;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      } catch (e) { setError(`大纲联动更新失败：${errMsg(e)}`); break; }
+    }
+    setOutlineDrift(null); // 先清态，再刷新带回真实漂移状态
+    await refreshDeck(activeId).catch(() => {});
+    setBusy(false);
+  };
+
   const readLockedPagesSafe = async (pid: string): Promise<string[]> => {
     try { return (await api<{ locked: string[] }>(`/api/projects/${pid}/locked-pages`)).locked; } catch { return []; }
   };
@@ -517,7 +555,7 @@ export function Workbench() {
                 )}
                 {outline && activeId && (
                   <OutlineCard projectId={activeId} outline={outline} busy={busy}
-                               onChanged={() => void refreshOutline(activeId)}
+                               onChanged={() => { void refreshOutline(activeId); void refreshDeck(activeId).catch(() => {}); }}
                                onNotify={(t) => setMessages((m) => [...m, { role: 'assistant', text: t }])}
                                waitResult={() => waitResult(activeId)}
                                onReply={(q) => { setInput(`关于「${q.slice(0, 40)}」：`); }} />
@@ -581,6 +619,22 @@ export function Workbench() {
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void regenerateDriftPages()}>
                       重新生成受影响页
                     </button>
+                  </span>
+                )}
+                {outlineDrift && outlineDrift.changed && (outlineDrift.affected_pages.length > 0 || outlineDrift.added_titles.length > 0) && (
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span className="chip chip-fail" title={[
+                      ...outlineDrift.changed_pages.map((c) => `${c.page}：「${c.old_title}」→「${c.new_title}」`),
+                      ...outlineDrift.removed_pages.map((c) => `${c.page}（移除）：${c.title}`),
+                      ...outlineDrift.added_titles.map((t) => `新增：${t}`),
+                    ].join('\n')}>
+                      ⚠ 大纲已变更{outlineDrift.affected_pages.length > 0 ? `（${outlineDrift.affected_pages.length} 页受影响）` : outlineDrift.added_titles.length > 0 ? `（${outlineDrift.added_titles.length} 章待生成）` : ''}
+                    </span>
+                    {(outlineDrift.affected_pages.length > 0 || outlineDrift.added_titles.length > 0) && (
+                      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void regenerateOutlinePages()}>
+                        按新大纲更新
+                      </button>
+                    )}
                   </span>
                 )}
                 {versions.length > 1 && (

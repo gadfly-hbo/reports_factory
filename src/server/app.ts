@@ -20,6 +20,7 @@ import { listFamilies } from '../agent/families.js';
 import { snapshotDeck, listVersions, diffVersions } from '../agent/deck-versions.js';
 import { readLockedPages, writeLockedPages } from '../agent/locked-pages.js';
 import { detectDrift } from '../agent/data-drift.js';
+import { detectOutlineDrift } from '../agent/outline-drift.js';
 import { buildDeckExports } from '../agent/export-deck.js';
 
 
@@ -220,6 +221,12 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
   app.get('/api/projects/:id/data-drift', async (req) => {
     const { id } = req.params as { id: string };
     return detectDrift(resolve(store.root, id));
+  });
+
+  // 大纲变更联动（flow-15 B4）：确认大纲改→受影响页
+  app.get('/api/projects/:id/outline-drift', async (req) => {
+    const { id } = req.params as { id: string };
+    return detectOutlineDrift(resolve(store.root, id));
   });
 
   // 页锁定（flow-10 P2-2）
