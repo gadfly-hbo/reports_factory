@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { listDeckPages } from './deck-files.js';
 import { digitGuard, type DigitGuardReport } from './digit-guard.js';
 import { buildImpactMap } from './data-drift.js';
+import { readManifest } from './materials.js';
+import { unreadMaterials } from './read-log.js';
 
 /**
  * deck 质检（T5，D7/G8）：结构校验 + 隐私建议性输出——全部不阻断，结果给 agent（交付前自检）
@@ -166,6 +168,20 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     ? { item: 'image_sources', status: 'info', detail: `联网取图 ${imageEntries.length} 张（外发前请核版权）：${imageEntries.slice(0, 8).map(([u, ps]) => `${[...ps].join('/')}: ${u}`).join('；')}${imageEntries.length > 8 ? ' 等' : ''}` }
     : { item: 'image_sources', status: 'pass', detail: '无联网取图' };
 
+  // 材料覆盖复核（B5 #16）：read 工具 ∪ bash 命令引用双源触达；生成期间新增材料同样纳入
+  const manifest = await readManifest(projectRoot);
+  const readyMaterials = manifest.materials.filter((m) => m.status === 'ready');
+  const unread = await unreadMaterials(projectRoot);
+  const coverageItem: QaItem = readyMaterials.length === 0
+    ? { item: 'material_coverage', status: 'info', detail: '无就绪材料（纯指令生成）' }
+    : unread.length > 0
+      ? {
+          item: 'material_coverage',
+          status: 'flag',
+          detail: `${unread.length} 份材料从未被读取：${readyMaterials.filter((m) => unread.includes(m.extract_file)).map((m) => m.filename).join('、')}——内容可能遗漏，用 read 工具补读后重新 qa_deck`,
+        }
+      : { item: 'material_coverage', status: 'pass', detail: `${readyMaterials.length} 份材料全部触达（read ∪ bash）` };
+
   const digitItem: QaItem = {
     item: 'digit_guard',
     status: digit.violations.length > 0 ? 'flag' : 'pass',
@@ -191,6 +207,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     digitItem,
     headlineItem,
     imageItem,
+    coverageItem,
   ];
   const hasFlag = items.some((i) => i.status === 'flag');
   return {

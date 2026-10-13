@@ -41,3 +41,5 @@ web-dist/
 data/*/node_modules
 # deck 版本快照（flow-9）
 data/*/versions/
+# exec 命令留痕（B5：命令全文可含凭据，仅本地覆盖判定/调试用，不入库）
+data/*/work/exec-log.jsonl

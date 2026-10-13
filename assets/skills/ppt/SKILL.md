@@ -18,7 +18,7 @@ description: PPT 报告生成完整规范——资深商业汇报设计师：内
 
 ## 二、工作流（阶段纪律）
 
-1. 用 **read 工具**（非 bash cat——覆盖门只认 read）读材料：索引 `materials.json`，**逐份读完所有就绪条目的 `extract_file`**（漏读会被 propose_outline 拒绝并列出清单）；图片的 `original_file`=原件路径，可直接 addImage 引用。
+1. 用 **read 工具**读材料（覆盖门主源；bash 命令引用材料路径同样计入触达，但变量/glob 动态拼接可能绕过——读材料一律直接 read）：索引 `materials.json`，**逐份读完所有就绪条目的 `extract_file`**（漏读会被 propose_outline 拒绝并列出清单；生成期间新增材料由 qa_deck 的 material_coverage 复核）；图片的 `original_file`=原件路径，可直接 addImage 引用。
 2. 读完全部材料 → 调 `propose_outline` 出框架提案（**用户确认前不写代码**；意见→重出新版）。
 3. 宿主注入「用户已确认框架」后自主推进：逐页写 `deck/pages/page_XX.mjs` + `deck/deck.mjs` → `render_deck` 渲染。
 4. 渲染成功后**逐页 `look_page` 视觉自检**（见 §六），有问题改代码重渲再看，每页都看过才能交付。

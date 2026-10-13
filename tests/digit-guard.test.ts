@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { digitGuard, evalFormula } from '../src/agent/digit-guard.js';
 import { qaDeck } from '../src/agent/qa-deck.js';
 import { renderDeckTool } from '../src/agent/tools/render-deck-tool.js';
+import { logReadPath } from '../src/agent/read-log.js';
 
 const MAT_TEXT = '本季度进店客流 12,400 人次（上季 11458），环比上升 8.2%。客单价 328 元。库存周转天数 46 天。会员复购率 41%。';
 const PAGE = (nums: string, calcs = '', headline = '') => `import pptxgen from 'pptxgenjs';
@@ -272,6 +273,28 @@ describe('取图来源清单 image_sources（B3 / 痛点 #9）', () => {
       const item = report.items.find((i) => i.item === 'image_sources')!;
       expect(item.status).toBe('pass');
       expect(item.detail).toContain('无联网取图');
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe('材料覆盖复核 material_coverage（B5 / 痛点 #16）', () => {
+  it('从未触达 → flag 列 filename 与补读指令；补读后 → pass', async () => {
+    const root = await tmpRoot('cov');
+    try {
+      await seed(root, { 'page_01.mjs': PAGE('内容页', '', '// headline: 内容页') });
+      let report = await qaDeck(root);
+      let item = report.items.find((i) => i.item === 'material_coverage')!;
+      expect(item.status).toBe('flag');
+      expect(item.detail).toContain('m.md'); // seed 材料文件名
+      expect(item.detail).toContain('read');
+
+      await logReadPath(root, 'sources/src_1.extract.md'); // read 工具补读
+      report = await qaDeck(root);
+      item = report.items.find((i) => i.item === 'material_coverage')!;
+      expect(item.status).toBe('pass');
+      expect(item.detail).toContain('1 份');
     } finally {
       await rm(root, { recursive: true, force: true }).catch(() => {});
     }

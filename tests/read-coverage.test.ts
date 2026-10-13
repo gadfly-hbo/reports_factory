@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ModelReply, ModelTransport } from 'pi-agent-runtime';
 import { SessionHost } from '../src/agent/session-host.js';
 import { MINIMAX_M3 } from '../src/agent/model.js';
-import { logReadPath, readPaths, unreadMaterials } from '../src/agent/read-log.js';
+import { logReadPath, readPaths, unreadMaterials, logExecCommand } from '../src/agent/read-log.js';
 
 async function tmpRoot(tag: string): Promise<string> {
   const base = await mkdtemp(join(tmpdir(), `rs-rc-${tag}-`));
@@ -47,6 +47,33 @@ describe('材料阅读覆盖门（flow-8 D2）', () => {
 
       await logReadPath(root, 'sources/s2.extract.md');
       expect(await unreadMaterials(root)).toEqual([]); // 读全
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it('exec 兜底（B5）：bash 引用材料路径计入触达；双源皆无仍列未读；混合并集', async () => {
+    const root = await tmpRoot('exec');
+    try {
+      await writeFile(join(root, 'materials.json'), JSON.stringify({ version: 1, materials: [
+        { source_id: 's1', filename: 'a.md', kind: 'markdown', status: 'ready', extract_file: 'sources/s1.extract.md', original_file: 'sources/s1__a.md', size: 1, chars: 1, updated_at: 'x' },
+        { source_id: 's2', filename: 'b.md', kind: 'markdown', status: 'ready', extract_file: 'sources/s2.extract.md', original_file: 'sources/s2__b.md', size: 1, chars: 1, updated_at: 'x' },
+        { source_id: 's3', filename: 'c.md', kind: 'markdown', status: 'ready', extract_file: 'sources/s3.extract.md', original_file: 'sources/s3__c.md', size: 1, chars: 1, updated_at: 'x' },
+      ] }));
+      expect(await unreadMaterials(root)).toHaveLength(3); // 双源皆无
+
+      await logExecCommand(root, 'cat sources/s1.extract.md | head -50'); // bash cat 形态
+      await logExecCommand(root, "grep '销售' ./sources/s2.extract.md"); // ./ 前缀 + grep 形态
+      await logReadPath(root, 'sources/s3.extract.md'); // read 工具形态
+      expect(await unreadMaterials(root)).toEqual([]); // 三形态各触达一份 → 并集读全
+
+      // 失败命令（exitCode ≠ 0）不计触达（L2 修复）
+      await writeFile(join(root, 'materials.json'), JSON.stringify({ version: 1, materials: [
+        { source_id: 's4', filename: 'd.md', kind: 'markdown', status: 'ready', extract_file: 'sources/s4.extract.md', original_file: 'sources/s4__d.md', size: 1, chars: 1, updated_at: 'x' },
+        ...JSON.parse(await readFile(join(root, 'materials.json'), 'utf-8')).materials,
+      ] }));
+      await logExecCommand(root, 'cat sources/s4.extract.md', 1); // cat 失败（exit 1）
+      expect(await unreadMaterials(root)).toEqual(['sources/s4.extract.md']);
     } finally {
       await rm(root, { recursive: true, force: true }).catch(() => {});
     }

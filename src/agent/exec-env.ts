@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { mkdir, readFile, stat as fsStat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve, sep } from 'node:path';
 import type { ExecutionEnvironment } from 'pi-agent-runtime';
+import { logExecCommand } from './read-log.js';
 
 /**
  * 联网执行环境（flow-2 U4，运行条件对齐 C4）：
@@ -67,13 +68,16 @@ export async function createNetworkExecutionEnvironment(opts: NetEnvOptions): Pr
           signal,
         } as Parameters<typeof execFileAsync>[2]);
         const output = `${stdout ?? ''}${stderr ? `\n${stderr}` : ''}`.slice(0, maxOutputBytes);
+        await logExecCommand(root, command, 0); // 覆盖门兜底留痕（exec 后，失败不阻断）
         return { output, exitCode: 0 };
       } catch (e) {
         const err = e as { stdout?: string; stderr?: string; code?: number | string; killed?: boolean; message?: string };
         if (err.killed || /SIGKILL|timed out/i.test(err.message ?? '')) {
+          await logExecCommand(root, command, 124).catch(() => {});
           return { output: `执行超时（>${Math.round(execTimeoutMs / 1000)}s）已终止`, exitCode: 124 };
         }
         const output = `${err.stdout ?? ''}${err.stderr ? `\n${err.stderr}` : ''}`.slice(0, maxOutputBytes);
+        await logExecCommand(root, command, typeof err.code === 'number' ? err.code : 1).catch(() => {});
         return { output: output || (err.message ?? 'exec failed'), exitCode: typeof err.code === 'number' ? err.code : 1 };
       }
     },
