@@ -16,6 +16,7 @@ interface Family { id: string; name: string; description: string }
 interface Brand { primary?: string; logo_path?: string; font_zh?: string }
 interface DeckVersion { n: number; created_at: string; pptx_bytes: number; page_count: number }
 interface PageDiff { file: string; status: 'added' | 'removed' | 'changed' | 'unchanged'; bytes_a?: number; bytes_b?: number }
+interface DriftInfo { changed_sources: Array<{ source_id: string; filename: string; changed_numbers: string[] }>; affected_pages: string[] }
 interface AiStatus { chain: string[]; providers: Array<{ provider: string; modelId: string; key: boolean }>; modelAvailable: boolean }
 interface Usage { modelCalls: number; toolCalls: number; inputTokens?: number; outputTokens: number; activeMs: number }
 interface ToolCard { name: string; status: 'running' | 'done' | 'failed'; durationMs?: number; reason?: string }
@@ -85,6 +86,7 @@ export function Workbench() {
   const [versionDiff, setVersionDiff] = useState<PageDiff[] | null>(null);
   const [diffPair, setDiffPair] = useState<{ a: number; b: number } | null>(null);
   const [lockedPages, setLockedPages] = useState<string[]>([]);
+  const [drift, setDrift] = useState<DriftInfo | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const lastUserText = useRef('');
@@ -110,6 +112,7 @@ export function Workbench() {
     setVersions((await api<{ versions: DeckVersion[] }>(`/api/projects/${id}/deck/versions`).catch(() => ({ versions: [] }))).versions);
     setVersionDiff(null); setDiffPair(null);
     setLockedPages((await api<{ locked: string[] }>(`/api/projects/${id}/locked-pages`).catch(() => ({ locked: [] }))).locked);
+    setDrift(await api<DriftInfo>(`/api/projects/${id}/data-drift`).catch(() => null));
   }, []);
 
   const refreshUsage = useCallback(async (id: string) => {
@@ -313,6 +316,37 @@ export function Workbench() {
   const openSettings = async () => {
     setShowSettings(true);
     try { setAiStatus(await api<AiStatus>('/api/ai/status')); } catch (e) { setError(errMsg(e)); }
+  };
+
+  const regenerateDriftPages = async () => {
+    if (!activeId || !drift || drift.affected_pages.length === 0 || busy) return;
+    const locked = await readLockedPagesSafe(activeId);
+    const pages = drift.affected_pages.filter((p) => !locked.includes(p));
+    if (pages.length === 0) { setError('受影响页均已锁定，请先解锁'); return; }
+    setMessages((m) => [...m, { role: 'assistant', text: `开始重新生成 ${pages.length} 个受数据变更影响的页…` }]);
+    setBusy(true);
+    for (const page of pages) {
+      try {
+        await post(`/api/projects/${activeId}/chat`, {
+          text: '数据已更新，请重新 read 该材料的最新提取文本，然后用新数据重新生成此页（风格与全套一致），完成后 render_deck。',
+          page,
+        });
+        await new Promise((r) => setTimeout(r, 1000));
+        // 等这轮完成再发下一页
+        for (;;) {
+          const res = await api<AgentResult>(`/api/projects/${activeId}/agent/result`).catch(() => null);
+          if (!res || !res.active) break;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      } catch (e) { setError(`重生成 ${page} 失败：${errMsg(e)}`); break; }
+    }
+    await refreshDeck(activeId).catch(() => {});
+    setBusy(false);
+    setDrift(null); // 刷新后清提示
+  };
+
+  const readLockedPagesSafe = async (pid: string): Promise<string[]> => {
+    try { return (await api<{ locked: string[] }>(`/api/projects/${pid}/locked-pages`)).locked; } catch { return []; }
   };
 
   const toggleLock = async (page: string) => {
@@ -539,6 +573,16 @@ export function Workbench() {
                 {deck?.pptx && <span className="chip chip-ok">deck.pptx · {Math.max(1, Math.round(deck.pptx.bytes / 1024))}KB · {deck.pages.length} 页</span>}
                 {selectedPage && <span className="chip chip-accent">正在编辑 {pageLabel}</span>}
                 {selectedPage && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedPage(null)}>取消选中</button>}
+                {drift && drift.affected_pages.length > 0 && (
+                  <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span className="chip chip-fail" title={drift.changed_sources.map((c) => `${c.filename}: ${c.changed_numbers.slice(0, 3).join('→')}…`).join('\n')}>
+                      ⚠ 数据已变更（{drift.affected_pages.length} 页受影响）
+                    </span>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void regenerateDriftPages()}>
+                      重新生成受影响页
+                    </button>
+                  </span>
+                )}
                 {versions.length > 1 && (
                   <select className="wb-ver-select" aria-label="历史版本" defaultValue=""
                            onChange={(e) => {

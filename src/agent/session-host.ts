@@ -33,6 +33,7 @@ import { createNetworkExecutionEnvironment } from './exec-env.js';
 import { familyContent } from './families.js';
 import { logReadPath } from './read-log.js';
 import { readLockedPages, isLockedPath } from './locked-pages.js';
+import { detectDrift } from './data-drift.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -284,7 +285,8 @@ export class SessionHost {
     const family = opts.system ? '' : await this.projectFamily();
     const brand = opts.system ? '' : await this.projectBrand();
     const locked = opts.system ? '' : await this.projectLocked();
-    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim(), locked.trim()].filter(Boolean).join('\n\n');
+    const drift = opts.system ? '' : await this.projectDrift();
+    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim(), locked.trim(), drift.trim()].filter(Boolean).join('\n\n');
     if (this.closed) throw new Error('宿主已关闭');
     if (this.activeRun) {
       await this.control({ kind: 'steer', text });
@@ -325,6 +327,15 @@ export class SessionHost {
   /** 最近一次已结束的结果（R1-2：停止/快速失败后前端退出 busy 的依据；无则 null）。 */
   outcome(): RunResult<string> | null {
     return this.lastOutcome;
+  }
+
+  /** 数据变更指令（data-drift；材料更新时提醒 agent 重读）。 */
+  private async projectDrift(): Promise<string> {
+    const drift = await detectDrift(this.projectRootDir);
+    if (drift.changed_sources.length === 0) return '';
+    const sources = drift.changed_sources.map((c) => c.filename).join('、');
+    const numbers = drift.changed_sources.flatMap((c) => c.changed_numbers).slice(0, 8).join('、');
+    return `【数据已更新】以下材料已重新上传且数字有变更：${sources}（变更的数字：${numbers}…）。请用 read 工具重新读取这些材料的最新提取文本，受影响的页（${drift.affected_pages.join('、')}）需用新数据重新生成。`;
   }
 
   /** 锁定页指令（locked-pages；手工定稿页不可修改）。 */

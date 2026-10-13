@@ -19,6 +19,7 @@ import { listDeckPages } from '../agent/deck-files.js';
 import { listFamilies } from '../agent/families.js';
 import { snapshotDeck, listVersions, diffVersions } from '../agent/deck-versions.js';
 import { readLockedPages, writeLockedPages } from '../agent/locked-pages.js';
+import { detectDrift } from '../agent/data-drift.js';
 import { buildDeckExports } from '../agent/export-deck.js';
 
 
@@ -213,6 +214,12 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     } catch (e) {
       throw httpError(404, `导出文件丢失：${(e as Error).message}`);
     }
+  });
+
+  // 数据联动（flow-11 P3）：材料变更→受影响页
+  app.get('/api/projects/:id/data-drift', async (req) => {
+    const { id } = req.params as { id: string };
+    return detectDrift(resolve(store.root, id));
   });
 
   // 页锁定（flow-10 P2-2）

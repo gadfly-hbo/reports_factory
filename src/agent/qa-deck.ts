@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { listDeckPages } from './deck-files.js';
 import { digitGuard, type DigitGuardReport } from './digit-guard.js';
+import { buildImpactMap } from './data-drift.js';
 
 /**
  * deck 质检（T5，D7/G8）：结构校验 + 隐私建议性输出——全部不阻断，结果给 agent（交付前自检）
@@ -79,6 +80,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
   }
 
   const digit = await digitGuard(projectRoot, slideTexts);
+  void buildImpactMap(projectRoot).catch(() => {}); // 数据联动依赖图（异步不阻塞 QA）
   const digitItem: QaItem = {
     item: 'digit_guard',
     status: digit.violations.length > 0 ? 'flag' : 'pass',
