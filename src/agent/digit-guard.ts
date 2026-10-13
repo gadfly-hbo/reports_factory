@@ -14,6 +14,7 @@ import { readManifest } from './materials.js';
 export interface DigitViolation {
   slide: number;
   number: string;
+  source?: 'chart';
 }
 
 export interface DigitGuardReport {
@@ -21,6 +22,12 @@ export interface DigitGuardReport {
   derived: number;
   exempt: number;
   violations: DigitViolation[];
+}
+
+/** 图表数据输入（B1 #2）：slide 持有图表，numbers 为其 `<c:val>` 数据值。 */
+export interface ChartDataInput {
+  slide: number;
+  numbers: string[];
 }
 
 const NUM_RE = /(?<![\d.])(\d{1,12}(?:\.\d+)?)(?![\d])/g;
@@ -140,8 +147,8 @@ async function collectCalcs(projectRoot: string, raw: Set<string>): Promise<Calc
   return claims;
 }
 
-/** 数字护栏主入口。slideTexts: 每页的 <a:t> 文本拼接（1 基序）。 */
-export async function digitGuard(projectRoot: string, slideTexts: string[]): Promise<DigitGuardReport> {
+/** 数字护栏主入口。slideTexts: 每页的 <a:t> 文本拼接（1 基序）；chartData: 图表 <c:val> 数据值。 */
+export async function digitGuard(projectRoot: string, slideTexts: string[], chartData: ChartDataInput[] = []): Promise<DigitGuardReport> {
   const raw = new Set<string>();
   const manifest = await readManifest(projectRoot);
   for (const entry of manifest.materials) {
@@ -170,5 +177,18 @@ export async function digitGuard(projectRoot: string, slideTexts: string[]): Pro
       violations.push({ slide: idx + 1, number: n });
     }
   });
+  // 图表数据（B1 #2）：数据即数据——年份豁免沿用，结构性小整数豁免不适用
+  for (const chart of chartData) {
+    for (const rawVal of chart.numbers) {
+      const n = rawVal.trim().replace(/^-/, '');
+      if (!/^\d{1,12}(?:\.\d+)?$/.test(n)) continue;
+      if (/^(19|20)\d\d$/.test(n)) { exempt++; continue; }
+      const nn = norm(n);
+      if (raw.has(nn)) { rawHits++; continue; }
+      const hit = calcs.find((c) => c.verified && closeEnough(c.value, new Decimal(nn), n));
+      if (hit) { derivedHits++; continue; }
+      violations.push({ slide: chart.slide, number: n, source: 'chart' });
+    }
+  }
   return { raw: rawHits, derived: derivedHits, exempt, violations };
 }

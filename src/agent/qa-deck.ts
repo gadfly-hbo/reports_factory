@@ -63,7 +63,27 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
   const charts = Object.keys(zip.files).filter((n) => /^ppt\/charts\/chart\d+\.xml$/.test(n)).length;
 
   // 数字护栏 v2（flow-8 D1）：slideTexts 供三级判定
-  const slideTexts = await Promise.all(slideNames.map(async (n) => (await zip.files[n].async('string')).match(/<a:t>([^<]*)<\/a:t>/g)?.map((t) => t.replace(/<[^>]+>/g, '')).join(' ') ?? ''));
+  const slideTexts = await Promise.all(slideNames.map(async (n) => (await zip.files[n]!.async('string')).match(/<a:t>([^<]*)<\/a:t>/g)?.map((t) => t.replace(/<[^>]+>/g, '')).join(' ') ?? ''));
+
+  // 图表数字溯源（B1 #2）：slide rels 建 chart→slide 映射，提取 <c:val> 数据值
+  const chartData: { slide: number; numbers: string[] }[] = [];
+  for (const n of slideNames) {
+    const relsFile = zip.files[n.replace('slides/', 'slides/_rels/') + '.rels'];
+    if (!relsFile) continue;
+    const relsXml = await relsFile.async('string');
+    const slideIdx = Number.parseInt(n.match(/\d+/)![0], 10);
+    for (const rel of relsXml.matchAll(/Type="[^"]*\/chart"\s+Target="([^"]+)"/g)) {
+      const chartPath = `ppt/${rel[1]!.replace(/^\//, '').split('/').slice(-2).join('/')}`;
+      const chartFile = zip.files[chartPath];
+      if (!chartFile) continue;
+      const chartXml = await chartFile.async('string');
+      const numbers: string[] = [];
+      for (const valBlock of chartXml.matchAll(/<c:val>([\s\S]*?)<\/c:val>/g)) {
+        for (const v of valBlock[1]!.matchAll(/<c:v>([^<]*)<\/c:v>/g)) numbers.push(v[1]!);
+      }
+      if (numbers.length > 0) chartData.push({ slide: slideIdx, numbers });
+    }
+  }
 
   const missingPreviews = (await listDeckPages(projectRoot)).filter((p) => !p.html).map((p) => p.name);
 
@@ -79,13 +99,58 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     }
   }
 
-  const digit = await digitGuard(projectRoot, slideTexts);
+  const digit = await digitGuard(projectRoot, slideTexts, chartData);
   void buildImpactMap(projectRoot).catch(() => {}); // 数据联动依赖图（异步不阻塞 QA）
+
+  // 结论行校验（B1 #1+#7）：页代码 `// headline: <结论>` 声明 + 上页匹配；@skip 豁免但图表页禁豁免
+  const chartSlides = new Set(chartData.map((c) => c.slide));
+  const pages = await listDeckPages(projectRoot);
+  const missingHeadline: string[] = [];
+  const notOnSlide: string[] = [];
+  const chartSkip: string[] = [];
+  let headlinePass = 0;
+  let headlineSkip = 0;
+  const pageCount = Math.min(pages.length, slideTexts.length); // 页序=slide 序（listDeckPages 排序约定）
+  for (let i = 0; i < pageCount; i++) {
+    const page = pages[i]!;
+    const hasChart = chartSlides.has(i + 1);
+    let marker: string | null = null;
+    try {
+      const code = await readFile(join(projectRoot, page.code), 'utf-8');
+      marker = /^[ \t]*\/\/\s*headline:\s*(.*)$/m.exec(code)?.[1]?.trim() || null;
+    } catch { /* 页代码缺失按缺声明处理 */ }
+    if (marker === null) {
+      missingHeadline.push(page.name + (hasChart ? '(含图表)' : ''));
+      continue;
+    }
+    if (marker === '@skip') {
+      if (hasChart) chartSkip.push(page.name);
+      else headlineSkip++;
+      continue;
+    }
+    if ((slideTexts[i] ?? '').replace(/\s+/g, '').includes(marker.replace(/\s+/g, ''))) headlinePass++;
+    else notOnSlide.push(page.name);
+  }
+  const headlineProblems = [...missingHeadline, ...notOnSlide, ...chartSkip];
+  const headlineItem: QaItem = pages.length === 0
+    ? { item: 'headline_check', status: 'info', detail: '无页代码可校验（deck 为外部导入或页文件缺失）' }
+    : headlineProblems.length > 0
+      ? {
+          item: 'headline_check',
+          status: 'flag',
+          detail: [
+            missingHeadline.length > 0 ? `缺声明：${missingHeadline.join('、')}` : '',
+            notOnSlide.length > 0 ? `结论未上页：${notOnSlide.join('、')}` : '',
+            chartSkip.length > 0 ? `图表页不可 @skip（必须有解读）：${chartSkip.join('、')}` : '',
+          ].filter(Boolean).join('；') + '——内容页补 // headline: 一句话结论 并渲染上页',
+        }
+      : { item: 'headline_check', status: 'pass', detail: `结论行校验通过：${headlinePass} 页（${headlineSkip} 页豁免）` };
+
   const digitItem: QaItem = {
     item: 'digit_guard',
     status: digit.violations.length > 0 ? 'flag' : 'pass',
     detail: digit.violations.length > 0
-      ? `${digit.violations.length} 处数字无出处：${digit.violations.slice(0, 5).map((v) => `第${v.slide}页「${v.number}」`).join('、')}${digit.violations.length > 5 ? ' 等' : ''}——补材料、改回材料原值，或加 // calc: 公式 = 值 声明后重渲`
+      ? `${digit.violations.length} 处数字无出处：${digit.violations.slice(0, 5).map((v) => `第${v.slide}页「${v.number}」${v.source === 'chart' ? '(图表)' : ''}`).join('、')}${digit.violations.length > 5 ? ' 等' : ''}——补材料、改回材料原值，或加 // calc: 公式 = 值 声明后重渲`
       : `数字验证通过：原始 ${digit.raw} + 推导 ${digit.derived}${digit.exempt ? `（豁免结构数/年份 ${digit.exempt}）` : ''}`,
   };
 
@@ -104,6 +169,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     },
     ...(missingPreviews.length > 0 ? [{ item: 'page_preview', status: 'info' as const, detail: `${missingPreviews.length} 页缺 agent HTML 预览（UI 以近似预览展示）` }] : []),
     digitItem,
+    headlineItem,
   ];
   const hasFlag = items.some((i) => i.status === 'flag');
   return {
