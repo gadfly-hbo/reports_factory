@@ -31,7 +31,8 @@ export interface ChartDataInput {
 }
 
 const NUM_RE = /(?<![\d.])(\d{1,12}(?:\.\d+)?)(?![\d])/g;
-const DATA_UNIT_RE = /[%％¥$]|元|万|亿|倍|人|次|天|点|月|件|台|单|客|店/;
+/** 数据单位上下文表（B6 source_note 与护栏共用：显著数字判定） */
+export const DATA_UNIT_RE = /[%％¥$]|元|万|亿|倍|人|次|天|点|月|件|台|单|客|店/;
 const FORMULA_ALLOWED = /^[0-9+\-*/().\s]+$/;
 /** 数学常数豁免：*100 等百分比换算不应要求 raw 出处 */
 const MATH_CONSTANTS = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '100', '1000', '10000', '100000000']);

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { listDeckPages } from './deck-files.js';
-import { digitGuard, type DigitGuardReport } from './digit-guard.js';
+import { digitGuard, DATA_UNIT_RE, type DigitGuardReport } from './digit-guard.js';
 import { buildImpactMap } from './data-drift.js';
 import { readManifest } from './materials.js';
 import { unreadMaterials } from './read-log.js';
@@ -182,6 +182,59 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
         }
       : { item: 'material_coverage', status: 'pass', detail: `${readyMaterials.length} 份材料全部触达（read ∪ bash）` };
 
+  // 结论溯源（B6 #19）：数据页（显著数字：>99 整数或带单位）须页脚「数据来源：」+ 页代码 // sources: 声明
+  const isDataPage = (text: string): boolean => {
+    const clean = text.replace(/,/g, '');
+    for (const m of clean.matchAll(/\d{1,12}(?:\.\d+)?/g)) {
+      const n = m[0]!;
+      if (/^(19|20)\d\d$/.test(n)) continue; // 年份
+      const after = clean.slice((m.index ?? 0) + n.length, (m.index ?? 0) + n.length + 1);
+      const over99 = !n.includes('.') && Number.parseInt(n, 10) > 99;
+      if (over99 || DATA_UNIT_RE.test(after)) return true;
+    }
+    return false;
+  };
+  const srcMissing: string[] = [];
+  const srcNotRendered: string[] = [];
+  const srcUnknown: string[] = [];
+  let dataPageCount = 0;
+  const manifestFilenames = new Set(readyMaterials.map((m) => m.filename));
+  const normText = (s: string) => s.replace(/\s+/g, '');
+  for (let i = 0; i < pageCount; i++) {
+    const page = pages[i]!;
+    if (!isDataPage(slideTexts[i] ?? '')) continue;
+    dataPageCount++;
+    if (readyMaterials.length === 0) continue; // 降级 info，不做标记校验
+    let marker: string | null = null;
+    try {
+      const code = await readFile(join(projectRoot, page.code), 'utf-8');
+      marker = /^[ \t]*\/\/\s*sources:\s*(.+)$/m.exec(code)?.[1]?.trim() || null;
+    } catch { /* 页代码缺失按缺声明处理 */ }
+    if (marker === null) { srcMissing.push(page.name); continue; }
+    const names = marker.split(/、|,/).map((s) => s.trim()).filter(Boolean);
+    if (names.length === 0) { srcMissing.push(page.name); continue; } // 空名标记按缺声明处理
+    const unknown = names.filter((n) => !manifestFilenames.has(n));
+    if (unknown.length > 0) srcUnknown.push(`${page.name}（${unknown.join('、')}）`); // 不 continue：与「未上页」可并行命中（PRD 三查并行）
+    const text = normText(slideTexts[i] ?? '');
+    const rendered = text.includes('数据来源') && names.every((n) => text.includes(normText(n)));
+    if (!rendered) srcNotRendered.push(page.name);
+  }
+  const sourceItem: QaItem = dataPageCount === 0
+    ? { item: 'source_note', status: 'pass', detail: '无数据页需来源标注' }
+    : readyMaterials.length === 0
+      ? { item: 'source_note', status: 'info', detail: `无就绪材料，来源标注跳过（${dataPageCount} 个数据页）` }
+      : srcMissing.length + srcNotRendered.length + srcUnknown.length > 0
+        ? {
+            item: 'source_note',
+            status: 'flag',
+            detail: [
+              srcMissing.length > 0 ? `缺来源声明：${srcMissing.join('、')}` : '',
+              srcNotRendered.length > 0 ? `来源未上页：${srcNotRendered.join('、')}` : '',
+              srcUnknown.length > 0 ? `材料名不存在：${srcUnknown.join('、')}` : '',
+            ].filter(Boolean).join('；') + '——数据页页脚补「数据来源：<材料名>」并在页代码留 // sources: 声明',
+          }
+        : { item: 'source_note', status: 'pass', detail: `${dataPageCount} 个数据页来源标注齐全` };
+
   const digitItem: QaItem = {
     item: 'digit_guard',
     status: digit.violations.length > 0 ? 'flag' : 'pass',
@@ -208,6 +261,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     headlineItem,
     imageItem,
     coverageItem,
+    sourceItem,
   ];
   const hasFlag = items.some((i) => i.status === 'flag');
   return {

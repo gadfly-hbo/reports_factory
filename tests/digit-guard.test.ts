@@ -8,9 +8,10 @@ import { renderDeckTool } from '../src/agent/tools/render-deck-tool.js';
 import { logReadPath } from '../src/agent/read-log.js';
 
 const MAT_TEXT = '本季度进店客流 12,400 人次（上季 11458），环比上升 8.2%。客单价 328 元。库存周转天数 46 天。会员复购率 41%。';
-const PAGE = (nums: string, calcs = '', headline = '') => `import pptxgen from 'pptxgenjs';
+const PAGE = (nums: string, calcs = '', headline = '', sources = '') => `import pptxgen from 'pptxgenjs';
 ${calcs}
 ${headline}
+${sources}
 export function buildSlide(pptx) {
   const s = pptx.addSlide();
   s.addText('${nums}', { x: 1, y: 3, w: 11, h: 1, fontSize: 24 });
@@ -273,6 +274,55 @@ describe('取图来源清单 image_sources（B3 / 痛点 #9）', () => {
       const item = report.items.find((i) => i.item === 'image_sources')!;
       expect(item.status).toBe('pass');
       expect(item.detail).toContain('无联网取图');
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
+
+describe('结论溯源 source_note（B6 / 痛点 #19）', () => {
+  it('数据页缺标记/标记未上页/引用不存在材料名 → flag；齐全 → pass；非数据页豁免', async () => {
+    const root = await tmpRoot('srcnote');
+    try {
+      await seed(root, {
+        'page_01.mjs': PAGE('客流 12400 人次', ''), // 数据页无标记
+        'page_02.mjs': PAGE('营收 431 万元 数据来源：m.md', '', '// headline: 营收', '// sources: m.md'), // 齐全
+        'page_03.mjs': PAGE('增速 8.2% 数据来源：不存在.xlsx', '', '// sources: 不存在.xlsx'), // 引用不存在材料名（且已上页——只命中名字查）
+        'page_04.mjs': PAGE('目录与要点 3 项 2026', '', '// headline: @skip'), // 非数据页（3≤99 无单位、2026 年份）
+        'page_05.mjs': PAGE('毛利率 34.2%', '', '// sources: m.md'), // 标记合法但页脚未渲染「数据来源」→ 未上页
+        'page_06.mjs': PAGE('库存 4600 件 数据来源：', '', '// sources: 、'), // 空名标记 → 按缺声明
+      });
+      const report = await qaDeck(root);
+      const item = report.items.find((i) => i.item === 'source_note')!;
+      expect(item.status).toBe('flag');
+      expect(item.detail).toContain('page_01'); // 缺声明
+      expect(item.detail).toContain('page_03'); // 材料名不存在（已上页，只命中名字查）
+      expect(item.detail).toContain('page_05'); // 来源未上页
+      expect(item.detail).toContain('page_06'); // 空名标记归缺声明
+      expect(item.detail).not.toContain('page_02'); // 齐全
+      expect(item.detail).not.toContain('page_04'); // 非数据页豁免
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it('全部数据页齐全 → pass；无就绪材料的数据页 → 降级 info', async () => {
+    const root = await tmpRoot('srcpass');
+    try {
+      await seed(root, {
+        'page_01.mjs': PAGE('客流 12400 人次 数据来源：m.md', '', '// headline: 客流 12400 人次', '// sources: m.md'),
+      });
+      let report = await qaDeck(root);
+      let item = report.items.find((i) => i.item === 'source_note')!;
+      expect(item.status).toBe('pass');
+      expect(item.detail).toContain('1 个数据页');
+
+      // 无就绪材料：抹掉 manifest 的 ready 状态后重跑
+      await writeFile(join(root, 'materials.json'), JSON.stringify({ version: 1, materials: [] }));
+      report = await qaDeck(root);
+      item = report.items.find((i) => i.item === 'source_note')!;
+      expect(item.status).toBe('info');
+      expect(item.detail).toContain('无就绪材料');
     } finally {
       await rm(root, { recursive: true, force: true }).catch(() => {});
     }
