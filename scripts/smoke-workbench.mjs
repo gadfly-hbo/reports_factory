@@ -29,6 +29,10 @@ try {
 
   await page.click('.wb-new');
   await page.fill('.wb-new-form input', '冒烟项目');
+  // flow-7：新建对话框可选场景（默认自动）
+  const famSel = await page.$('.wb-new-form select');
+  if (!famSel) fail('新建对话框缺场景选择');
+  await page.selectOption('.wb-new-form select', 'product-launch');
   await page.click('.wb-new-form .btn-primary');
   await page.waitForSelector('.wb-item.active', { timeout: 5000 });
   console.log('PASS 新建项目并激活');
@@ -193,6 +197,17 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`);
   await page.waitForTimeout(200);
   if (await page.$('.wb-drawer')) fail('抽屉关闭失效');
   console.log('PASS 运行详情抽屉（空态明示 + 开关）');
+
+  // flow-7：header 场景切换持久化
+  await page.waitForSelector('.wb-family-select', { timeout: 5000 });
+  const selVal = await page.$eval('.wb-family-select', (el) => el.value);
+  if (selVal !== 'product-launch') fail(`新建场景未持久：${selVal}`);
+  await page.selectOption('.wb-family-select', 'academic-defense');
+  await page.reload();
+  await page.waitForSelector('.wb-family-select', { timeout: 5000 });
+  const afterReload = await page.$eval('.wb-family-select', (el) => el.value);
+  if (afterReload !== 'academic-defense') fail(`场景切换未持久：${afterReload}`);
+  console.log('PASS 场景家族（新建选择 + header 切换持久化）');
 
   // 设置页（W8/US20，R1-1 补齐）：模型链状态呈现（零密钥内容）
   await page.click('.wb-topbar-right .btn-ghost:last-of-type'); // 设置

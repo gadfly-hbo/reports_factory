@@ -166,10 +166,12 @@ await pptx.writeFile({ fileName: 'deck/deck.pptx' });`,
     expect(skill).toContain('deck/pages/page_01.mjs');
     expect(skill).toContain('buildSlide');
     expect(skill).toContain('render_deck');
-    // U1 设计配方
+    // U1 设计配方（flow-7：结构配方迁至家族文件，核心 skill 保留色板/组件/分派）
     expect(skill).toContain('深蓝经典');
-    expect(skill).toContain('KPI 卡片墙');
-    expect(skill).toContain('大数字视觉锤');
+    expect(skill).toContain('场景配方');
+    const family = await readFile('assets/skills/ppt/families/business-review.md', 'utf-8');
+    expect(family).toContain('KPI 卡片墙');
+    expect(family).toContain('大数字视觉锤');
     expect(skill).toContain('页码徽章');
     expect(skill).toContain('sizing');
     // U3 视觉自检 / 图片放开

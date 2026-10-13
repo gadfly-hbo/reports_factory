@@ -30,6 +30,7 @@ import { proposeOutlineTool } from './tools/outline-tool.js';
 import { renderDeckTool } from './tools/render-deck-tool.js';
 import { lookPageTool } from './tools/look-page-tool.js';
 import { createNetworkExecutionEnvironment } from './exec-env.js';
+import { familyContent } from './families.js';
 import { qaDeckTool } from './tools/qa-deck-tool.js';
 import { exportDeckTool } from './tools/export-deck-tool.js';
 import { BUILD_SYSTEM, confirmedOutlinePrompt } from './prompts.js';
@@ -83,6 +84,7 @@ interface OperationBindings {
 
 export class SessionHost {
   readonly taskId: string;
+  private readonly projectRootDir: string;
   private readonly runtime: SessionRuntime;
   private session: SessionInfo | null = null;
   private readonly tools: readonly Tool[];
@@ -92,9 +94,10 @@ export class SessionHost {
   private readonly eventListeners = new Set<(e: AgentEventForUi) => void>();
   private closed = false;
 
-  private constructor(runtime: SessionRuntime, taskId: string, tools: readonly Tool[]) {
+  private constructor(runtime: SessionRuntime, taskId: string, projectRootDir: string, tools: readonly Tool[]) {
     this.runtime = runtime;
     this.taskId = taskId;
+    this.projectRootDir = projectRootDir;
     this.tools = tools;
   }
 
@@ -124,7 +127,8 @@ export class SessionHost {
     mkdirSync(sessionRoot, { recursive: true });
     mkdirSync(join(opts.projectRoot, 'work'), { recursive: true });
 
-    // 专业内容：原生 skills 装载（宿主指定可信源）
+    // 专业内容：原生 skills 装载（宿主指定可信源）；家族目录与之同源（R7-1：不再自造路径）
+    if (process.env['REPORT_STUDIO_SKILLS_DIR']) process.env['REPORT_STUDIO_SKILLS_DIR'] = opts.skillsDir;
     const resources = await loadHarnessResources({
       cwd: opts.projectRoot,
       sources: [{ kind: 'skills', path: opts.skillsDir, version: LOCAL_POLICY_VERSION }],
@@ -229,7 +233,7 @@ export class SessionHost {
       },
     });
 
-    const host = new SessionHost(runtime, taskId, [outlineTool, renderDeck, qaTool, exportTool, lookPage, ...nativeTools].map(soft));
+    const host = new SessionHost(runtime, taskId, opts.projectRoot, [outlineTool, renderDeck, qaTool, exportTool, lookPage, ...nativeTools].map(soft));
     hostRef = host;
     host.session = await host.findOrCreateSession();
     return host;
@@ -256,7 +260,9 @@ export class SessionHost {
 
   /** 发送消息（prompt）。已有运行在推进时转 steer（对话式插话）；否则开新 run。 */
   async send(text: string, opts: { system?: string } = {}): Promise<{ mode: 'steer' | 'run' }> {
-    const system = opts.system ?? BUILD_SYSTEM;
+    // 场景家族（flow-7）：项目 ppt_family 的配方并入 system（每 run 一个家族；降级不阻断）
+    const family = opts.system ? '' : await this.projectFamily();
+    const system = [opts.system ?? BUILD_SYSTEM, family.trim()].filter(Boolean).join('\n\n');
     if (this.closed) throw new Error('宿主已关闭');
     if (this.activeRun) {
       await this.control({ kind: 'steer', text });
@@ -297,6 +303,17 @@ export class SessionHost {
   /** 最近一次已结束的结果（R1-2：停止/快速失败后前端退出 busy 的依据；无则 null）。 */
   outcome(): RunResult<string> | null {
     return this.lastOutcome;
+  }
+
+  /** 项目的场景家族配方（ppt_family；读不到/未设 → 默认家族）。 */
+  private async projectFamily(): Promise<string> {
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const project = JSON.parse(await readFile(join(this.projectRootDir, 'project.json'), 'utf-8')) as { ppt_family?: string };
+      return await familyContent(project.ppt_family);
+    } catch {
+      return familyContent(null);
+    }
   }
 
   /** 框架确认注入（outline/confirm 路由调用）：把确认大纲作为一次推进发给会话。 */

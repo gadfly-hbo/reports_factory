@@ -66,3 +66,10 @@ R2 PASS：Major ?t=+key 双保险；Low/Info 修；smoke 18 项（新增 cache-b
 # flow-6 REVIEW（2026-10-11）
 
 单轮 PASS。开发插曲：按钮漏写 onClick 成假控件——被本次新增 smoke route-stub 断言当场抓住（假控件防线首次实战生效）。Low（regen 失败重试不发 page）已顺手修；2 Info 记档。
+
+
+---
+
+# flow-7 REVIEW（2026-10-13）
+
+单轮 PASS（5/5 验收轴过）。发现：R7-1 Medium 家族目录与 skillsDir 脱钩（env 覆盖语义矛盾）→已修（session-host 透传）；R7-2 页码徽章配方只在默认家族→已修（上提 SKILL §三点五）；R7-3 ⚠ 擦边字符→已修（改实心小三角表述）；R7-4 坏文件降级无用例→已补。Info：家族缓存需重启生效（记档）；header select 过滤 business-review 的 API 直 pin 观感问题（不可达）；散落草稿建议清理。修后 64 用例 + smoke 20 项复跑绿。

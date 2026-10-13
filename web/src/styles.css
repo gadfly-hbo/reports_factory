@@ -160,3 +160,5 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica 
 .wb-item .fine { font-size: .68rem; }
 .wb-page-composer { margin-top: 10px; align-self: stretch; max-width: 720px; }
 .wb-page-reply summary { cursor: pointer; margin-top: 4px; }
+.wb-new-form select { border: 1px solid var(--wb-line); border-radius: 6px; padding: 5px 6px; font: inherit; font-size: .84rem; background: #fff; }
+.wb-family-select { border: 1px solid var(--wb-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: .82rem; background: var(--wb-panel); color: var(--wb-ink2); max-width: 190px; }

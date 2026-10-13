@@ -16,6 +16,7 @@ import { composeChatPrompt } from '../agent/prompts.js';
 import { FileBudgetStore } from '../agent/budget-store.js';
 import { qaDeck } from '../agent/qa-deck.js';
 import { listDeckPages } from '../agent/deck-files.js';
+import { listFamilies } from '../agent/families.js';
 import { buildDeckExports } from '../agent/export-deck.js';
 
 
@@ -208,6 +209,24 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
       return reply.send(data);
     } catch (e) {
       throw httpError(404, `导出文件丢失：${(e as Error).message}`);
+    }
+  });
+
+  // 场景家族（flow-7）：列表 + 项目绑定
+  app.get('/api/ppt/families', async () => {
+    return { families: (await listFamilies()).map(({ id, name, description }) => ({ id, name, description })) };
+  });
+
+  app.put('/api/projects/:id/family', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const body = parseBody(z.object({ family: z.string().min(1).max(64) }), req.body);
+      const valid = (await listFamilies()).some((f) => f.id === body.family);
+      if (!valid) throw httpError(400, `unknown family: ${body.family}`);
+      const project = await store.updateProject(id, { ppt_family: body.family });
+      return { ok: true, project };
+    } catch (e) {
+      return replyGateError(reply, e as Error & { statusCode?: number });
     }
   });
 

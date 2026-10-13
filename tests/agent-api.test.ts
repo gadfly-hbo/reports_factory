@@ -100,6 +100,23 @@ describe('S2 Agent 会话路由', () => {
     expect(body.version).toBe(1);
   });
 
+  it('flow-7 场景家族：列表/绑定/非法 400', async () => {
+    const families = await app.inject({ method: 'GET', url: '/api/ppt/families' });
+    expect(families.statusCode).toBe(200);
+    const list = (families.json() as { families: Array<{ id: string; name: string }> }).families;
+    expect(list.length).toBeGreaterThanOrEqual(9);
+    expect(list.some((f) => f.id === 'business-review')).toBe(true);
+
+    const created = await app.inject({ method: 'POST', url: '/api/projects', payload: { title: '场景测试' } });
+    const id = (created.json() as { project: { project_id: string } }).project.project_id;
+    const pin = await app.inject({ method: 'PUT', url: `/api/projects/${id}/family`, payload: { family: 'product-launch' } });
+    expect(pin.statusCode).toBe(200);
+    expect(((pin.json() as { project: { ppt_family?: string } }).project).ppt_family).toBe('product-launch');
+
+    const bad = await app.inject({ method: 'PUT', url: `/api/projects/${id}/family`, payload: { family: 'no-such' } });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('T6 服务重启后历史可恢复（惰性建 host 找回 JSONL 会话）', async () => {
     // 前一用例删除了 env 密钥：惰性建 host 需要——重新装载（只填缺失，不动显式值）
     const { loadKeysFromDisk } = await import('../src/agent/model.js');

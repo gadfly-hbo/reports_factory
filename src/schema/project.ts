@@ -15,6 +15,8 @@ export const ProjectSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   privacy_policy: PrivacyPolicySchema.default('allow_external'), // 用户 2026-10-07 裁决：全面解除隐私策略
+  /** PPT 场景家族（flow-7）：families/<id>.md 配方由宿主注入 system；缺省默认通用商务汇报 */
+  ppt_family: z.string().min(1).max(64).optional(),
 });
 
 export const SourceKindSchema = z.enum(['text', 'markdown', 'csv', 'image', 'table', 'xlsx', 'docx', 'pdf', 'bundle']);

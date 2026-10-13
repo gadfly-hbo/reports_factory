@@ -136,7 +136,7 @@ export class WorkspaceStore {
 
   async updateProject(
     projectId: string,
-    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy'>>,
+    patch: Partial<Pick<Project, 'title' | 'purpose' | 'privacy_policy' | 'ppt_family'>>,
   ): Promise<Project> {
     const p = await this.getProject(projectId);
     if (!p) throw new Error(`project not found: ${projectId}`);

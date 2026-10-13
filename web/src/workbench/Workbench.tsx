@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, del, errMsg } from '../state/api';
 import { OutlineCard, type OutlineState } from './OutlineCard';
 
-interface Project { project_id: string; title: string; purpose?: string; updated_at: string; created_at: string }
+interface Project { project_id: string; title: string; purpose?: string; updated_at: string; created_at: string; ppt_family?: string }
 interface MaterialEntry { source_id: string; filename: string; kind: string; status: 'ready' | 'failed'; chars: number; size?: number; error?: string }
 interface AgentResult { active: boolean; status?: string; value?: string; reason?: string }
 interface UiEvent { at: string; kind: string; detail?: Record<string, unknown> }
@@ -12,6 +12,7 @@ interface DeckInfo { pages: Array<{ name: string; preview_ready: boolean; bytes:
 interface QaReport { ok: boolean; slides: number; text_boxes: number; charts: number; empty_slides?: string[]; items: Array<{ item: string; status: 'pass' | 'flag' | 'info'; detail: string }>; message: string }
 interface ExportRec { export_id: string; format: string; created_at: string }
 interface HistoryEntry { id: string; kind: string; message?: { role: string; text: string; calls?: Array<{ name: string }> } }
+interface Family { id: string; name: string; description: string }
 interface AiStatus { chain: string[]; providers: Array<{ provider: string; modelId: string; key: boolean }>; modelAvailable: boolean }
 interface Usage { modelCalls: number; toolCalls: number; inputTokens?: number; outputTokens: number; activeMs: number }
 interface ToolCard { name: string; status: 'running' | 'done' | 'failed'; durationMs?: number; reason?: string }
@@ -63,6 +64,7 @@ export function Workbench() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [newFamily, setNewFamily] = useState('');
   const [outline, setOutline] = useState<OutlineState | null>(null);
   const [events, setEvents] = useState<UiEvent[]>([]);
   const [runTools, setRunTools] = useState<ToolCard[]>([]);
@@ -74,6 +76,7 @@ export function Workbench() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [families, setFamilies] = useState<Family[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const lastUserText = useRef('');
@@ -103,6 +106,7 @@ export function Workbench() {
   }, []);
 
   useEffect(() => { void refreshProjects().catch((e) => setError(errMsg(e))); }, [refreshProjects]);
+  useEffect(() => { void api<{ families: Family[] }>('/api/ppt/families').then((r) => setFamilies(r.families)).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!activeId) { setMaterials([]); setOutline(null); setEvents([]); setDeck(null); setSelectedPage(null); setView('chat'); return; }
@@ -282,7 +286,8 @@ export function Workbench() {
     if (!newTitle.trim()) return;
     try {
       const r = await post<{ project: Project }>('/api/projects', { title: newTitle.trim() });
-      setCreating(false); setNewTitle('');
+      if (newFamily) await put(`/api/projects/${r.project.project_id}/family`, { family: newFamily });
+      setCreating(false); setNewTitle(''); setNewFamily('');
       await refreshProjects();
       setActiveId(r.project.project_id);
     } catch (e) { setError(errMsg(e)); }
@@ -349,6 +354,14 @@ export function Workbench() {
                   onClick={() => setView('deck')}>成果{hasDeck ? `（${deck!.pages.length} 页）` : ''}</button>
         </div>
         <div className="wb-topbar-right">
+          {activeId && families.length > 0 && (
+            <select className="wb-family-select" aria-label="PPT 场景" value={active?.ppt_family ?? ''}
+                    title="场景配方将注入下一轮生成（换场景不影响已生成页）"
+                    onChange={(e) => { void put(`/api/projects/${activeId}/family`, { family: e.target.value }).then(refreshProjects).catch((err2) => setError(errMsg(err2))); }}>
+              <option value="">自动 · 通用商务汇报</option>
+              {families.filter((f) => f.id !== 'business-review').map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          )}
           <button type="button" className="btn btn-ghost btn-sm" aria-expanded={showDrawer}
                   onClick={() => { const next = !showDrawer; setShowDrawer(next); if (activeId && next) void refreshUsage(activeId); }}>运行详情</button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openSettings()}>设置</button>
@@ -362,6 +375,10 @@ export function Workbench() {
             <div className="wb-new-form">
               <input autoFocus placeholder="项目名称（可留空）" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
                      onKeyDown={(e) => { if (e.key === 'Enter') void createProject(); if (e.key === 'Escape') setCreating(false); }} />
+              <select aria-label="场景" defaultValue={newFamily} onChange={(e) => setNewFamily(e.target.value)}>
+                <option value="">场景：自动（通用商务汇报）</option>
+                {families.filter((f) => f.id !== 'business-review').map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
               <div className="wb-new-actions">
                 <button className="btn btn-sm" type="button" onClick={() => setCreating(false)}>取消</button>
                 <button className="btn btn-primary btn-sm" type="button" onClick={() => void createProject()}>创建</button>
