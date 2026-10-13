@@ -51,7 +51,10 @@ slide.addText('07', { x: 12.55, y: 6.95, w: 0.38, h: 0.38, fontSize: 10, color: 
 ## 五、图片与素材（鼓励使用，防变形）
 
 - **用户上传的图片**：`materials.json` 里 kind=image 条目的 `original_file` 即原件路径——`addImage({ path, x,y,w,h, sizing:{ type:'contain', w, h } })`（sizing 必带，防拉伸变形）。
-- **联网取图**（bash 可联网）：先下载到 `deck/assets/` 再引用：`curl -L -o deck/assets/cover.jpg '<url>'`；只取与内容直接相关的图；下不到就换纯形状方案，不硬编。
+- **联网取图**（bash 可联网）：先下载到 `deck/assets/` 再引用：`curl -L -o deck/assets/cover.jpg '<url>'`；只取与内容直接相关的图；下不到就换纯形状方案，不硬编。**取图纪律**：
+  - **风格定调**：写第一张配图页前确定全 deck 图像调性——真实照片 / 扁平插画 / 纯形状几何，三选一，全 deck 统一不混用。
+  - **图表页禁照片**：图表页只用图表 + 文字 + theme 形状，不配照片。
+  - **版权**：只从免费商用图源取图（Unsplash / Pexels / Pixabay 等），禁搜索引擎结果页直链、禁带水印图；每张联网图在页代码留出处标记 `// image: <url>`（qa_deck 会汇总来源清单供外发前核验）。
 - **图文避让**：有图时文字框缩窄，禁止层叠遮挡；图宽 ≥3in 才有信息量。
 - 视频规范：`addMedia({ type:'video', path, w, h })` 且严格 16:9。
 
@@ -59,9 +62,9 @@ slide.addText('07', { x: 12.55, y: 6.95, w: 0.38, h: 0.38, fontSize: 10, color: 
 
 render_deck 成功后**逐页** `look_page`（返回该页截图给你看）。逐项检查：
 - 文字遮挡/重叠；内容溢出页面或卡片边界；
-- 对齐（左缘/基线一致）；留白失衡（大空洞或过挤）；
+- 对齐（左缘/基线一致）；留白失衡（**限内容页**评判——封面/章节隔页的居中大留白是设计构图，不算失衡；内容页的大空洞或过挤才算）；
 - 字号可读（≥12pt）；accent 是否超过 3 处点睛；
-发现任一问题：edit 该页代码 → render_deck → 该页再看一次。**每页都看过且无问题**才算交付。
+发现任一问题：edit 该页代码 → render_deck → 该页再看一次。**每页都看过且无问题**才算交付（遮挡/溢出/对齐/字号四项对全部页型生效，不豁免任何页）。
 
 ## 七、deck 工件组织
 
@@ -89,3 +92,4 @@ export function buildSlide(pptx) {
 - [ ] theme 常量贯穿（未硬编码散色）；图片全部 sizing contain；图文无遮挡
 - [ ] render_deck 通过且 slide 数=框架页数；**每页 look_page 看过并修完**
 - [ ] qa_deck 无结构 flag（headline_check 无缺声明/未上页/图表页豁免）；预览 HTML 齐全
+- [ ] 配图风格全 deck 统一（照片/插画/几何三选一）；图表页无照片；联网图全部有 `// image:` 出处标记且来源为免费商用图源

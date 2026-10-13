@@ -146,6 +146,26 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
         }
       : { item: 'headline_check', status: 'pass', detail: `结论行校验通过：${headlinePass} 页（${headlineSkip} 页豁免）` };
 
+  // 取图来源清单（B3 #9）：页代码 `// image: <url>` 标记主源 + 裸 URL 兜底，按页归属去重
+  const imageSources = new Map<string, Set<string>>();
+  const collectUrls = (code: string, owner: string) => {
+    const urls = new Set<string>();
+    for (const m of code.matchAll(/\/\/\s*image:\s*(https?:\/\/\S+)/g)) urls.add(m[1]!.replace(/['"）)]+$/, ''));
+    for (const m of code.matchAll(/https?:\/\/[^\s'")]+/g)) urls.add(m[0]!);
+    for (const u of urls) {
+      if (!imageSources.has(u)) imageSources.set(u, new Set());
+      imageSources.get(u)!.add(owner);
+    }
+  };
+  for (const page of pages) {
+    try { collectUrls(await readFile(join(projectRoot, page.code), 'utf-8'), page.name); } catch { /* 页代码缺失跳过 */ }
+  }
+  try { collectUrls(await readFile(join(deckDir, 'deck.mjs'), 'utf-8'), 'deck.mjs'); } catch { /* 无 deck.mjs */ }
+  const imageEntries = [...imageSources.entries()];
+  const imageItem: QaItem = imageEntries.length > 0
+    ? { item: 'image_sources', status: 'info', detail: `联网取图 ${imageEntries.length} 张（外发前请核版权）：${imageEntries.slice(0, 8).map(([u, ps]) => `${[...ps].join('/')}: ${u}`).join('；')}${imageEntries.length > 8 ? ' 等' : ''}` }
+    : { item: 'image_sources', status: 'pass', detail: '无联网取图' };
+
   const digitItem: QaItem = {
     item: 'digit_guard',
     status: digit.violations.length > 0 ? 'flag' : 'pass',
@@ -170,6 +190,7 @@ export async function qaDeck(projectRoot: string): Promise<QaReport> {
     ...(missingPreviews.length > 0 ? [{ item: 'page_preview', status: 'info' as const, detail: `${missingPreviews.length} 页缺 agent HTML 预览（UI 以近似预览展示）` }] : []),
     digitItem,
     headlineItem,
+    imageItem,
   ];
   const hasFlag = items.some((i) => i.status === 'flag');
   return {

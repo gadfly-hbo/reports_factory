@@ -240,3 +240,40 @@ describe('结论行校验 headline_check（B1 / 痛点 #1+#7）', () => {
     }
   });
 });
+
+describe('取图来源清单 image_sources（B3 / 痛点 #9）', () => {
+  it('标记+裸 URL 同图去重；裸 URL 兜底；跨页归属正确；无图 pass', async () => {
+    const root = await tmpRoot('imgsrc');
+    try {
+      await seed(root, {
+        'page_01.mjs': PAGE('封面', "// image: https://img.example.com/a.jpg\n// curl -L -o deck/assets/a.jpg 'https://img.example.com/a.jpg'"),
+        'page_02.mjs': PAGE('内容', "// curl -L -o deck/assets/b.jpg 'https://img.example.com/b.jpg'"),
+        'page_03.mjs': PAGE('纯文字', ''),
+      });
+      const report = await qaDeck(root);
+      const item = report.items.find((i) => i.item === 'image_sources')!;
+      expect(item.status).toBe('info');
+      expect(item.detail).toContain('https://img.example.com/a.jpg');
+      expect(item.detail).toContain('https://img.example.com/b.jpg');
+      expect(item.detail.match(/img\.example\.com\/a\.jpg/g)).toHaveLength(1); // 去重
+      expect(item.detail).toContain('page_01');
+      expect(item.detail).toContain('page_02');
+      expect(item.detail).not.toContain('page_03');
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it('无任何 URL → pass 无联网取图', async () => {
+    const root = await tmpRoot('imgnone');
+    try {
+      await seed(root, { 'page_01.mjs': PAGE('纯文字页', '') });
+      const report = await qaDeck(root);
+      const item = report.items.find((i) => i.item === 'image_sources')!;
+      expect(item.status).toBe('pass');
+      expect(item.detail).toContain('无联网取图');
+    } finally {
+      await rm(root, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+});
