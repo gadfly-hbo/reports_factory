@@ -162,3 +162,14 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica 
 .wb-page-reply summary { cursor: pointer; margin-top: 4px; }
 .wb-new-form select { border: 1px solid var(--wb-line); border-radius: 6px; padding: 5px 6px; font: inherit; font-size: .84rem; background: #fff; }
 .wb-family-select { border: 1px solid var(--wb-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: .82rem; background: var(--wb-panel); color: var(--wb-ink2); max-width: 190px; }
+.wb-brand-picker { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.wb-color-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.wb-color-dot.active { border-color: var(--wb-brand); box-shadow: 0 0 0 2px var(--wb-accent-soft); }
+.wb-hex-input { width: 62px; border: 1px solid var(--wb-line); border-radius: 5px; padding: 3px 6px; font-size: .76rem; font-family: ui-monospace, Menlo, monospace; }
+.wb-brand-dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--wb-line); }
+.wb-ver-select { border: 1px solid var(--wb-line); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: .8rem; background: var(--wb-panel); }
+.wb-ver-diff { border: 1px solid var(--wb-line); border-radius: 8px; padding: 10px 14px; background: var(--wb-panel); font-size: .84rem; }
+.wb-ver-diff ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.wb-ver-diff .ver-added { color: var(--wb-ok); }
+.wb-ver-diff .ver-removed { color: var(--wb-fail); }
+.wb-ver-diff .ver-changed { color: var(--wb-run, #b7791f); }

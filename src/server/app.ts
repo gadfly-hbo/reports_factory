@@ -17,6 +17,7 @@ import { FileBudgetStore } from '../agent/budget-store.js';
 import { qaDeck } from '../agent/qa-deck.js';
 import { listDeckPages } from '../agent/deck-files.js';
 import { listFamilies } from '../agent/families.js';
+import { snapshotDeck, listVersions, diffVersions } from '../agent/deck-versions.js';
 import { buildDeckExports } from '../agent/export-deck.js';
 
 
@@ -129,6 +130,7 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     const { id } = req.params as { id: string };
     try {
       const confirmed = await confirmOutline(resolve(store.root, id));
+      await snapshotDeck(resolve(store.root, id)); // flow-9 P1-2：确认成功后快照（避免失败请求留副作用）
       let injected = false;
       let inject_error: string | undefined;
       try {
@@ -210,6 +212,38 @@ export function buildServer(store: WorkspaceStore, webDist?: string): FastifyIns
     } catch (e) {
       throw httpError(404, `导出文件丢失：${(e as Error).message}`);
     }
+  });
+
+  // 版本（flow-9 P1-2）
+  app.get('/api/projects/:id/deck/versions', async (req) => {
+    const { id } = req.params as { id: string };
+    return { versions: await listVersions(resolve(store.root, id)) };
+  });
+
+  app.get('/api/projects/:id/deck/versions/diff', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { a?: string; b?: string };
+    const a = Number.parseInt(q.a ?? '', 10);
+    const b = Number.parseInt(q.b ?? '', 10);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) { reply.code(400); return { ok: false, error: 'a/b 参数非法' }; }
+    const projectRoot = resolve(store.root, id);
+    const vs = await listVersions(projectRoot);
+    if (!vs.some((v) => v.n === a) || !vs.some((v) => v.n === b)) { reply.code(404); return { ok: false, error: '版本不存在' }; }
+    return { diff: await diffVersions(projectRoot, a, b) };
+  });
+
+  // 企业 VI（flow-9 P1-1）：PUT brand
+  app.put('/api/projects/:id/brand', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const body = parseBody(z.object({
+        primary: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        logo_path: z.string().min(1).max(500).optional(),
+        font_zh: z.string().min(1).max(100).optional(),
+      }), req.body);
+      const project = await store.updateProject(id, { brand: body });
+      return { ok: true, project };
+    } catch (e) { return replyGateError(reply, e as Error & { statusCode?: number }); }
   });
 
   // 场景家族（flow-7）：列表 + 项目绑定

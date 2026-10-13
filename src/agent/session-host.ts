@@ -266,9 +266,10 @@ export class SessionHost {
 
   /** 发送消息（prompt）。已有运行在推进时转 steer（对话式插话）；否则开新 run。 */
   async send(text: string, opts: { system?: string } = {}): Promise<{ mode: 'steer' | 'run' }> {
-    // 场景家族（flow-7）：项目 ppt_family 的配方并入 system（每 run 一个家族；降级不阻断）
+    // 场景家族（flow-7）+ 企业 VI（flow-9）：并入 system（每 run 注入；降级不阻断）
     const family = opts.system ? '' : await this.projectFamily();
-    const system = [opts.system ?? BUILD_SYSTEM, family.trim()].filter(Boolean).join('\n\n');
+    const brand = opts.system ? '' : await this.projectBrand();
+    const system = [opts.system ?? BUILD_SYSTEM, family.trim(), brand.trim()].filter(Boolean).join('\n\n');
     if (this.closed) throw new Error('宿主已关闭');
     if (this.activeRun) {
       await this.control({ kind: 'steer', text });
@@ -309,6 +310,20 @@ export class SessionHost {
   /** 最近一次已结束的结果（R1-2：停止/快速失败后前端退出 busy 的依据；无则 null）。 */
   outcome(): RunResult<string> | null {
     return this.lastOutcome;
+  }
+
+  /** 企业 VI 指令（brand；主色替换 theme.primary、Logo 引用、字体覆盖）。 */
+  private async projectBrand(): Promise<string> {
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const project = JSON.parse(await readFile(join(this.projectRootDir, 'project.json'), 'utf-8')) as { brand?: { primary?: string; logo_path?: string; font_zh?: string } };
+      if (!project.brand) return '';
+      const parts: string[] = ['【品牌配置】'];
+      if (project.brand.primary) parts.push(`theme.primary 替换为 "${project.brand.primary.replace('#', '')}"（不带#，pptxgenjs 格式）；封面/页眉/标题条用该色。`);
+      if (project.brand.logo_path) parts.push(`Logo 文件路径 "${project.brand.logo_path}"——封面右下或页眉用 addImage({ path, sizing:{type:"contain",w:1.2,h:0.5} }) 引用。`);
+      if (project.brand.font_zh) parts.push(`中文字体全部用 "${project.brand.font_zh}"（fontFace 参数）。`);
+      return parts.join('\n');
+    } catch { return ''; }
   }
 
   /** 项目的场景家族配方（ppt_family；读不到/未设 → 默认家族）。 */

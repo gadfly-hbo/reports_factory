@@ -29,11 +29,16 @@ try {
 
   await page.click('.wb-new');
   await page.fill('.wb-new-form input', '冒烟项目');
-  // flow-7：新建对话框可选场景（默认自动）
+  // flow-7：新建对话框可选场景 + flow-9 品牌色板
   const famSel = await page.$('.wb-new-form select');
   if (!famSel) fail('新建对话框缺场景选择');
   await page.selectOption('.wb-new-form select', 'product-launch');
+  await page.click('.wb-color-dot:nth-child(3)'); // 选第二个色 #143628
   await page.click('.wb-new-form .btn-primary');
+  await page.waitForSelector('.wb-brand-dot', { timeout: 3000 });
+  const dotColor = await page.getAttribute('.wb-brand-dot', 'style');
+  if (!dotColor?.includes('26, 43, 74')) fail(`品牌色块错误：${dotColor}`);
+  console.log('PASS 品牌主色选择（新建→色板 #1a2b4a →顶栏色块回显）');
   await page.waitForSelector('.wb-item.active', { timeout: 5000 });
   console.log('PASS 新建项目并激活');
 

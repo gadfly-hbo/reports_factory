@@ -78,6 +78,7 @@ export function buildSlide(pptx) {
 ```
 
 - 汇总：`deck/deck.mjs`——import 全部分页、`defineLayout({name:'W',width:13.33,height:7.5})`、依次 buildSlide、`await pptx.writeFile({fileName:'deck/deck.pptx'})`。
+- **目录联动（增删页后必须同步）**：删页 = 同时删 page_XX.mjs **和** deck.mjs 对应 import 行；加页 = 写文件 **并** 在 deck.mjs 追加 import+调用（位置=插入序）；调序 = 调 deck.mjs 的 import 调用顺序。若家族配方含目录页，增删调序后目录页内容必须同步重写（页码与标题与实际页序一致）。render_deck 会校验文件数 = import 数。
 - 预览：每页同时写同名 `.html`（1280×720 同布局静态页，内联 CSS 同 theme）——look_page 优先用它；漏写则只能看近似图。
 - 代码硬约束：ESM import（禁 require）；fill 色不带 `#`；addText 必带 fontFace+color+fontSize。
 

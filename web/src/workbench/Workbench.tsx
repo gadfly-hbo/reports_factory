@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, del, errMsg } from '../state/api';
 import { OutlineCard, type OutlineState } from './OutlineCard';
 
-interface Project { project_id: string; title: string; purpose?: string; updated_at: string; created_at: string; ppt_family?: string }
+interface Project { project_id: string; title: string; purpose?: string; updated_at: string; created_at: string; ppt_family?: string; brand?: Brand }
 interface MaterialEntry { source_id: string; filename: string; kind: string; status: 'ready' | 'failed'; chars: number; size?: number; error?: string }
 interface AgentResult { active: boolean; status?: string; value?: string; reason?: string }
 interface UiEvent { at: string; kind: string; detail?: Record<string, unknown> }
@@ -13,6 +13,9 @@ interface QaReport { ok: boolean; slides: number; text_boxes: number; charts: nu
 interface ExportRec { export_id: string; format: string; created_at: string }
 interface HistoryEntry { id: string; kind: string; message?: { role: string; text: string; calls?: Array<{ name: string }> } }
 interface Family { id: string; name: string; description: string }
+interface Brand { primary?: string; logo_path?: string; font_zh?: string }
+interface DeckVersion { n: number; created_at: string; pptx_bytes: number; page_count: number }
+interface PageDiff { file: string; status: 'added' | 'removed' | 'changed' | 'unchanged'; bytes_a?: number; bytes_b?: number }
 interface AiStatus { chain: string[]; providers: Array<{ provider: string; modelId: string; key: boolean }>; modelAvailable: boolean }
 interface Usage { modelCalls: number; toolCalls: number; inputTokens?: number; outputTokens: number; activeMs: number }
 interface ToolCard { name: string; status: 'running' | 'done' | 'failed'; durationMs?: number; reason?: string }
@@ -77,6 +80,10 @@ export function Workbench() {
   const [showSettings, setShowSettings] = useState(false);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [families, setFamilies] = useState<Family[]>([]);
+  const [newBrandColor, setNewBrandColor] = useState('');
+  const [versions, setVersions] = useState<DeckVersion[]>([]);
+  const [versionDiff, setVersionDiff] = useState<PageDiff[] | null>(null);
+  const [diffPair, setDiffPair] = useState<{ a: number; b: number } | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const lastUserText = useRef('');
@@ -99,6 +106,8 @@ export function Workbench() {
   const refreshDeck = useCallback(async (id: string) => {
     setDeck(await api<DeckInfo>(`/api/projects/${id}/deck`).catch(() => null));
     setExportList((await api<{ exports: ExportRec[] }>(`/api/projects/${id}/exports`).catch(() => ({ exports: [] }))).exports);
+    setVersions((await api<{ versions: DeckVersion[] }>(`/api/projects/${id}/deck/versions`).catch(() => ({ versions: [] }))).versions);
+    setVersionDiff(null); setDiffPair(null);
   }, []);
 
   const refreshUsage = useCallback(async (id: string) => {
@@ -287,7 +296,8 @@ export function Workbench() {
     try {
       const r = await post<{ project: Project }>('/api/projects', { title: newTitle.trim() });
       if (newFamily) await put(`/api/projects/${r.project.project_id}/family`, { family: newFamily });
-      setCreating(false); setNewTitle(''); setNewFamily('');
+      if (newBrandColor && /^#[0-9a-fA-F]{6}$/.test(newBrandColor)) await put(`/api/projects/${r.project.project_id}/brand`, { primary: newBrandColor });
+      setCreating(false); setNewTitle(''); setNewFamily(''); setNewBrandColor('');
       await refreshProjects();
       setActiveId(r.project.project_id);
     } catch (e) { setError(errMsg(e)); }
@@ -354,6 +364,7 @@ export function Workbench() {
                   onClick={() => setView('deck')}>成果{hasDeck ? `（${deck!.pages.length} 页）` : ''}</button>
         </div>
         <div className="wb-topbar-right">
+          {active?.brand?.primary && <span className="wb-brand-dot" style={{ background: active.brand.primary }} title={`品牌主色 ${active.brand.primary}`} />}
           {activeId && families.length > 0 && (
             <select className="wb-family-select" aria-label="PPT 场景" value={active?.ppt_family ?? ''}
                     title="场景配方将注入下一轮生成（换场景不影响已生成页）"
@@ -379,6 +390,15 @@ export function Workbench() {
                 <option value="">场景：自动（通用商务汇报）</option>
                 {families.filter((f) => f.id !== 'business-review').map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
+              <div className="wb-brand-picker">
+                <span className="fine">品牌主色：</span>
+                {['', '#1a2b4a', '#143628', '#333333', '#b44626', '#263442', '#1e40af'].map((c) => (
+                  <button key={c || 'none'} type="button" className={`wb-color-dot ${newBrandColor === c ? 'active' : ''}`}
+                          style={{ background: c || 'var(--wb-line)' }} title={c || '默认（不覆盖）'} onClick={() => setNewBrandColor(c)} />
+                ))}
+                <input placeholder="#hex" value={newBrandColor} maxLength={7}
+                       onChange={(e) => setNewBrandColor(e.target.value)} className="wb-hex-input" />
+              </div>
               <div className="wb-new-actions">
                 <button className="btn btn-sm" type="button" onClick={() => setCreating(false)}>取消</button>
                 <button className="btn btn-primary btn-sm" type="button" onClick={() => void createProject()}>创建</button>
@@ -508,6 +528,20 @@ export function Workbench() {
                 {deck?.pptx && <span className="chip chip-ok">deck.pptx · {Math.max(1, Math.round(deck.pptx.bytes / 1024))}KB · {deck.pages.length} 页</span>}
                 {selectedPage && <span className="chip chip-accent">正在编辑 {pageLabel}</span>}
                 {selectedPage && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedPage(null)}>取消选中</button>}
+                {versions.length > 1 && (
+                  <select className="wb-ver-select" aria-label="历史版本" defaultValue=""
+                           onChange={(e) => {
+                             if (!e.target.value) { setVersionDiff(null); setDiffPair(null); return; }
+                             const b = Number.parseInt(e.target.value, 10);
+                             const a = versions.filter((v) => v.n < b).at(-1)?.n;
+                             if (!a) return;
+                             setDiffPair({ a, b });
+                             void api<{ diff: PageDiff[] }>(`/api/projects/${activeId}/deck/versions/diff?a=${a}&b=${b}`).then((r) => setVersionDiff(r.diff)).catch(() => setVersionDiff(null));
+                           }}>
+                    <option value="">历史版本（{versions.length}）</option>
+                    {versions.slice().reverse().map((v) => <option key={v.n} value={v.n}>v{v.n} · {new Date(v.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} · {v.page_count} 页</option>)}
+                  </select>
+                )}
                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => void runQa()}>质检</button>
                   {(['pptx', 'html', 'pdf'] as const).map((fmt) => (
@@ -556,6 +590,17 @@ export function Workbench() {
                   <img key={`${selectedPage}-${deck?.pptx?.bytes ?? 0}`} src={`/api/projects/${activeId}/deck/preview/${selectedPage}?t=${busy ? 0 : (deck?.pptx?.bytes ?? 0)}`} alt={`${pageLabel} 大图预览`} />
                   <figcaption className="fine">近似渲染，实际以导出 PPTX 为准。</figcaption>
                 </figure>
+              )}
+              {versionDiff && diffPair && (
+                <div className="wb-ver-diff" role="region" aria-label={`版本对比 v${diffPair.a} → v${diffPair.b}`}>
+                  <strong>v{diffPair.a} → v{diffPair.b} 页级变更</strong>
+                  <ul>
+                    {versionDiff.filter((d) => d.status !== 'unchanged').length === 0 && <li className="fine">无变更</li>}
+                    {versionDiff.filter((d) => d.status !== 'unchanged').map((d) => (
+                      <li key={d.file} className={`ver-${d.status}`}>{d.status === 'added' ? '＋' : d.status === 'removed' ? '－' : '≈'} {d.file}{d.bytes_b ? `（${Math.round(d.bytes_b / 1024)}KB）` : ''}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {selectedPage && activeId && (
                 <form className="wb-composer wb-page-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>

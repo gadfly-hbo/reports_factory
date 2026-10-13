@@ -92,6 +92,11 @@ export function renderDeckTool(projectRoot: string): Tool {
 
       const expected = (args as { expected_slides?: unknown }).expected_slides;
       const warnings: string[] = [];
+      // 目录联动校验（flow-9 P1-3）：页文件数 ≠ deck.mjs import 数 → warning
+      const deckCode = await readFile(deckFile, 'utf-8');
+      const pageCount = (await listDeckPages(projectRoot)).length;
+      const importCount = (deckCode.match(/from ['"]\.\/pages\/page_/g) ?? []).length;
+      if (importCount !== pageCount) warnings.push(`目录不同步：pages/ 有 ${pageCount} 个页文件，deck.mjs 只 import 了 ${importCount} 个——增删页后必须同步更新 deck.mjs 的 import 列表`);
       if (typeof expected === 'number' && expected > 0 && slides !== expected) {
         warnings.push(`slide 数 ${slides} 与确认框架页数 ${expected} 不一致`);
       }
