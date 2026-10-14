@@ -1,0 +1,12 @@
+{
+  "project_id": "proj_d2e42829",
+  "kind": "ppt",
+  "title": "品牌画像诊断",
+  "created_at": "2026-10-14T14:31:22.528Z",
+  "updated_at": "2026-10-14T14:32:17.881Z",
+  "privacy_policy": "allow_external",
+  "ppt_family": "consulting-report",
+  "brand": {
+    "primary": "#b44626"
+  }
+}

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>11 Risks</title>
+<style>
+body{margin:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:#555;}
+.frame{position:relative;width:1280px;height:720px;background:#fff;margin:8px auto;box-shadow:0 4px 18px rgba(0,0,0,.35);overflow:hidden;}
+.hdr-bar{position:absolute;left:58px;top:58px;width:8px;height:38px;background:#b44626;}
+.hdr-l{position:absolute;left:82px;top:58px;font:700 11px 'PingFang SC';color:#626773;letter-spacing:3px;}
+.hdr-r{position:absolute;right:90px;top:58px;font:700 10px Arial;color:#b44626;letter-spacing:4px;}
+.headline{position:absolute;left:58px;top:110px;width:1162px;font:bold 15px/1.4 'PingFang SC';color:#b44626;}
+.tbl-th{position:absolute;left:58px;top:188px;width:1162px;height:40px;background:#263442;display:flex;align-items:center;color:#fff;font:700 12px 'PingFang SC';}
+.tbl-th .a{padding-left:18px;width:480px;}
+.tbl-th .b{width:90px;text-align:center}
+.tbl-th .c{padding-left:18px;flex:1;}
+.tbl-row{position:absolute;left:58px;width:1162px;height:74px;display:flex;align-items:center;font:400 11px 'PingFang SC';border-bottom:1px solid #fff;}
+.tbl-row.z{background:#F7F6F3;}
+.tbl-row .a{padding-left:18px;width:480px;color:#242830;font-weight:700;}
+.tbl-row .b{width:90px;text-align:center;}
+.tbl-row .c{padding-left:18px;flex:1;color:#626773;line-height:1.25;}
+.chip{display:inline-block;width:84px;height:30px;line-height:30px;color:#fff;font:700 11px 'PingFang SC';border-radius:4px;}
+.chip-h{background:#b44626}.chip-m{background:#5A6675}
+.r1{top:228px;} .r2{top:302px;} .r3{top:376px;} .r4{top:450px;} .r5{top:524px;}
+.sow{position:absolute;left:58px;top:628px;width:1162px;height:48px;background:#F7F6F3;display:flex;align-items:center;padding:0 25px;font:bold 11.5px 'PingFang SC';color:#b44626;box-sizing:border-box;}
+.src{position:absolute;left:58px;top:685px;font:italic 9px 'PingFang SC';color:#626773;}
+.page-no{position:absolute;right:30px;bottom:14px;width:36px;height:36px;background:#5A6675;color:#fff;font:700 10px Arial;text-align:center;line-height:36px;border-radius:50%;}
+</style></head><body><div class="frame">
+<div class="hdr-bar"></div><div class="hdr-l">风险与对策  /  RISKS &amp; MITIGATIONS</div><div class="hdr-r">SEMIR</div>
+<div class="headline">数据可信用于结构叙事，需注意 TGI 缺失 / 跨人群合并 / 模型预测偏差 / 营收字段缺失四项解读风险</div>
+<div class="tbl-th"><div class="a">风险</div><div class="b">等级</div><div class="c">缓解措施</div></div>
+<div class="tbl-row r1 z"><div class="a">TGI 字段缺失，无法判断偏好相对大盘的偏离</div><div class="b"><span class="chip chip-h">高</span></div><div class="c">在大服饰策略 / 时尚度等结论性叙事时，标注「人群内结构观察」而非「相对大盘的相对偏好」；如需 TGI 对比，向数据银行额外申请大盘基线。</div></div>
+<div class="tbl-row r2"><div class="a">4 组「线下门店_上」人群合并，可能掩盖子人群差异</div><div class="b"><span class="chip chip-m">中</span></div><div class="c">按 4 组分别下钻查看 Top3 标签差异，识别是否合并稀释关键信号；若差异大则保留单组策略而非合并策略。</div></div>
+<div class="tbl-row r3 z"><div class="a">占比按类型归一化，跨类型直接相加会失真</div><div class="b"><span class="chip chip-m">中</span></div><div class="c">所有跨类型结论用「分别占比 + 文字说明」表达，不做百分数加和；图表严格按类型独立绘出。</div></div>
+<div class="tbl-row r4"><div class="a">预测字段（性别 / 年龄 / 城市等）为平台模型预测，非自报</div><div class="b"><span class="chip chip-m">中</span></div><div class="c">关键结论（如女性 75.4%）用官方数据银行口径原文表述，注明「平台预测，非自报」；下单 / 复购等行为数据交叉验证。</div></div>
+<div class="tbl-row r5 z"><div class="a">无客单价、GMV 等营收字段，无法推算商业价值</div><div class="b"><span class="chip chip-h">高</span></div><div class="c">行动建议明确「需要进一步补充」消费金额 / 订单数据；下一阶段把数据银行人群回连 BI 订单表，补充客单 / GMV 视角。</div></div>
+<div class="sow">启示：数据可信但解读需谨慎——所有结论标注「人群内结构 + 平台预测」口径，商业决策前补充行为数据交叉验证</div>
+<div class="src">数据来源：26年8月森马天猫官旗.md</div>
+<div class="page-no">11</div>
+</div></body></html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>04 Methodology</title>
+<style>
+body{margin:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:#555;}
+.frame{position:relative;width:1280px;height:720px;background:#fff;margin:8px auto;box-shadow:0 4px 18px rgba(0,0,0,.35);overflow:hidden;}
+.hdr-bar{position:absolute;left:58px;top:58px;width:8px;height:38px;background:#b44626;}
+.hdr-l{position:absolute;left:82px;top:58px;font:700 11px 'PingFang SC';color:#626773;letter-spacing:3px;}
+.hdr-r{position:absolute;right:90px;top:58px;font:700 10px Arial;color:#b44626;letter-spacing:4px;}
+.headline{position:absolute;left:58px;top:110px;width:1162px;font:bold 16px/1.4 'PingFang SC';color:#b44626;}
+.card-l{position:absolute;left:58px;top:192px;width:576px;height:432px;background:#F7F6F3;border:0.75px solid #DEDCD6;box-sizing:border-box;padding:24px 30px;}
+.card-r{position:absolute;left:666px;top:192px;width:554px;height:432px;background:#fff;border:1.5px solid #b44626;box-sizing:border-box;padding:24px 30px;}
+.c-h{font:700 11px 'PingFang SC';color:#263442;letter-spacing:3px;margin-bottom:14px;}
+.c-h-r{font:700 11px 'PingFang SC';color:#b44626;letter-spacing:3px;margin-bottom:14px;}
+.row{display:flex;margin-bottom:8px;font:400 10.5px 'PingFang SC';line-height:1.25;}
+.row .k{width:148px;color:#626773;font-weight:700;flex-shrink:0;}
+.row .v{flex:1;color:#242830;}
+.cav{margin-bottom:12px;}
+.cav-h{font:700 12px 'PingFang SC';color:#242830;display:inline-block;margin-left:8px;}
+.cav-no{display:inline-block;width:18px;height:18px;background:#b44626;color:#fff;font:700 8px Arial;text-align:center;line-height:18px;border-radius:50%;}
+.cav-b{font:400 10px/1.25 'PingFang SC';color:#626773;margin-left:30px;}
+.sow{position:absolute;left:58px;top:628px;width:1162px;height:48px;background:#F7F6F3;display:flex;align-items:center;padding:0 25px;font:bold 12px 'PingFang SC';color:#b44626;box-sizing:border-box;}
+.src{position:absolute;left:58px;top:685px;font:italic 9px 'PingFang SC';color:#626773;}
+.page-no{position:absolute;right:30px;bottom:14px;width:36px;height:36px;background:#5A6675;color:#fff;font:700 10px Arial;text-align:center;line-height:36px;border-radius:50%;}
+</style></head><body><div class="frame">
+<div class="hdr-bar"></div><div class="hdr-l">研究方法  /  METHODOLOGY</div><div class="hdr-r">SEMIR</div>
+<div class="headline">数据来自天猫品牌数据银行 4 组人群合并 / 554 条标签，无 TGI 与客单价需谨慎解读</div>
+<div class="card-l">
+  <div class="c-h">方法卡  METHOD CARD</div>
+  <div class="row"><div class="k">数据平台</div><div class="v">天猫品牌数据银行</div></div>
+  <div class="row"><div class="k">人群组数</div><div class="v">4 组（线下门店_上_第 1-4 组，2026 年 8 月采集）</div></div>
+  <div class="row"><div class="k">采集日期</div><div class="v">2026-08-26</div></div>
+  <div class="row"><div class="k">标签行数</div><div class="v">554 条</div></div>
+  <div class="row"><div class="k">输出字段</div><div class="v">标签类型 / 标签 / 占比 / TGI / PLS 层 / PLS 维度</div></div>
+  <div class="row"><div class="k">PLS 维度</div><div class="v">基础人口学 / 综合身份聚类 / 物理数字环境 / 社会资产与购买力 / 价格与利益应激 / 圈层生活方式 / 创新与品牌心智 / 内容与视觉心智 / 转化决策摩擦</div></div>
+  <div class="row"><div class="k">占比口径</div><div class="v">按标签类型归一化至 100%（各类型内部相加=100%）</div></div>
+</div>
+<div class="card-r">
+  <div class="c-h-r">局限性说明  CAVEATS</div>
+  <div class="cav"><span class="cav-no">1</span><div class="cav-h">无 TGI 字段</div><div class="cav-b">材料中 TGI 列为空，无法判断该偏好相对大盘的偏离程度，只能看人群内占比</div></div>
+  <div class="cav"><span class="cav-no">2</span><div class="cav-h">无客单价 / GMV</div><div class="cav-b">仅有画像标签，未含消费金额、订单、复购等行为字段，不能直接推算营收</div></div>
+  <div class="cav"><span class="cav-no">3</span><div class="cav-h">线下门店人群为主</div><div class="cav-b">数据来自 4 组「线下门店_上」人群，是已成交客户而非全店流量，存在幸存者偏差</div></div>
+  <div class="cav"><span class="cav-no">4</span><div class="cav-h">占比按类型归一化</div><div class="cav-b">同一类型内相加=100%，跨类型不可直接相加</div></div>
+  <div class="cav"><span class="cav-no">5</span><div class="cav-h">预测字段非自报</div><div class="cav-b">性别 / 年龄 / 城市 / 身高 / 体重 / 星座等均为平台模型预测，存在系统性偏差</div></div>
+</div>
+<div class="sow">启示：数据可信用于「结构 / 偏好」叙事；客单价、ROI、复购等需另接行为数据交叉验证</div>
+<div class="src">数据来源：26年8月森马天猫官旗.md</div>
+<div class="page-no">04</div>
+</div></body></html>
