@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { RuntimeFault } from 'pi-agent-runtime';
 import { FileBudgetStore } from '../src/agent/budget-store.js';
 
-const UNLIMITED = { cumulative: 'unlimited' as const, maxOutputTokens: 8_192, modelTimeoutMs: 600_000, toolTimeoutMs: 120_000, controlTimeoutMs: 30_000 };
+const UNLIMITED = { cumulative: 'unlimited' as const, maxOutputTokens: 8_192, modelTimeoutMs: 600_000, toolTimeoutMs: 120_000, controlTimeoutMs: 30_000 }; // 本地 fixture（独立于宿主 UNLIMITED_LIMITS——宿主 toolTimeoutMs 已为 300s，此处不测超时）
 const CONFIG_A = JSON.stringify({ v: 'a' });
 const CONFIG_B = JSON.stringify({ v: 'b' });
 

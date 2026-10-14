@@ -102,6 +102,18 @@ try {
   if (emoji.length) await fail(`发现 emoji：${emoji[0]}`);
   console.log(`PASS deck.pptx 校验：${slides.length} slide / ${texts.length} 文本框 / 0 emoji / ${deck.pages.filter((p) => p.preview_ready).length} 页预览`);
 
+  // B 系列 e2e 诊断：真实 agent 生成后的全项质检报告（观察 agent 对新规则的真实遵循度，不阻断）
+  const qa = (await api(`/api/projects/${pid}/qa`)).body;
+  console.log(`INFO 生成后质检（digit.raw=${qa.digit?.raw} derived=${qa.digit?.derived} violations=${qa.digit?.violations?.length}）`);
+  for (const item of qa.items ?? []) console.log(`  [qa] ${item.status.toUpperCase().padEnd(4)} ${item.item}：${String(item.detail).slice(0, 160)}`);
+  // 新规则遵循度快照：headline/sources 标记的真实落码率
+  const pageCodes = await Promise.all(deck.pages.map(async (p) => {
+    try { return await readFile(join(home, pid, 'deck', 'pages', `${p.name}.mjs`), 'utf-8'); } catch { return ''; }
+  }));
+  const withHeadline = pageCodes.filter((c) => /^[ \t]*\/\/\s*headline:/m.test(c)).length;
+  const withSources = pageCodes.filter((c) => /^[ \t]*\/\/\s*sources:/m.test(c)).length;
+  console.log(`INFO 新规则落码率：headline ${withHeadline}/${pageCodes.length} 页，sources ${withSources}/${pageCodes.length} 页`);
+
   // 视觉抽查：截图第一页预览（若有）
   const withPreview = deck.pages.find((p) => p.preview_ready);
   if (withPreview) {

@@ -57,9 +57,12 @@ export const UNLIMITED_LIMITS: UncappedLimits = {
   cumulative: 'unlimited',
   maxOutputTokens: 32_768, // 与主模型单次输出上限一致（T3 真调教训：写代码轮 8192 不够）
   modelTimeoutMs: 600_000,
-  toolTimeoutMs: 120_000,
+  toolTimeoutMs: 300_000, // 硬墙须宽于 env 软超时——慢命令先被软超时转为可恢复工具错误，而非杀死整个 run（flow-18 e2e 事故）
   controlTimeoutMs: 30_000,
 };
+
+/** bash 软超时（先于 SDK 硬墙触发）：超时返回可恢复错误文本（exitCode 124）给 agent 自纠。 */
+export const EXEC_SOFT_TIMEOUT_MS = 120_000;
 
 export interface SessionHostOptions {
   /** 项目数据根（data/<proj> 绝对路径）——会话 JSONL 与受限执行环境的边界 */
@@ -147,7 +150,7 @@ export class SessionHost {
     const env = await createNetworkExecutionEnvironment({
       root: opts.projectRoot,
       policyVersion: 'report-studio-net-v1',
-      execTimeoutMs: UNLIMITED_LIMITS.toolTimeoutMs,
+      execTimeoutMs: EXEC_SOFT_TIMEOUT_MS,
     });
     const nativeTools = createExecutionTools(env, ['read', 'write', 'edit', 'bash']);
     const outlineTool = proposeOutlineTool(opts.projectRoot);

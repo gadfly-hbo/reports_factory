@@ -11,7 +11,7 @@ import { buildServer } from '../src/server/app.js';
 import { WorkspaceStore } from '../src/storage/workspace.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 
-const UNLIMITED = { cumulative: 'unlimited' as const, maxOutputTokens: 32_768, modelTimeoutMs: 600_000, toolTimeoutMs: 120_000, controlTimeoutMs: 30_000 };
+const UNLIMITED = { cumulative: 'unlimited' as const, maxOutputTokens: 32_768, modelTimeoutMs: 600_000, toolTimeoutMs: 120_000, controlTimeoutMs: 30_000 }; // 本地 fixture（独立于宿主 UNLIMITED_LIMITS——宿主 toolTimeoutMs 已为 300s，此处不测超时）
 
 describe('R1 修复：停止语义 / 恢复接线 / 配置迁移 / 用量', () => {
   it('R1-2 outcome：run 结束后 outcome 可读（前端退出 busy 的依据）', async () => {

@@ -24,6 +24,7 @@ description: PPT 报告生成完整规范——资深商业汇报设计师：内
 3. 宿主注入「用户已确认框架」后自主推进：逐页写 `deck/pages/page_XX.mjs` + `deck/deck.mjs` → `render_deck` 渲染。
 4. 渲染成功后**逐页 `look_page` 视觉自检**（见 §六），有问题改代码重渲再看，每页都看过才能交付。
 5. 交付前 `qa_deck`；正式下载由用户在导出区点击。
+6. **bash 与依赖纪律**：渲染依赖（pptxgenjs 等）由宿主保证——`render_deck` 执行时自动在项目根创建 node_modules 链接，页代码直接 `import pptxgen from 'pptxgenjs'` 即可，**禁止依赖探查**（find / which / npm ls 等一律不要）。bash 命令只在项目根内操作（读材料、下载图片到 `deck/assets/`）；**禁止全盘扫描**（`find /`、`grep -r /` 等）——慢且无意义，单命令超 120 秒会被超时终止，浪费轮次。
 
 ## 三、设计系统（六套配色，开工时问用户选，未指定默认深蓝经典）
 
